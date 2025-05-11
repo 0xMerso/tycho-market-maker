@@ -1,0 +1,122 @@
+use serde::Deserialize;
+use std::{fs, time::Duration};
+
+use crate::utils;
+
+use super::maker::PriceFeedConfig;
+
+/// Environment configuration expected
+#[derive(Debug, Clone)]
+pub struct EnvConfig {
+    pub testing: bool,
+    pub heartbeat: String,
+    pub sender: String,
+    pub pvkey: String,
+    pub tycho_api_key: String,
+}
+
+impl Default for EnvConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl EnvConfig {
+    pub fn new() -> Self {
+        EnvConfig {
+            testing: utils::misc::get("TESTING") == "true",
+            heartbeat: utils::misc::get("HEARTBEAT"),
+            sender: utils::misc::get("SENDER"),
+            pvkey: utils::misc::get("PV_KEY"),
+            tycho_api_key: utils::misc::get("TYCHO_API_KEY"),
+        }
+    }
+
+    pub fn log_config(&self) {
+        tracing::debug!("Env Config:");
+        tracing::debug!("  Testing:               {}", self.testing);
+        tracing::debug!("  Heartbeat:             {}", self.heartbeat);
+        tracing::debug!("  Sender:                {}", self.sender);
+        tracing::debug!("  Private Key:           {}...", &self.pvkey[..5]);
+        tracing::debug!("  Tycho API Key:         {}...", &self.tycho_api_key[..5]);
+    }
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct MarketMakerConfig {
+    // Exact match with config (e.g. mmc.toml)
+    pub token0: String,
+    pub addr0: String,
+    pub token1: String,
+    pub addr1: String,
+    pub network: String,
+    pub rpc: String,
+    pub explorer: String,
+    pub spread: u32,
+    pub slippage: u32,
+    pub profitability: bool,
+    pub price: f64,
+    pub reference: String,
+    pub wallet_public_key: String,
+    pub wallet_private_key: String,
+    pub max_trade_allocation: f64,
+    pub broadcast: String,
+    pub gas_limit: u64,
+    pub target_block_offset: u64,
+    pub tycho_endpoint: String,
+    pub tycho_api_key: String,
+    pub poll_interval_ms: u64,
+    pub permit2: String,
+    pub tycho_router: String,
+    pub pfc: PriceFeedConfig,
+}
+
+impl MarketMakerConfig {
+    pub fn log_config(&self) {
+        tracing::debug!("Market Maker Config:");
+        tracing::debug!("  Network:               {}", self.network);
+        tracing::debug!("  Token0:                {} ({})", self.token0, self.addr0);
+        tracing::debug!("  Token1:                {} ({})", self.token1, self.addr1);
+        tracing::debug!("  RPC:                   {}", self.rpc);
+        tracing::debug!("  Explorer:              {}", self.explorer);
+        tracing::debug!("  Spread (bps):          {}", self.spread);
+        tracing::debug!("  Slippage (bps):        {}", self.slippage);
+        tracing::debug!("  Profitability Check:   {}", self.profitability);
+        tracing::debug!("  Reference Price:       {} ({})", self.price, self.reference);
+        tracing::debug!("  Wallet Public Key:     {}", self.wallet_public_key);
+        tracing::debug!("  Max Trade Allocation:  {}", self.max_trade_allocation);
+        tracing::debug!("  Execution Mode:        {}", self.broadcast);
+        tracing::debug!("  Gas Limit:             {}", self.gas_limit);
+        tracing::debug!("  Target Block Offset:   {}", self.target_block_offset);
+        tracing::debug!("  Tycho Endpoint:        {}", self.tycho_endpoint);
+        tracing::debug!("  Tycho API Key:         {}", self.tycho_api_key);
+        tracing::debug!("  Poll Interval (secs):  {}", self.poll_interval_ms);
+        tracing::debug!("  Permit2:               {}", self.permit2);
+        tracing::debug!("  Tycho Router:          {}", self.tycho_router);
+        tracing::debug!("  Price Feed Config:     {:?}", self.pfc);
+    }
+
+    pub fn validate(&self) -> Result<(), String> {
+        if self.spread > 10_000 {
+            return Err("spread must be ≤ 10000 BPS (100%)".into());
+        }
+        if self.slippage > 10_000 {
+            return Err("slippage must be ≤ 10000 BPS (100%)".into());
+        }
+        if !(0.0..=1.0).contains(&self.max_trade_allocation) {
+            return Err("max_trade_allocation must be between 0.0 and 1.0".into());
+        }
+        Ok(())
+    }
+
+    pub fn poll_interval(&self) -> Duration {
+        Duration::from_millis(self.poll_interval_ms)
+    }
+}
+
+pub fn load_market_maker_config(path: &str) -> MarketMakerConfig {
+    let contents = fs::read_to_string(path).map_err(|e| format!("Failed to read config file: {e}")).unwrap();
+    let config: MarketMakerConfig = toml::from_str(&contents).map_err(|e| format!("Failed to parse TOML: {e}")).unwrap();
+    config.validate().expect("Invalid configuration");
+    config
+}

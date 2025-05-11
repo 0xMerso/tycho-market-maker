@@ -1,0 +1,44 @@
+# =========================================== Market Maker FuLL Configuration ===========================================
+
+token0 = "ETH" # Base
+addr0 = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+
+token1 = "USDC" # Quote
+addr1 = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+
+network = "ethereum" # "base", "unichain"
+rpc = "https://eth.llamarpc.com"
+
+explorer = "https://etherscan.io/"
+spread = 30
+slippage = 50
+profitability = true
+
+price = 1.0000
+reference = "fixed"
+
+wallet_public_key = "0xYourEOA"
+wallet_private_key = "0xYourPrivKey"
+max_trade_allocation = 0.2
+
+broadcast = "buildernet"
+gas_limit = 300000
+target_block_offset = 1
+
+tycho_endpoint = "tycho-beta.propellerheads.xyz"
+tycho_api_key = "sampletoken"
+poll_interval_ms = 12000
+
+permit2 = "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+tycho_router = "0x0178f471f219737c51d6005556d2f44de011a08a"
+
+
+[pfc] # ======= MM Price Feed Config =======
+
+# type = "binance"
+# endpoint = "https://api.binance.com/api/v3"         
+
+type = "chainlink"                   
+source = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419"
+
+# type = "custom"
