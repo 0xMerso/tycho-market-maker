@@ -97,8 +97,6 @@ pub struct TychoStreamState {
     pub protosims: HashMap<String, Box<dyn ProtocolSim>>,
     // Components instances, indexed by their unique identifier. Serialised and stored in Redis
     pub components: HashMap<String, ProtocolComponent>,
-    // Tokens from Tycho Client
-    pub tokens: Vec<Token>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

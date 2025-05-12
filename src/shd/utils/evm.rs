@@ -9,13 +9,13 @@ use reqwest::Client;
 use crate::types::sol::IERC20;
 
 /// Retrieve the latest block number
-pub async fn get_latest_block(provider: String) -> u64 {
+pub async fn latest(provider: String) -> u64 {
     let provider = ProviderBuilder::new().on_http(provider.parse().unwrap());
     provider.get_block_number().await.unwrap_or_default()
 }
 
 /// Get the balance of the owner for the specified tokens.
-pub async fn erc20b(provider: &RootProvider<Http<Client>>, owner: String, tokens: Vec<String>) -> Result<Vec<u128>, String> {
+pub async fn balances(provider: &RootProvider<Http<Client>>, owner: String, tokens: Vec<String>) -> Result<Vec<u128>, String> {
     let mut balances = vec![];
     let client = Arc::new(provider);
     for t in tokens.iter() {

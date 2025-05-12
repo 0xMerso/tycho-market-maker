@@ -37,7 +37,7 @@ impl PriceFeed for BinancePriceFeed {
     async fn get(&self, mmc: MarketMakerConfig) -> Result<f64, String> {
         let symbol = format!("{}{}", mmc.token0.to_uppercase(), mmc.token1.to_uppercase());
         let endpoint = format!("{}/ticker/price?symbol={}", mmc.pfc.source, symbol);
-        tracing::debug!("Fetching price from Binance at {:?}", endpoint);
+        // tracing::debug!("Fetching price from Binance at {:?}", endpoint);
         binance(endpoint).await
     }
 }
@@ -53,7 +53,7 @@ pub async fn binance(endpoint: String) -> Result<f64, String> {
                     return Err(format!("Error deserializing response: {:?}", e));
                 }
                 let data = result.unwrap();
-                tracing::debug!("Price data fetched from Binance: {:?}", data);
+                // tracing::debug!("Price data fetched from Binance: {:?}", data);
                 match data.price.parse::<f64>() {
                     Ok(price) => Ok(price),
                     Err(e) => {
@@ -83,7 +83,7 @@ pub struct ChainlinkPriceFeed;
 impl PriceFeed for ChainlinkPriceFeed {
     /// @endpoint: RPC
     async fn get(&self, mmc: MarketMakerConfig) -> Result<f64, String> {
-        tracing::debug!("Fetching price from Chainlink at {:?}", mmc.pfc.source);
+        // tracing::debug!("Fetching price from Chainlink at {:?}", mmc.pfc.source);
         chainlink(mmc.rpc, mmc.pfc.source).await
     }
 }
@@ -127,19 +127,31 @@ mod tests {
         let _ = tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).try_init();
         tracing::info!("Testing price feed");
         let config = load_market_maker_config("config/mmc.toml");
-        if config.pfc.r#type == "binance" {
-            let feed = BinancePriceFeed;
-            let mk2 = MarketMakerBuilder::new(config, Box::new(feed)).build().expect("Failed to build Market Maker");
-            let price = mk2.market_price().await.expect("Failed to fetch market price");
-            tracing::info!("Market Price: {:?}", price);
-            assert!(price > 1500. && price < 3000., "Unexpected price value");
-        } else if config.pfc.r#type == "chainlink" {
-            let config = load_market_maker_config("config/mmc.toml");
-            let feed = ChainlinkPriceFeed;
-            let mk2 = MarketMakerBuilder::new(config, Box::new(feed)).build().expect("Failed to build Market Maker");
-            let price = mk2.market_price().await.expect("Failed to fetch market price");
-            tracing::info!("Market Price Chainlink: {:?}", price);
-            assert!(price > 1500. && price < 3000., "Unexpected price value");
+        let base = config.addr0.clone();
+        let quote = config.addr1.clone();
+        let tokens = crate::core::helpers::specific(config.clone(), Some("sampletoken"), vec![base, quote]).await;
+        match tokens {
+            Some(tokens) => {
+                let base = tokens[0].clone();
+                let quote = tokens[1].clone();
+                if config.pfc.r#type == "binance" {
+                    let feed = BinancePriceFeed;
+                    let mk2 = MarketMakerBuilder::new(config, Box::new(feed)).build(base, quote).expect("Failed to build Market Maker");
+                    let price = mk2.market_price().await.expect("Failed to fetch market price");
+                    tracing::info!("Market Price: {:?}", price);
+                    assert!(price > 1500. && price < 3000., "Unexpected price value");
+                } else if config.pfc.r#type == "chainlink" {
+                    let config = load_market_maker_config("config/mmc.toml");
+                    let feed = ChainlinkPriceFeed;
+                    let mk2 = MarketMakerBuilder::new(config, Box::new(feed)).build(base, quote).expect("Failed to build Market Maker");
+                    let price = mk2.market_price().await.expect("Failed to fetch market price");
+                    tracing::info!("Market Price Chainlink: {:?}", price);
+                    assert!(price > 1500. && price < 3000., "Unexpected price value");
+                }
+            }
+            None => {
+                tracing::error!("No tokens found");
+            }
         }
     }
 }

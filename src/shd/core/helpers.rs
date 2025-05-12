@@ -18,6 +18,7 @@ use tycho_simulation::evm::{
 };
 
 use num_bigint::BigUint;
+use tycho_simulation::protocol::models::ProtocolComponent;
 
 use crate::types::config::{EnvConfig, MarketMakerConfig};
 use crate::types::tycho::{PsbConfig, TychoSupportedProtocol};
@@ -97,9 +98,9 @@ pub async fn scope(config: MarketMakerConfig, env: EnvConfig) -> Vec<Token> {
 
 /// Get the tokens from the Tycho API
 /// Filters are hardcoded for now.
-pub async fn specific(mmc: MarketMakerConfig, env: EnvConfig, addresses: Vec<String>) -> Option<Vec<Token>> {
+pub async fn specific(mmc: MarketMakerConfig, key: Option<&str>, addresses: Vec<String>) -> Option<Vec<Token>> {
     tracing::info!("Getting tokens for network {}", mmc.network);
-    match HttpRPCClient::new(format!("https://{}", mmc.tycho_endpoint).as_str(), Some(&env.tycho_api_key.as_str())) {
+    match HttpRPCClient::new(format!("https://{}", mmc.tycho_endpoint).as_str(), key) {
         Ok(client) => {
             let addresses = addresses.iter().map(|a| Bytes::from_str(a.to_lowercase().as_str()).unwrap()).collect::<Vec<Bytes>>();
             let (chain, _, _) = chain(mmc.network.clone()).expect("Invalid chain");
@@ -183,5 +184,11 @@ fn sanitize(input: Vec<ResponseToken>) -> Vec<Token> {
         s.address.to_string().starts_with("0x")
     })
     .collect()
+}
+
+// Just a helper function to print the component in a custom way
+pub fn cpname(cp: ProtocolComponent) -> String {
+    let addr: String = cp.id.to_string().chars().take(7).collect();
+    format!("{}::{:.15}", addr, cp.protocol_system)
 }
 

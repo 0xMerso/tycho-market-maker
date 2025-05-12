@@ -9,10 +9,12 @@ use super::maker::PriceFeedConfig;
 #[derive(Debug, Clone)]
 pub struct EnvConfig {
     pub testing: bool,
+    // APIs
     pub heartbeat: String,
-    pub sender: String,
-    pub pvkey: String,
     pub tycho_api_key: String,
+    // Wallet
+    pub wallet_public_key: String,
+    pub wallet_private_key: String,
 }
 
 impl Default for EnvConfig {
@@ -26,18 +28,18 @@ impl EnvConfig {
         EnvConfig {
             testing: utils::misc::get("TESTING") == "true",
             heartbeat: utils::misc::get("HEARTBEAT"),
-            sender: utils::misc::get("SENDER"),
-            pvkey: utils::misc::get("PV_KEY"),
+            wallet_public_key: utils::misc::get("WALLET_PUBLIC_KEY"),
+            wallet_private_key: utils::misc::get("WALLET_PRIVATE_KEY"),
             tycho_api_key: utils::misc::get("TYCHO_API_KEY"),
         }
     }
 
-    pub fn log_config(&self) {
+    pub fn print(&self) {
         tracing::debug!("Env Config:");
         tracing::debug!("  Testing:               {}", self.testing);
         tracing::debug!("  Heartbeat:             {}", self.heartbeat);
-        tracing::debug!("  Sender:                {}", self.sender);
-        tracing::debug!("  Private Key:           {}...", &self.pvkey[..5]);
+        tracing::debug!("  Public key:            {}", self.wallet_public_key);
+        tracing::debug!("  Private Key:           🤐");
         tracing::debug!("  Tycho API Key:         {}...", &self.tycho_api_key[..5]);
     }
 }
@@ -55,16 +57,11 @@ pub struct MarketMakerConfig {
     pub spread: u32,
     pub slippage: u32,
     pub profitability: bool,
-    pub price: f64,
-    pub reference: String,
-    pub wallet_public_key: String,
-    pub wallet_private_key: String,
     pub max_trade_allocation: f64,
     pub broadcast: String,
     pub gas_limit: u64,
     pub target_block_offset: u64,
     pub tycho_endpoint: String,
-    pub tycho_api_key: String,
     pub poll_interval_ms: u64,
     pub permit2: String,
     pub tycho_router: String,
@@ -72,7 +69,7 @@ pub struct MarketMakerConfig {
 }
 
 impl MarketMakerConfig {
-    pub fn log_config(&self) {
+    pub fn print(&self) {
         tracing::debug!("Market Maker Config:");
         tracing::debug!("  Network:               {}", self.network);
         tracing::debug!("  Token0:                {} ({})", self.token0, self.addr0);
@@ -82,14 +79,11 @@ impl MarketMakerConfig {
         tracing::debug!("  Spread (bps):          {}", self.spread);
         tracing::debug!("  Slippage (bps):        {}", self.slippage);
         tracing::debug!("  Profitability Check:   {}", self.profitability);
-        tracing::debug!("  Reference Price:       {} ({})", self.price, self.reference);
-        tracing::debug!("  Wallet Public Key:     {}", self.wallet_public_key);
         tracing::debug!("  Max Trade Allocation:  {}", self.max_trade_allocation);
         tracing::debug!("  Execution Mode:        {}", self.broadcast);
         tracing::debug!("  Gas Limit:             {}", self.gas_limit);
         tracing::debug!("  Target Block Offset:   {}", self.target_block_offset);
         tracing::debug!("  Tycho Endpoint:        {}", self.tycho_endpoint);
-        tracing::debug!("  Tycho API Key:         {}", self.tycho_api_key);
         tracing::debug!("  Poll Interval (secs):  {}", self.poll_interval_ms);
         tracing::debug!("  Permit2:               {}", self.permit2);
         tracing::debug!("  Tycho Router:          {}", self.tycho_router);
