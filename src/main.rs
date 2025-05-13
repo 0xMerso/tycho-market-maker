@@ -1,14 +1,11 @@
 use std::{collections::HashMap, panic::AssertUnwindSafe, sync::Arc};
 
-use alloy::rpc::types::serde_helpers::quantity::vec;
 use futures::FutureExt;
 use shd::{
     core::feed::{BinancePriceFeed, ChainlinkPriceFeed, PriceFeed, PriceFeedType},
-    data::keys,
     types::{
         config::EnvConfig,
-        maker::{IMarketMaker, MarketMaker, MarketMakerBuilder},
-        misc::StreamState,
+        maker::{IMarketMaker, MarketMakerBuilder},
         tycho::TychoStreamState,
     },
     utils::r#static::RESTART,
@@ -37,23 +34,32 @@ async fn main() {
         PriceFeedType::Chainlink => Box::new(ChainlinkPriceFeed),
         // @dev Add your custom price feed here
     };
-    let base = config.addr0.clone();
-    let quote = config.addr1.clone();
-    match shd::core::helpers::specific(config.clone(), Some(env.tycho_api_key.as_str()), vec![base, quote]).await {
+
+    let base = config.addr0.clone().to_lowercase();
+    let quote = config.addr1.clone().to_lowercase();
+    match shd::core::helpers::tokens(config.clone(), Some(env.tycho_api_key.as_str())).await {
         Some(tokens) => {
-            let base = tokens[0].clone();
-            let quote = tokens[1].clone();
+            let base = tokens
+                .iter()
+                .find(|t| t.address.to_string() == base)
+                .unwrap_or_else(|| panic!("Base token not found in the list of tokens: {}", base));
+            let quote = tokens
+                .iter()
+                .find(|t| t.address.to_string() == quote)
+                .unwrap_or_else(|| panic!("Quote token not found in the list of tokens: {}", quote));
+
             tracing::info!("Base  token: {} | Quote token: {}", base.symbol, quote.symbol);
             let mut mk = MarketMakerBuilder::new(config.clone(), feed)
-                .build(base, quote)
+                .build(base.clone(), quote.clone())
                 .expect("Failed to build Market Maker with the given config");
+            shd::core::inventory::wallet(config.clone(), env.clone()).await;
             if let Ok(price) = mk.market_price().await {
                 tracing::info!("Market Price: {:?}", price);
             }
-            shd::core::inventory::wallet(config.clone(), env.clone()).await;
             let cache = Arc::new(RwLock::new(TychoStreamState {
                 protosims: HashMap::new(),
                 components: HashMap::new(),
+                atks: tokens.clone(),
             }));
             loop {
                 tracing::debug!("Launching stream for network {}", config.network);

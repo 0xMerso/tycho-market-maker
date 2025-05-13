@@ -6,6 +6,7 @@ addr0 = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
 token1 = "USDC" # Quote
 addr1 = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
 network = "ethereum" # "base", "unichain"
+gas_token = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" # Erc20
 rpc = "https://eth.llamarpc.com"
 explorer = "https://etherscan.io/"
 tycho_endpoint = "tycho-beta.propellerheads.xyz"
@@ -23,11 +24,11 @@ tycho_router = "0x0178f471f219737c51d6005556d2f44de011a08a"
 # === Misc ===
 poll_interval_ms = 12000
 
-
 [pfc] # ======= MM Price Feed Config ======= 
-# Expected is token0 to token1 => if token0 is ETH and token1 USDC, then price is ~2500, not 0.0004
-type = "binance"
-source = "https://api.binance.com/api/v3"         
-# type = "chainlink"                   
-# source = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419"
-# type = "custom"
+# Expected price is token0 per token1 => if token0 is ETH and token1 USDC, then price is ~2500, not 0.0004
+# type = "binance"
+# source = "https://api.binance.com/api/v3"         
+type = "chainlink"                   
+source = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419"
+# type = "custom" 
+# type = "twap" 

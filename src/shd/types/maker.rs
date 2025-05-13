@@ -18,7 +18,7 @@ use super::{
 pub trait IMarketMaker: Send + Sync {
     fn prices(&self, components: &[ProtocolComponent], pts: &HashMap<String, Box<dyn ProtocolSim>>) -> Vec<f64>;
     async fn evaluate(&self, components: Vec<ProtocolComponent>, sps: Vec<f64>, reference: f64) -> Vec<CompReadjustment>;
-    async fn readjust(&self, inventory: Inventory, orders: Vec<CompReadjustment>);
+    async fn readjust(&self, inventory: Inventory, orders: Vec<CompReadjustment>, env: EnvConfig);
     async fn inventory(&self, env: EnvConfig) -> Result<Inventory, String>;
     async fn market_price(&self) -> Result<f64, String>;
     async fn monitor(&mut self, mtx: SharedTychoStreamState, env: EnvConfig);
@@ -78,15 +78,18 @@ pub enum TradeDirection {
 #[derive(Debug, Clone)]
 pub struct CompReadjustment {
     pub direction: TradeDirection,
+    pub selling: Token,
+    pub buying: Token,
     pub component: ProtocolComponent,
     pub spot: f64,
     pub reference: f64,
+    pub spread: f64,
     pub spread_bps: f64,
 }
 
 #[derive(Debug, Clone)]
 pub struct Inventory {
-    pub base: u128,
-    pub quote: u128,
+    pub base_balance: u128,
+    pub quote_balance: u128,
     pub nonce: u64,
 }

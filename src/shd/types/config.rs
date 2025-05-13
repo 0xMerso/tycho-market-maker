@@ -39,7 +39,7 @@ impl EnvConfig {
         tracing::debug!("  Testing:               {}", self.testing);
         tracing::debug!("  Heartbeat:             {}", self.heartbeat);
         tracing::debug!("  Public key:            {}", self.wallet_public_key);
-        tracing::debug!("  Private Key:           🤐");
+        // tracing::debug!("  Private Key:           🤐");
         tracing::debug!("  Tycho API Key:         {}...", &self.tycho_api_key[..5]);
     }
 }

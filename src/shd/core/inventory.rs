@@ -1,16 +1,8 @@
-use std::{env, sync::Arc};
 
-use alloy::{
-    providers::{Provider, ProviderBuilder, RootProvider},
-    transports::http::Http,
-};
-use reqwest::Client;
+use alloy::providers::{Provider, ProviderBuilder};
 
 use crate::{
-    types::{
-        config::{EnvConfig, MarketMakerConfig},
-        sol::IERC20,
-    },
+    types::config::{EnvConfig, MarketMakerConfig},
     utils::evm::balances,
 };
 

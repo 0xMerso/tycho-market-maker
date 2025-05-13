@@ -2,10 +2,10 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use tycho_client::rpc::RPCClient;
 use tycho_client::HttpRPCClient;
-use tycho_common::dto::{PaginationParams, PaginationResponse, ResponseToken, TokensRequestBody};
+use tycho_common::dto::{PaginationParams, ProtocolStateRequestBody, ResponseToken, TokensRequestBody, VersionParam};
 use tycho_common::Bytes;
 use tycho_simulation::evm::protocol::ekubo::state::EkuboState;
-use tycho_simulation::evm::protocol::filters::{balancer_pool_filter, curve_pool_filter, uniswap_v4_pool_with_hook_filter};
+use tycho_simulation::evm::protocol::filters::{balancer_pool_filter, uniswap_v4_pool_with_hook_filter};
 use tycho_simulation::models::Token;
 
 use tycho_simulation::evm::protocol::uniswap_v3::state::UniswapV3State;
@@ -21,12 +21,18 @@ use num_bigint::BigUint;
 use tycho_simulation::protocol::models::ProtocolComponent;
 
 use crate::types::config::{EnvConfig, MarketMakerConfig};
-use crate::types::tycho::{PsbConfig, TychoSupportedProtocol};
+use crate::types::tycho::{AmmType, PsbConfig, TychoSupportedProtocol};
+use crate::utils::r#static::BASIS_POINT_DENO;
 
 /// Due to library conflicts, we need to redefine the Chain type depending the use case, hence the following aliases.
 pub type ChainCommon = tycho_common::dto::Chain;
 pub type ChainSimCore = tycho_simulation::tycho_core::dto::Chain;
 pub type ChainSimu = tycho_simulation::evm::tycho_models::Chain;
+
+/// ======================================================================================= ==== =====================================================================================================
+/// ======================================================================================= MISC =====================================================================================================
+/// ======================================================================================= ==== =====================================================================================================
+
 
 /// Return the chains types for a given network name
 pub fn chain(name: String) -> Option<(ChainCommon, ChainSimCore, ChainSimu)> {
@@ -36,6 +42,157 @@ pub fn chain(name: String) -> Option<(ChainCommon, ChainSimCore, ChainSimu)> {
         "unichain" => Some((ChainCommon::Unichain, ChainSimCore::Unichain, ChainSimu::Unichain)),
         _ => {
             tracing::error!("Unknown chain: {}", name);
+            None
+        }
+    }
+}
+
+/// ? This is just for information purposes, not used in MM algo
+/// Converts a native fee (as a hex string) into a byte vector representing fee in basis points.
+/// The conversion depends on the protocol type:
+/// - uniswap_v2_pool: fee is already in basis points (e.g., "0x1e" → 30)
+/// - uniswap_v3_pool or uniswap_v4_pool: fee is stored on a 1e6 scale (so 3000 → 30 bps, i.e. divide by 100)
+/// - curve: fee is stored on a pow10 scale (e.g., 4000000 becomes 4 bps, so divide by 1_000_000)
+/// - balancer_v2_pool: fee is stored on a pow18 scale (e.g., 1*10^15 becomes 10 bps, so divide by 1e14)
+pub fn amm_fee_to_bps(cp: ProtocolComponent) -> u128 {
+    let value = cp
+        .static_attributes
+        .iter()
+        .find(|(k, _)| *k == "key_lp_fee" || *k == "fee")
+        .map(|(_, v)| v.to_string())
+        .unwrap_or_default();
+    let fee = value.trim_start_matches("0x");
+    let fee = u128::from_str_radix(fee, 16).unwrap_or(0);
+    let fee = match AmmType::from(cp.protocol_type_name.as_str()) {
+        AmmType::PancakeswapV2 | AmmType::Sushiswap | AmmType::UniswapV2 => fee, // Already in bps
+        AmmType::PancakeswapV3 | AmmType::UniswapV3 | AmmType::UniswapV4 => fee * (BASIS_POINT_DENO as u128) / 1_000_000,
+        AmmType::Curve => 4,   // Not implemented, assuming 4 bps by default
+        AmmType::EkuboV2 => 0, // Not implemented, assuming 0 bps by default
+        AmmType::Balancer => (fee * (BASIS_POINT_DENO as u128)) / 1e18 as u128,
+    };
+    fee
+}
+
+// Just a helper function to print the component name in a custom way
+pub fn cpname(cp: ProtocolComponent) -> String {
+    let fee = amm_fee_to_bps(cp.clone());
+    let addr: String = cp.id.to_string().chars().take(7).collect();
+    format!("[{} {:>15} {:>3}]", addr, cp.protocol_system, fee)
+}
+
+/// ======================================================================================= ===== =====================================================================================================
+/// ======================================================================================= Tycho =====================================================================================================
+/// ======================================================================================= ===== =====================================================================================================
+
+
+/// Filter out invalid strings from a vector of strings, that are not ASCII
+fn sanitize(input: Vec<ResponseToken>) -> Vec<Token> {
+    let mut tokens = vec![];
+    for t in input.iter() {
+        let g = t.gas.first().unwrap_or(&Some(0u64)).unwrap_or_default();
+        if t.symbol.len() >= 20 {
+            continue; // Symbol has been mistaken for a contract address, possibly.
+        }
+        if let Ok(addr) = tycho_simulation::tycho_core::Bytes::from_str(t.address.clone().to_string().as_str()) {
+            tokens.push(Token {
+                address: addr,
+                decimals: t.decimals as usize,
+                symbol: t.symbol.clone(),
+                gas: BigUint::from(g),
+            });
+        }
+    }
+    tokens.into_iter()
+    .filter(|s| {
+        // Ensure the symbol has no control characters and meets any other symbol criteria
+        s.symbol.chars().all(|c| c.is_ascii_graphic()) && 
+        !s.symbol.chars().any(|c| c.is_control()) &&
+        // Check that the address looks valid (e.g., starts with "0x" and is the correct length)
+        s.address.to_string().starts_with("0x")
+    })
+    .collect()
+}
+
+
+/// Get the tokens only for the configured strategy
+pub async fn scope(config: MarketMakerConfig, key: Option<&str>) -> Vec<Token> {
+    let atks = match tokens(config.clone(), key).await {
+        Some(t) => t,
+        None => {
+            tracing::error!("Failed to get tokens");
+            return vec![]
+        }
+    };
+    let targets = [config.addr0.clone().to_lowercase(), config.addr1.clone().to_lowercase()];
+    let tokens = atks
+        .iter()
+        .filter(|t| {
+            let addr = t.address.to_string().to_lowercase();
+            targets.iter().any(|target| target == &addr)
+        })
+        .cloned()
+        .collect::<Vec<Token>>();
+    tokens
+}
+
+
+/// Get the tokens from the Tycho API
+/// Filters are hardcoded for now.
+pub async fn specific(mmc: MarketMakerConfig, key: Option<&str>, addresses: Vec<String>) -> Option<Vec<Token>> {
+    tracing::info!("Getting tokens for network {}", mmc.network);
+    match HttpRPCClient::new(format!("https://{}", mmc.tycho_endpoint).as_str(), key) {
+        Ok(client) => {
+            let addresses = addresses.iter().map(|a| Bytes::from_str(a.to_lowercase().as_str()).unwrap()).collect::<Vec<Bytes>>();
+            let (chain, _, _) = chain(mmc.network.clone()).expect("Invalid chain");
+            let req = TokensRequestBody {
+                token_addresses: Some(addresses.clone()),
+                min_quality: Some(100),
+                traded_n_days_ago: None,
+                chain,
+                pagination: PaginationParams { page: 0, page_size: 500_i64 },
+            };
+            match client.get_tokens(&req.clone()).await {
+                Ok(result) => {
+                    let tokens = sanitize(result.tokens);
+                    Some(tokens)
+                }
+                Err(e) => {
+                    tracing::error!("Failed to get tokens on network {}: {:?}", mmc.network, e.to_string());
+                    None
+                }
+            }
+        }
+        Err(e) => {
+            tracing::error!("Failed to create client: {:?}", e.to_string());
+            None
+        }
+    }
+}
+
+
+/// Get the tokens from the Tycho API
+/// Filters are hardcoded for now.
+pub async fn tokens(mmc: MarketMakerConfig, key: Option<&str>) -> Option<Vec<Token>> {
+    tracing::info!("Getting tokens for network {}", mmc.network);
+    match HttpRPCClient::new(format!("https://{}", mmc.tycho_endpoint).as_str(), key) {
+        Ok(client) => {
+            let time = std::time::SystemTime::now();
+            let (chain, _, _) = chain(mmc.network.clone()).expect("Invalid chain");
+            match client.get_all_tokens(chain, Some(100), Some(1), 500).await {
+                Ok(result) => {
+                    let tokens = sanitize(result);
+                    let elasped = time.elapsed().unwrap_or_default().as_millis();
+                    tracing::debug!("Took {:?} ms to get {} tokens on {}", elasped, tokens.len(), mmc.network);
+                    Some(tokens)
+                }
+                Err(e) => {
+                    tracing::error!("Failed to get tokens on network {}: {:?}", mmc.network, e.to_string());
+                    None
+                }
+            }
+        }
+        Err(e) => {
+            tracing::error!("Failed to create client: {:?}", e.to_string());
             None
         }
     }
@@ -75,120 +232,57 @@ pub async fn psb(mmc: MarketMakerConfig, key: String, psbc: PsbConfig, tokens: V
     psb
 }
 
-/// Get the tokens only for the configured strategy
-pub async fn scope(config: MarketMakerConfig, env: EnvConfig) -> Vec<Token> {
-    let atks = match tokens(config.clone(), env.clone()).await {
-        Some(t) => t,
-        None => {
-            tracing::error!("Failed to get tokens");
-            return vec![]
-        }
+
+/// Get the balances of the component in the specified protocol system.
+/// Returns a HashMap of component addresses and their balances.
+/// Balance is returned as a u128, with decimals.
+pub async fn get_component_balances(mmc: MarketMakerConfig, cp: ProtocolComponent, key: String) -> Option<HashMap<String, u128>> {
+
+    match HttpRPCClient::new(format!("https://{}", mmc.tycho_endpoint).as_str(), Some(key.as_str())) {
+        Ok(client) => {
+     
+    let (chain, _, _) = chain(mmc.network.clone()).expect("Invalid chain");
+    let body = ProtocolStateRequestBody {
+        protocol_ids: Some(vec![cp.id.to_string().to_lowercase().clone()]),
+        protocol_system: cp.protocol_system, // Single, so cannot use protocol_ids vec of different protocols ?
+        chain,
+        include_balances: true,           // We want to include account balances.
+        version: VersionParam::default(), // { timestamp: None, block: None },
+        pagination: PaginationParams {
+            page: 0,        // Start at the first page.
+            page_size: 100, // Maximum page size supported is 100.
+        },
     };
-    let targets = vec![config.addr0.clone().to_lowercase(), config.addr1.clone().to_lowercase()];
-    let tokens = atks
-        .iter()
-        .filter(|t| {
-            let addr = t.address.to_string().to_lowercase();
-            targets.iter().any(|target| target == &addr)
-        })
-        .cloned()
-        .collect::<Vec<Token>>();
-    tokens
-}
-
-/// Get the tokens from the Tycho API
-/// Filters are hardcoded for now.
-pub async fn specific(mmc: MarketMakerConfig, key: Option<&str>, addresses: Vec<String>) -> Option<Vec<Token>> {
-    tracing::info!("Getting tokens for network {}", mmc.network);
-    match HttpRPCClient::new(format!("https://{}", mmc.tycho_endpoint).as_str(), key) {
-        Ok(client) => {
-            let addresses = addresses.iter().map(|a| Bytes::from_str(a.to_lowercase().as_str()).unwrap()).collect::<Vec<Bytes>>();
-            let (chain, _, _) = chain(mmc.network.clone()).expect("Invalid chain");
-            let req = TokensRequestBody {
-                token_addresses: Some(addresses.clone()),
-                min_quality: Some(100),
-                traded_n_days_ago: None,
-                chain,
-                pagination: PaginationParams { page: 0, page_size: 500 as i64 },
-            };
-            match client.get_tokens(&req.clone()).await {
-                Ok(result) => {
-                    let tokens = sanitize(result.tokens);
-                    Some(tokens)
-                }
-                Err(e) => {
-                    tracing::error!("Failed to get tokens on network {}: {:?}", mmc.network, e.to_string());
-                    return None
+    
+    match client.get_protocol_states(&body).await {
+        Ok(response) => {
+            let attributes = response.states.clone().into_iter().map(|state| state.attributes.clone()).collect::<Vec<_>>();
+            // for attribute in attributes.iter() {
+            //     for a in attribute.iter() {
+            //         tracing::debug!(" - Attribute key: {:?}", a.0);
+            //     }
+            // }
+            let component_balances = response.states.into_iter().map(|state| state.balances.clone()).collect::<Vec<_>>();
+            let mut result = HashMap::new();
+            for cb in component_balances.iter() {
+                for c in cb.iter() {
+                    let b = u128::from_str_radix(c.1.to_string().trim_start_matches("0x"), 16);
+                    if let Ok(b) = b {
+                        result.insert(c.0.clone().to_string().to_lowercase(), b);
+                    }
                 }
             }
+            Some(result)
         }
         Err(e) => {
-            tracing::error!("Failed to create client: {:?}", e.to_string());
+            tracing::error!("Failed to get protocol states: {}: {:?}", cp.id.to_string().clone(), e.to_string());
             None
         }
     }
 }
-
-
-/// Get the tokens from the Tycho API
-/// Filters are hardcoded for now.
-pub async fn tokens(mmc: MarketMakerConfig, env: EnvConfig) -> Option<Vec<Token>> {
-    tracing::info!("Getting tokens for network {}", mmc.network);
-    match HttpRPCClient::new(format!("https://{}", mmc.tycho_endpoint).as_str(), Some(&env.tycho_api_key.as_str())) {
-        Ok(client) => {
-            let time = std::time::SystemTime::now();
-            let (chain, _, _) = chain(mmc.network.clone()).expect("Invalid chain");
-            match client.get_all_tokens(chain, Some(100), Some(1), 500).await {
-                Ok(result) => {
-                    let tokens = sanitize(result);
-                    let elasped = time.elapsed().unwrap_or_default().as_millis();
-                    tracing::debug!("Took {:?} ms to get {} tokens on {}", elasped, tokens.len(), mmc.network);
-                    Some(tokens)
-                }
-                Err(e) => {
-                    tracing::error!("Failed to get tokens on network {}: {:?}", mmc.network, e.to_string());
-                    None
-                }
-            }
-        }
-        Err(e) => {
-            tracing::error!("Failed to create client: {:?}", e.to_string());
-            None
-        }
-    }
+Err(e) => {
+    tracing::error!("Failed to create client: {:?}", e.to_string());
+    None
 }
-
-/// Filter out invalid strings from a vector of strings, that are not ASCII
-fn sanitize(input: Vec<ResponseToken>) -> Vec<Token> {
-    let mut tokens = vec![];
-    for t in input.iter() {
-        let g = t.gas.first().unwrap_or(&Some(0u64)).unwrap_or_default();
-        if t.symbol.len() >= 20 {
-            continue; // Symbol has been mistaken for a contract address, possibly.
-        }
-        if let Ok(addr) = tycho_simulation::tycho_core::Bytes::from_str(t.address.clone().to_string().as_str()) {
-            tokens.push(Token {
-                address: addr,
-                decimals: t.decimals as usize,
-                symbol: t.symbol.clone(),
-                gas: BigUint::from(g),
-            });
-        }
-    }
-    tokens.into_iter()
-    .filter(|s| {
-        // Ensure the symbol has no control characters and meets any other symbol criteria
-        s.symbol.chars().all(|c| c.is_ascii_graphic()) && 
-        !s.symbol.chars().any(|c| c.is_control()) &&
-        // Check that the address looks valid (e.g., starts with "0x" and is the correct length)
-        s.address.to_string().starts_with("0x")
-    })
-    .collect()
 }
-
-// Just a helper function to print the component in a custom way
-pub fn cpname(cp: ProtocolComponent) -> String {
-    let addr: String = cp.id.to_string().chars().take(7).collect();
-    format!("{}::{:.15}", addr, cp.protocol_system)
 }
-

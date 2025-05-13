@@ -67,7 +67,7 @@ impl TychoSupportedProtocol {
     }
 }
 
-#[derive(Display, EnumString)]
+#[derive(Display)]
 pub enum AmmType {
     #[strum(serialize = "pancakeswap_v2_pool")]
     PancakeswapV2,
@@ -89,6 +89,23 @@ pub enum AmmType {
     Curve,
 }
 
+impl From<&str> for AmmType {
+    fn from(s: &str) -> Self {
+        match s {
+            "pancakeswap_v2_pool" => AmmType::PancakeswapV2,
+            "pancakeswap_v3_pool" => AmmType::PancakeswapV3,
+            "sushiswap_v2_pool" => AmmType::Sushiswap,
+            "uniswap_v2_pool" => AmmType::UniswapV2,
+            "uniswap_v3_pool" => AmmType::UniswapV3,
+            "uniswap_v4_pool" => AmmType::UniswapV4,
+            "balancer_v2_pool" => AmmType::Balancer,
+            "curve_pool" => AmmType::Curve,      // ?
+            "ekubo_v2_pool" => AmmType::EkuboV2, // ?
+            _ => panic!("Unknown AMM type"),
+        }
+    }
+}
+
 pub type SharedTychoStreamState = Arc<RwLock<TychoStreamState>>;
 
 /// Tycho Stream Data, stored in a Mutex/Arc for shared access between the SDK stream and the client or API.
@@ -97,6 +114,8 @@ pub struct TychoStreamState {
     pub protosims: HashMap<String, Box<dyn ProtocolSim>>,
     // Components instances, indexed by their unique identifier. Serialised and stored in Redis
     pub components: HashMap<String, ProtocolComponent>,
+    // All tokens given Tycho, used to find path, price, etc.
+    pub atks: Vec<Token>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

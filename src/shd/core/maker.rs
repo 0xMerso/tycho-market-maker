@@ -1,24 +1,18 @@
-use std::{collections::HashMap, env, hash::Hash};
+use std::collections::HashMap;
 
-use alloy::{
-    providers::{Provider, ProviderBuilder},
-    rpc::types::serde_helpers::quantity::vec,
-};
+use alloy::providers::{Provider, ProviderBuilder};
 use async_trait::async_trait;
+use env_logger::Env;
 use futures::StreamExt;
 use tycho_client::feed::component_tracker::ComponentFilter;
-use tycho_simulation::{
-    models::Token,
-    protocol::{models::ProtocolComponent, state::ProtocolSim},
-};
+use tycho_simulation::protocol::{models::ProtocolComponent, state::ProtocolSim};
 
 use crate::{
-    core::helpers::cpname,
-    data::keys,
+    core::helpers::{cpname, get_component_balances},
     types::{
         config::EnvConfig,
         maker::{CompReadjustment, IMarketMaker, Inventory, MarketMaker, TradeDirection},
-        tycho::{PsbConfig, SharedTychoStreamState, SrzToken},
+        tycho::{PsbConfig, SharedTychoStreamState},
     },
     utils::r#static::{ADD_TVL_THRESHOLD, BASIS_POINT_DENO, NULL_ADDRESS},
 };
@@ -45,9 +39,9 @@ impl IMarketMaker for MarketMaker {
                 }
             };
             let result = if is0base {
-                proto.spot_price(&cp.tokens[1], &cp.tokens[0])
-            } else {
                 proto.spot_price(&cp.tokens[0], &cp.tokens[1])
+            } else {
+                proto.spot_price(&cp.tokens[1], &cp.tokens[0])
             };
             match result {
                 Ok(price) => {
@@ -64,7 +58,7 @@ impl IMarketMaker for MarketMaker {
     // Evaluate if given pools are out of range (= require intervention)
     async fn evaluate(&self, components: Vec<ProtocolComponent>, sps: Vec<f64>, reference: f64) -> Vec<CompReadjustment> {
         let mut orders = vec![];
-        if sps.len() == 0 || components.len() != sps.len() {
+        if sps.is_empty() || components.len() != sps.len() {
             tracing::warn!("Components and spot prices length mismatch ({} != {})", components.len(), sps.len());
             return vec![];
         }
@@ -74,42 +68,38 @@ impl IMarketMaker for MarketMaker {
             let spread = spot - reference;
             let spread_bps = spread / reference * BASIS_POINT_DENO;
             // Check if the spread is above the threshold
+            let spread_name = self.quote.symbol.clone();
             if spread_bps.abs() > self.config.spread as f64 {
-                tracing::debug!(" - Pool {} | Spot: {:>15.5} | Spread: {:>10.2} = {:>10.2} bps", cpname(comp.clone()), spot, spread, spread_bps);
                 match spread_bps > 0. {
                     true => {
-                        // Pool is above the reference price, sell on pool
+                        // pool's 'quote' token is above the reference price, sell on pool
                         orders.push(CompReadjustment {
                             component: comp.clone(),
                             direction: TradeDirection::Buy,
+                            selling: self.base.clone(),
+                            buying: self.quote.clone(),
                             spot,
                             reference,
+                            spread,
                             spread_bps,
                         });
                     }
                     false => {
-                        // Pool is below the reference price, buy on pool
+                        // pool's 'quote' token is below the reference price, buy on pool
                         orders.push(CompReadjustment {
                             component: comp.clone(),
                             direction: TradeDirection::Sell,
+                            selling: self.quote.clone(),
+                            buying: self.base.clone(),
                             spot,
                             reference,
+                            spread,
                             spread_bps,
                         });
                     }
                 };
             }
         }
-        // Order by spread
-        orders.sort_by(|a, b| {
-            if a.spread_bps > b.spread_bps {
-                std::cmp::Ordering::Greater
-            } else if a.spread_bps < b.spread_bps {
-                std::cmp::Ordering::Less
-            } else {
-                std::cmp::Ordering::Equal
-            }
-        });
         // Compensation evaluation too ?
         orders
     }
@@ -118,27 +108,23 @@ impl IMarketMaker for MarketMaker {
     /// Might take some delay to get the balances which is an problem to deal with later
     /// Should be stored in memory and updated after each readjustment only
     async fn inventory(&self, env: EnvConfig) -> Result<Inventory, String> {
-        tracing::debug!("Inventory evaluation | MM at {}", env.wallet_public_key);
         let provider = ProviderBuilder::new().on_http(self.config.rpc.clone().parse().expect("Failed to parse RPC_URL"));
-        let tokens = vec![self.base.clone(), self.quote.clone()].iter().map(|t| t.address.to_string()).collect::<Vec<String>>();
+        let tokens = [self.base.clone(), self.quote.clone()].iter().map(|t| t.address.to_string()).collect::<Vec<String>>();
         match crate::utils::evm::balances(&provider, env.wallet_public_key.clone(), tokens.clone()).await {
-            Ok(balances) => {
-                tracing::debug!("Balances: {:?}", balances);
-                match provider.get_transaction_count(env.wallet_public_key.to_string().parse().unwrap()).await {
-                    Ok(nonce) => {
-                        tracing::debug!("Nonce of sender {}: {}", env.wallet_public_key.clone(), nonce);
-                        Ok(Inventory {
-                            base: balances[0].clone(),
-                            quote: balances[1].clone(),
-                            nonce,
-                        })
-                    }
-                    Err(e) => {
-                        tracing::warn!("Failed to get nonce: {:?}", e);
-                        Err(e.to_string())
-                    }
+            Ok(balances) => match provider.get_transaction_count(env.wallet_public_key.to_string().parse().unwrap()).await {
+                Ok(nonce) => {
+                    tracing::debug!("Inventory evaluation | Balances: {:?} | Nonce {} | Wallet {}", balances, nonce, env.wallet_public_key);
+                    Ok(Inventory {
+                        base_balance: balances[0],
+                        quote_balance: balances[1],
+                        nonce,
+                    })
                 }
-            }
+                Err(e) => {
+                    tracing::warn!("Failed to get nonce: {:?}", e);
+                    Err(e.to_string())
+                }
+            },
             Err(e) => {
                 tracing::warn!("Failed to get inventory: {:?}", e);
                 Err(e.to_string())
@@ -150,18 +136,95 @@ impl IMarketMaker for MarketMaker {
     // async fn size() {}
 
     /// Process readjustment orders
-    async fn readjust(&self, inventory: Inventory, crs: Vec<CompReadjustment>) {
-        // Profitability
+    /// Questions, given that there might be multiple readjustments to do:
+    /// - How to allocate the size of each readjustment, they are dependent on each other
+    /// "Optimal swap is to swap until marginal price + fee = market price"
+    async fn readjust(&self, inventory: Inventory, mut crs: Vec<CompReadjustment>, env: EnvConfig) {
+        // --- Ordering ---
+        // Order by spread
+        crs.sort_by(|a, b| {
+            if a.spread_bps > b.spread_bps {
+                std::cmp::Ordering::Greater
+            } else if a.spread_bps < b.spread_bps {
+                std::cmp::Ordering::Less
+            } else {
+                std::cmp::Ordering::Equal
+            }
+        });
+
         tracing::debug!("Profitability evaluation: {}", self.config.profitability);
         for cr in crs.iter() {
+            match get_component_balances(self.config.clone(), cr.component.clone(), env.tycho_api_key.clone()).await {
+                Some(balances) => {
+                    // for b in balances.iter() {
+                    //     tracing::debug!(" - Attribute: {}", b.0);
+                    // }
+
+                    let buying = cr.buying.clone();
+                    let buying_pow = 10f64.powi(buying.decimals as i32);
+                    let pool_buying_balance = balances.get(&buying.address.to_string().to_lowercase()).unwrap_or_else(|| panic!("Failed to get buying balance"));
+                    let pool_buying_balance_divided = (pool_buying_balance.clone() as f64) / buying_pow;
+
+                    let selling = cr.selling.clone();
+                    let selling_pow = 10f64.powi(selling.decimals as i32);
+                    let pool_selling_balance = balances.get(&selling.address.to_string().to_lowercase()).unwrap_or_else(|| panic!("Failed to get selling balance"));
+                    let pool_selling_balance_divided = (pool_selling_balance.clone() as f64) / selling_pow;
+
+                    // tracing::debug!(
+                    //     " Component {} has {:.2} {} and {:.2} {}",
+                    //     cpname(cr.component.clone()),
+                    //     pool_buying_balance_divided,
+                    //     buying.symbol,
+                    //     pool_selling_balance_divided,
+                    //     selling.symbol
+                    // );
+
+                    // --- Size & Allocation ---
+                    let inventory_balance = if selling == self.base { inventory.base_balance } else { inventory.quote_balance };
+                    let inventory_balance_divided = (inventory_balance as f64) / selling_pow;
+                    let optimal = pool_selling_balance_divided * 1. / BASIS_POINT_DENO;
+                    let max_alloc = inventory_balance_divided * self.config.max_trade_allocation as f64;
+                    let amount = inventory_balance_divided * self.config.max_trade_allocation as f64;
+
+                    let pool_msg = format!(
+                        " - Pool {} | Tycho Spot: {:>12.5} vs ref {:>12.5} | Spread: {:>7.2} {} = {:>5.0} bps)",
+                        cpname(cr.component.clone()),
+                        cr.spot,
+                        cr.reference,
+                        cr.spread,
+                        selling.symbol,
+                        cr.spread_bps,
+                    );
+                    let inventory_msg = format!(
+                        " Holding {:.2} {} in inventory | Optimal amount: {:.5} | Max allocation: {:.5} => selling {:.5} {} to buy {}",
+                        inventory_balance_divided, selling.symbol, optimal, max_alloc, amount, selling.symbol, buying.symbol
+                    );
+                    tracing::debug!("{} | {}", pool_msg, inventory_msg);
+                    // --- Execution ---
+                    // --- Fees ---
+                    // --- Gas ---
+                    // --- LP fees ---
+                    // --- Profitability ---
+                    // --- Prepa execution ---
+                }
+                None => {
+                    tracing::warn!("Failed to get component balances");
+                }
+            }
+        }
+
+        // --- Profitability ---
+        // --- Prepa execution ---
+        for _cr in crs.iter() {
             if !self.config.profitability {
             } else {
                 // tracing::warn!("Profitability evaluation not implemented yet");
                 // Fees (LP and gas)
+                // Buy until the effective marginal price (marginal price + fee) is equal to the market price.
                 return;
-                // buy until the effective marginal price (marginal price + fee) is equal to the market price.
             }
         }
+
         // Max Inventory
         // Allocation
         // Size optimization
@@ -171,13 +234,15 @@ impl IMarketMaker for MarketMaker {
     async fn monitor(&mut self, mtx: SharedTychoStreamState, env: EnvConfig) {
         loop {
             tracing::debug!("Connecting ProtocolStreamBuilder for {}", self.config.network);
-            let tokens = vec![self.base.clone(), self.quote.clone()];
             let psbc = PsbConfig {
                 filter: ComponentFilter::with_tvl_range(ADD_TVL_THRESHOLD, ADD_TVL_THRESHOLD),
             };
-            let mut components: Vec<tycho_simulation::protocol::models::ProtocolComponent> = vec![];
+            let state = mtx.read().await;
+            let atks = state.atks.clone();
+            drop(state);
+            let mut components = vec![];
             let mut protosims: HashMap<String, Box<dyn ProtocolSim>> = HashMap::new();
-            let psb = crate::core::helpers::psb(self.config.clone(), env.tycho_api_key.to_string(), psbc.clone(), tokens.clone()).await;
+            let psb = crate::core::helpers::psb(self.config.clone(), env.tycho_api_key.to_string(), psbc.clone(), atks.clone()).await;
             let _stream = match psb.build().await {
                 Ok(mut stream) => loop {
                     // Looping
@@ -194,26 +259,32 @@ impl IMarketMaker for MarketMaker {
                                     reference // msg.new_pairs.len(),
                                               // msg.removed_pairs.len()
                                 );
-                                if self.ready == false {
+                                if !self.ready {
                                     // --- First stream ---
                                     protosims = msg.states.clone();
                                     let mut keys = vec![];
                                     for (_id, comp) in msg.new_pairs.iter() {
                                         keys.push(comp.id.to_string().to_lowercase());
                                     }
+                                    let mut targets = 0;
                                     for k in keys.clone() {
                                         if let Some(_proto) = msg.states.get(&k.to_string()) {
                                             // Need to make sure protosim exists
                                             let comp = msg.new_pairs.get(&k.to_string()).expect("New pair not found");
                                             let symbols = comp.tokens.iter().map(|t| t.symbol.clone()).collect::<Vec<String>>();
                                             if !comp.id.to_string().contains(NULL_ADDRESS) {
-                                                tracing::debug!(" - Adding component of type {:<20} | Tokens: {:?} | Id: {:<10}", comp.protocol_type_name, symbols, comp.id);
                                                 components.push(comp.clone());
+                                                // If the component contains both config tokens, add it to the monitored list
+                                                let tks = comp.tokens.iter().map(|t| t.address.to_string().to_lowercase()).collect::<Vec<String>>();
+                                                if tks.contains(&self.base.address.to_string().to_lowercase()) && tks.contains(&self.quote.address.to_string().to_lowercase()) {
+                                                    targets += 1;
+                                                    tracing::debug!(" - Adding target component: {} | Tokens: {:?} ", cpname(comp.clone()), symbols);
+                                                }
                                             }
                                         }
                                     }
                                     self.ready = true;
-                                    tracing::info!("✅ ProtocolStreamBuilder initialised successfully");
+                                    tracing::info!("✅ ProtocolStreamBuilder initialised successfully. Monitoring {} on {} components", targets, components.len());
                                 } else {
                                     // --- Update protosims ---
                                     if !msg.states.is_empty() {
@@ -236,14 +307,24 @@ impl IMarketMaker for MarketMaker {
                                         }
                                     }
 
+                                    // Targets = components with both tokens, to monitor
+                                    // Components = all components, used to find route, pricing, etc.
+                                    let mut targets = vec![];
+                                    for cp in components.iter() {
+                                        let tks = cp.tokens.iter().map(|t| t.address.to_string().to_lowercase()).collect::<Vec<String>>();
+                                        if tks.contains(&self.base.address.to_string().to_lowercase()) && tks.contains(&self.quote.address.to_string().to_lowercase()) {
+                                            targets.push(cp.clone());
+                                        }
+                                    }
+
                                     // --- Evaluate ---
-                                    let prices = self.prices(&components, &protosims);
-                                    let readjusments = self.evaluate(components.clone(), prices.clone(), reference).await;
-                                    if readjusments.len() > 0 {
+                                    let prices = self.prices(&targets, &protosims);
+                                    let readjusments = self.evaluate(targets.clone(), prices.clone(), reference).await;
+                                    if !readjusments.is_empty() {
                                         let inventory = self.inventory(env.clone()).await;
                                         let elasped = time.elapsed().unwrap_or_default().as_millis();
                                         tracing::info!(" - Evaluation until readjustments took {} ms", elasped);
-                                        self.readjust(inventory.unwrap(), readjusments).await;
+                                        self.readjust(inventory.unwrap(), readjusments, env.clone()).await;
                                     }
                                 }
                             }
