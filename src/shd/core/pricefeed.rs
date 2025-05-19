@@ -113,7 +113,7 @@ pub async fn chainlink(rpc: String, pfeed: String) -> Result<f64, String> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        core::feed::ChainlinkPriceFeed,
+        core::pricefeed::ChainlinkPriceFeed,
         types::{
             config::load_market_maker_config,
             maker::{IMarketMaker, MarketMakerBuilder},
@@ -129,7 +129,7 @@ mod tests {
         let config = load_market_maker_config("config/mmc.toml");
         let base = config.addr0.clone();
         let quote = config.addr1.clone();
-        let tokens = crate::core::helpers::specific(config.clone(), Some("sampletoken"), vec![base, quote]).await;
+        let tokens = crate::helpers::global::specific(config.clone(), Some("sampletoken"), vec![base, quote]).await;
         match tokens {
             Some(tokens) => {
                 let base = tokens[0].clone();
@@ -137,14 +137,14 @@ mod tests {
                 if config.pfc.r#type == "binance" {
                     let feed = BinancePriceFeed;
                     let mk2 = MarketMakerBuilder::new(config, Box::new(feed)).build(base, quote).expect("Failed to build Market Maker");
-                    let price = mk2.market_price().await.expect("Failed to fetch market price");
+                    let price = mk2.fetch_market_price().await.expect("Failed to fetch market price");
                     tracing::info!("Market Price: {:?}", price);
                     assert!(price > 1500. && price < 3000., "Unexpected price value");
                 } else if config.pfc.r#type == "chainlink" {
                     let config = load_market_maker_config("config/mmc.toml");
                     let feed = ChainlinkPriceFeed;
                     let mk2 = MarketMakerBuilder::new(config, Box::new(feed)).build(base, quote).expect("Failed to build Market Maker");
-                    let price = mk2.market_price().await.expect("Failed to fetch market price");
+                    let price = mk2.fetch_market_price().await.expect("Failed to fetch market price");
                     tracing::info!("Market Price Chainlink: {:?}", price);
                     assert!(price > 1500. && price < 3000., "Unexpected price value");
                 }

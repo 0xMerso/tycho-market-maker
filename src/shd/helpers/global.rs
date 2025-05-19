@@ -20,7 +20,7 @@ use tycho_simulation::evm::{
 use num_bigint::BigUint;
 use tycho_simulation::protocol::models::ProtocolComponent;
 
-use crate::types::config::{EnvConfig, MarketMakerConfig};
+use crate::types::config::MarketMakerConfig;
 use crate::types::tycho::{AmmType, PsbConfig, TychoSupportedProtocol};
 use crate::utils::r#static::BASIS_POINT_DENO;
 

@@ -13,22 +13,22 @@ use redis::{
 
 use crate::types::misc::StreamState;
 
-pub mod keys {
+// pub mod keys {
 
-    pub static PREFIX: &str = "mkmk";
+//     pub static PREFIX: &str = "mkmk";
 
-    pub fn status(network: String) -> String {
-        format!("{}:status:{}", PREFIX, network.to_lowercase())
-    }
+//     pub fn status(network: String) -> String {
+//         format!("{}:status:{}", PREFIX, network.to_lowercase())
+//     }
 
-    pub fn tokens(network: String) -> String {
-        format!("{}:tokens:{}", PREFIX, network.to_lowercase())
-    }
+//     pub fn tokens(network: String) -> String {
+//         format!("{}:tokens:{}", PREFIX, network.to_lowercase())
+//     }
 
-    pub fn components(network: String) -> String {
-        format!("{}:components:{}", PREFIX, network.to_lowercase())
-    }
-}
+//     pub fn components(network: String) -> String {
+//         format!("{}:components:{}", PREFIX, network.to_lowercase())
+//     }
+// }
 
 pub async fn ping() {
     let co = connect().await;

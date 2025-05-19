@@ -7,20 +7,24 @@ use tycho_simulation::{
     protocol::{models::ProtocolComponent, state::ProtocolSim},
 };
 
-use crate::core::feed::PriceFeed;
+use crate::core::pricefeed::PriceFeed;
 
 use super::{
     config::{EnvConfig, MarketMakerConfig},
-    tycho::SharedTychoStreamState,
+    tycho::{ProtoSimComp, SharedTychoStreamState},
 };
 
 #[async_trait]
 pub trait IMarketMaker: Send + Sync {
-    fn prices(&self, components: &[ProtocolComponent], pts: &HashMap<String, Box<dyn ProtocolSim>>) -> Vec<f64>;
+    fn get_prices(&self, components: &[ProtocolComponent], pts: &HashMap<String, Box<dyn ProtocolSim>>) -> Vec<f64>;
     async fn evaluate(&self, components: Vec<ProtocolComponent>, sps: Vec<f64>, reference: f64) -> Vec<CompReadjustment>;
-    async fn readjust(&self, inventory: Inventory, orders: Vec<CompReadjustment>, env: EnvConfig);
-    async fn inventory(&self, env: EnvConfig) -> Result<Inventory, String>;
-    async fn market_price(&self) -> Result<f64, String>;
+    async fn readjust(&self, inventory: Inventory, crs: Vec<CompReadjustment>, env: EnvConfig);
+
+    async fn fetch_inventory(&self, env: EnvConfig) -> Result<Inventory, String>;
+    async fn fetch_market_context(&self, ethpts: Vec<ProtoSimComp>, components: Vec<ProtocolComponent>, tokens: Vec<Token>) -> Option<MarketContext>;
+    async fn fetch_eth_usd(&self) -> Result<f64, String>;
+    async fn fetch_market_price(&self) -> Result<f64, String>;
+
     async fn monitor(&mut self, mtx: SharedTychoStreamState, env: EnvConfig);
 }
 
@@ -92,4 +96,20 @@ pub struct Inventory {
     pub base_balance: u128,
     pub quote_balance: u128,
     pub nonce: u64,
+}
+
+#[derive(Debug, Clone)]
+pub struct MarketContext {
+    pub base_to_eth: f64,
+    pub quote_to_eth: f64,
+    pub eth_to_usd: f64,
+}
+
+#[derive(Debug, Clone)]
+pub struct ExecutionOrder {
+    pub cr: CompReadjustment,
+    pub base_to_quote: bool,
+    pub powered_selling_amount: f64,
+    pub powered_buying_amount: f64,
+    pub powered_buying_amount_min_recv: f64,
 }

@@ -2,31 +2,39 @@ use std::collections::HashMap;
 
 use alloy::providers::{Provider, ProviderBuilder};
 use async_trait::async_trait;
-use env_logger::Env;
 use futures::StreamExt;
 use tycho_client::feed::component_tracker::ComponentFilter;
-use tycho_simulation::protocol::{models::ProtocolComponent, state::ProtocolSim};
+use tycho_simulation::{
+    models::Token,
+    protocol::{models::ProtocolComponent, state::ProtocolSim},
+};
 
 use crate::{
-    core::helpers::{cpname, get_component_balances},
+    helpers::global::{cpname, get_component_balances},
     types::{
         config::EnvConfig,
-        maker::{CompReadjustment, IMarketMaker, Inventory, MarketMaker, TradeDirection},
-        tycho::{PsbConfig, SharedTychoStreamState},
+        maker::{CompReadjustment, ExecutionOrder, IMarketMaker, Inventory, MarketContext, MarketMaker, TradeDirection},
+        tycho::{ProtoSimComp, PsbConfig, SharedTychoStreamState},
     },
     utils::r#static::{ADD_TVL_THRESHOLD, BASIS_POINT_DENO, NULL_ADDRESS},
 };
+
+use super::pricefeed::chainlink;
 
 #[async_trait]
 impl IMarketMaker for MarketMaker {
     /// Market Maker main functions
 
-    async fn market_price(&self) -> Result<f64, String> {
+    async fn fetch_market_price(&self) -> Result<f64, String> {
         self.feed.get(self.config.clone()).await
     }
 
+    async fn fetch_eth_usd(&self) -> Result<f64, String> {
+        chainlink(self.config.rpc.clone(), self.config.gas_token_chainlink.clone()).await
+    }
+
     /// Get the prices of the components
-    fn prices(&self, components: &[ProtocolComponent], pts: &HashMap<String, Box<dyn ProtocolSim>>) -> Vec<f64> {
+    fn get_prices(&self, components: &[ProtocolComponent], pts: &HashMap<String, Box<dyn ProtocolSim>>) -> Vec<f64> {
         let mut ss = Vec::new();
         for cp in components.iter() {
             let token0 = cp.tokens[0].address.to_string().to_lowercase();
@@ -68,7 +76,6 @@ impl IMarketMaker for MarketMaker {
             let spread = spot - reference;
             let spread_bps = spread / reference * BASIS_POINT_DENO;
             // Check if the spread is above the threshold
-            let spread_name = self.quote.symbol.clone();
             if spread_bps.abs() > self.config.spread as f64 {
                 match spread_bps > 0. {
                     true => {
@@ -107,7 +114,7 @@ impl IMarketMaker for MarketMaker {
     /// Token inventory balances and metadata
     /// Might take some delay to get the balances which is an problem to deal with later
     /// Should be stored in memory and updated after each readjustment only
-    async fn inventory(&self, env: EnvConfig) -> Result<Inventory, String> {
+    async fn fetch_inventory(&self, env: EnvConfig) -> Result<Inventory, String> {
         let provider = ProviderBuilder::new().on_http(self.config.rpc.clone().parse().expect("Failed to parse RPC_URL"));
         let tokens = [self.base.clone(), self.quote.clone()].iter().map(|t| t.address.to_string()).collect::<Vec<String>>();
         match crate::utils::evm::balances(&provider, env.wallet_public_key.clone(), tokens.clone()).await {
@@ -128,6 +135,38 @@ impl IMarketMaker for MarketMaker {
             Err(e) => {
                 tracing::warn!("Failed to get inventory: {:?}", e);
                 Err(e.to_string())
+            }
+        }
+    }
+
+    /// @param components: list of ALL components, used to find the path than can be multi hop
+    /// @param tokens: list of ALL tokens
+    /// Fetch base/ETH and quote/ETH spot prices
+    /// Fetch ETH/USD
+    /// Compute base/USD and quote/USD
+    async fn fetch_market_context(&self, ethpts: Vec<ProtoSimComp>, components: Vec<ProtocolComponent>, tokens: Vec<Token>) -> Option<MarketContext> {
+        let eth_to_usd = self.fetch_eth_usd().await;
+        let base_to_eth_vp = super::routing::find_path(components.clone(), self.base.address.to_string().to_lowercase(), self.config.gas_token.to_lowercase());
+        let quote_to_eth_vp = super::routing::find_path(components.clone(), self.quote.address.to_string().to_lowercase(), self.config.gas_token.to_lowercase());
+        match (base_to_eth_vp, quote_to_eth_vp, eth_to_usd) {
+            (Ok(base_to_eth_vp), Ok(quote_to_eth_vp), Ok(eth_to_usd)) => {
+                let base_to_eth = super::routing::quote(ethpts.clone(), tokens.clone(), base_to_eth_vp.token_path.clone());
+                let quote_to_eth = super::routing::quote(ethpts.clone(), tokens.clone(), quote_to_eth_vp.token_path.clone());
+                match (base_to_eth, quote_to_eth) {
+                    (Some(base_to_eth), Some(quote_to_eth)) => Some(MarketContext {
+                        base_to_eth,
+                        quote_to_eth,
+                        eth_to_usd,
+                    }),
+                    _ => {
+                        tracing::warn!("Failed to get base/ETH quote");
+                        None
+                    }
+                }
+            }
+            _ => {
+                tracing::warn!("Failed to find path for base|quote to ETH.");
+                None
             }
         }
     }
@@ -163,12 +202,12 @@ impl IMarketMaker for MarketMaker {
                     let buying = cr.buying.clone();
                     let buying_pow = 10f64.powi(buying.decimals as i32);
                     let pool_buying_balance = balances.get(&buying.address.to_string().to_lowercase()).unwrap_or_else(|| panic!("Failed to get buying balance"));
-                    let pool_buying_balance_divided = (pool_buying_balance.clone() as f64) / buying_pow;
+                    let pool_buying_balance_divided = (*pool_buying_balance as f64) / buying_pow;
 
                     let selling = cr.selling.clone();
                     let selling_pow = 10f64.powi(selling.decimals as i32);
                     let pool_selling_balance = balances.get(&selling.address.to_string().to_lowercase()).unwrap_or_else(|| panic!("Failed to get selling balance"));
-                    let pool_selling_balance_divided = (pool_selling_balance.clone() as f64) / selling_pow;
+                    let pool_selling_balance_divided = (*pool_selling_balance as f64) / selling_pow;
 
                     // tracing::debug!(
                     //     " Component {} has {:.2} {} and {:.2} {}",
@@ -180,11 +219,13 @@ impl IMarketMaker for MarketMaker {
                     // );
 
                     // --- Size & Allocation ---
+                    let base_to_quote = selling == self.base;
                     let inventory_balance = if selling == self.base { inventory.base_balance } else { inventory.quote_balance };
                     let inventory_balance_divided = (inventory_balance as f64) / selling_pow;
                     let optimal = pool_selling_balance_divided * 1. / BASIS_POINT_DENO;
-                    let max_alloc = inventory_balance_divided * self.config.max_trade_allocation as f64;
-                    let amount = inventory_balance_divided * self.config.max_trade_allocation as f64;
+                    let max_alloc = inventory_balance_divided * self.config.max_trade_allocation;
+                    let amount_selling = inventory_balance_divided * self.config.max_trade_allocation;
+                    let amount_buying = if base_to_quote { amount_selling * cr.spot } else { amount_selling / cr.spot };
 
                     let pool_msg = format!(
                         " - Pool {} | Tycho Spot: {:>12.5} vs ref {:>12.5} | Spread: {:>7.2} {} = {:>5.0} bps)",
@@ -195,15 +236,28 @@ impl IMarketMaker for MarketMaker {
                         selling.symbol,
                         cr.spread_bps,
                     );
+
                     let inventory_msg = format!(
-                        " Holding {:.2} {} in inventory | Optimal amount: {:.5} | Max allocation: {:.5} => selling {:.5} {} to buy {}",
-                        inventory_balance_divided, selling.symbol, optimal, max_alloc, amount, selling.symbol, buying.symbol
+                        " Inventory: {:.2} {} | Optimal: {:.5} | Max: {:.5} | Selling {:.5} {} for {:.5} {}",
+                        inventory_balance_divided, selling.symbol, optimal, max_alloc, amount_selling, selling.symbol, amount_buying, buying.symbol
                     );
+
                     tracing::debug!("{} | {}", pool_msg, inventory_msg);
-                    // --- Execution ---
-                    // --- Fees ---
-                    // --- Gas ---
-                    // --- LP fees ---
+                    // --- Prepa Exec ---
+                    let powered_selling_amount = amount_selling * selling_pow;
+                    let powered_buying_amount = amount_buying * buying_pow;
+                    let buying_amount_min_recv = amount_buying * (BASIS_POINT_DENO - self.config.slippage as f64) / BASIS_POINT_DENO;
+                    let powered_buying_amount_min_recv = buying_amount_min_recv * buying_pow;
+
+                    let exo = ExecutionOrder {
+                        cr: cr.clone(),
+                        base_to_quote,
+                        powered_selling_amount,
+                        powered_buying_amount,
+                        powered_buying_amount_min_recv,
+                    };
+                    // --- Gas Fees ---
+                    // --- Swap fees ---
                     // --- Profitability ---
                     // --- Prepa execution ---
                 }
@@ -242,7 +296,7 @@ impl IMarketMaker for MarketMaker {
             drop(state);
             let mut components = vec![];
             let mut protosims: HashMap<String, Box<dyn ProtocolSim>> = HashMap::new();
-            let psb = crate::core::helpers::psb(self.config.clone(), env.tycho_api_key.to_string(), psbc.clone(), atks.clone()).await;
+            let psb = crate::helpers::global::psb(self.config.clone(), env.tycho_api_key.to_string(), psbc.clone(), atks.clone()).await;
             let _stream = match psb.build().await {
                 Ok(mut stream) => loop {
                     // Looping
@@ -250,7 +304,7 @@ impl IMarketMaker for MarketMaker {
                         Some(msg) => match msg {
                             Ok(msg) => {
                                 let time = std::time::SystemTime::now();
-                                let reference = self.market_price().await.unwrap_or_default();
+                                let reference = self.fetch_market_price().await.unwrap_or_default();
                                 tracing::info!(
                                     "'{}' stream: block # {} with {} states updates | Market price: {}", // , + {} pairs, - {} pairs",
                                     self.config.network.clone(),
@@ -318,10 +372,13 @@ impl IMarketMaker for MarketMaker {
                                     }
 
                                     // --- Evaluate ---
-                                    let prices = self.prices(&targets, &protosims);
+                                    let prices = self.get_prices(&targets, &protosims);
                                     let readjusments = self.evaluate(targets.clone(), prices.clone(), reference).await;
                                     if !readjusments.is_empty() {
-                                        let inventory = self.inventory(env.clone()).await;
+                                        // This async block should be optimised as much as possible
+                                        let inventory = self.fetch_inventory(env.clone()).await;
+                                        // let context = self.market_context().await;
+
                                         let elasped = time.elapsed().unwrap_or_default().as_millis();
                                         tracing::info!(" - Evaluation until readjustments took {} ms", elasped);
                                         self.readjust(inventory.unwrap(), readjusments, env.clone()).await;

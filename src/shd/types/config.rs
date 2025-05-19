@@ -52,6 +52,8 @@ pub struct MarketMakerConfig {
     pub token1: String,
     pub addr1: String,
     pub network: String,
+    pub gas_token: String,
+    pub gas_token_chainlink: String,
     pub rpc: String,
     pub explorer: String,
     pub spread: u32,
@@ -59,6 +61,7 @@ pub struct MarketMakerConfig {
     pub profitability: bool,
     pub max_trade_allocation: f64,
     pub broadcast: String,
+    pub sampdepths: Vec<f64>,
     pub gas_limit: u64,
     pub target_block_offset: u64,
     pub tycho_endpoint: String,
@@ -76,11 +79,14 @@ impl MarketMakerConfig {
         tracing::debug!("  Token1:                {} ({})", self.token1, self.addr1);
         tracing::debug!("  RPC:                   {}", self.rpc);
         tracing::debug!("  Explorer:              {}", self.explorer);
+        tracing::debug!("  Gas token:             {}", self.gas_token);
+        tracing::debug!("  Gas token chainlink:   {}", self.gas_token_chainlink);
         tracing::debug!("  Spread (bps):          {}", self.spread);
         tracing::debug!("  Slippage (bps):        {}", self.slippage);
         tracing::debug!("  Profitability Check:   {}", self.profitability);
         tracing::debug!("  Max Trade Allocation:  {}", self.max_trade_allocation);
-        tracing::debug!("  Execution Mode:        {}", self.broadcast);
+        tracing::debug!("  Broadcast:             {}", self.broadcast);
+        tracing::debug!("  Sampdepths:            {:?}", self.sampdepths);
         tracing::debug!("  Gas Limit:             {}", self.gas_limit);
         tracing::debug!("  Target Block Offset:   {}", self.target_block_offset);
         tracing::debug!("  Tycho Endpoint:        {}", self.tycho_endpoint);

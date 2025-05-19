@@ -23,3 +23,15 @@ impl Display for StreamState {
         }
     }
 }
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+pub struct CoinGeckoResponse {
+    pub ethereum: CryptoPrice,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+pub struct CryptoPrice {
+    pub usd: f64,
+}

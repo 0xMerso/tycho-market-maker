@@ -4,24 +4,13 @@ use tycho_simulation::{
     protocol::{models::ProtocolComponent, state::ProtocolSim},
 };
 
-/// One component of the Tycho protocol, with his simulation instance
-#[derive(Clone, Debug)]
-pub struct ProtoSimComp {
-    pub component: ProtocolComponent,
-    pub protosim: Box<dyn ProtocolSim>,
-}
-
-#[derive(Clone, Debug)]
-pub struct ValorisationPath {
-    pub token_path: Vec<String>,
-    pub comp_path: Vec<String>,
-}
+use crate::types::tycho::{ProtoSimComp, ValorisationPath};
 
 /// DFS graph traversal method that explores as far as possible along each branch before backtracking
 /// Used to price any token to ETH equivalent value, to reflect gas cost
 /// But can be used to price any token to any other token
 /// Only return the path, not the price
-pub fn routing(cps: Vec<ProtocolComponent>, input: String, target: String) -> Result<ValorisationPath, String> {
+pub fn find_path(cps: Vec<ProtocolComponent>, input: String, target: String) -> Result<ValorisationPath, String> {
     // (destination token address, component id that provides this conversion)
     let mut graph: HashMap<String, Vec<(String, String)>> = HashMap::new();
     for comp in cps {
@@ -91,8 +80,8 @@ pub fn quote(pts: Vec<ProtoSimComp>, atks: Vec<Token>, path: Vec<String>) -> Opt
             let comp_tokens: Vec<String> = state.component.tokens.iter().map(|t| t.address.to_string().to_lowercase()).collect();
             if comp_tokens.contains(&token_in) && comp_tokens.contains(&token_out) {
                 // Resolve the tokens from the global list.
-                let base = Token::from(atks.iter().find(|t| t.address.to_string().to_lowercase() == token_in).unwrap().clone());
-                let quote = Token::from(atks.iter().find(|t| t.address.to_string().to_lowercase() == token_out).unwrap().clone());
+                let base = atks.iter().find(|t| t.address.to_string().to_lowercase() == token_in).unwrap().clone();
+                let quote = atks.iter().find(|t| t.address.to_string().to_lowercase() == token_out).unwrap().clone();
                 match state.protosim.spot_price(&base, &quote) {
                     Ok(rate) => {
                         // log::info!("Found rate {} for {} -> {}", rate, token_in, token_out);

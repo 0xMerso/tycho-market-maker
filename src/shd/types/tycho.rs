@@ -147,3 +147,16 @@ impl From<SrzToken> for Token {
         }
     }
 }
+
+/// One component of the Tycho protocol, with his simulation instance
+#[derive(Clone, Debug)]
+pub struct ProtoSimComp {
+    pub component: ProtocolComponent,
+    pub protosim: Box<dyn ProtocolSim>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ValorisationPath {
+    pub token_path: Vec<String>,
+    pub comp_path: Vec<String>,
+}
