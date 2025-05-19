@@ -2,7 +2,7 @@ use std::{collections::HashMap, panic::AssertUnwindSafe, sync::Arc};
 
 use futures::FutureExt;
 use shd::{
-    core::feed::{BinancePriceFeed, ChainlinkPriceFeed, PriceFeed, PriceFeedType},
+    core::pricefeed::{BinancePriceFeed, ChainlinkPriceFeed, PriceFeed, PriceFeedType},
     types::{
         config::EnvConfig,
         maker::{IMarketMaker, MarketMakerBuilder},
@@ -23,9 +23,10 @@ async fn main() {
     let env = EnvConfig::new();
     env.print();
     // let commit = shd::misc::commit();
-    let config = shd::types::config::load_market_maker_config("config/mmc.toml");
+    let config = shd::types::config::load_market_maker_config("config/mmc.mainnet.toml");
     config.print();
-    tracing::info!("--- Launching Tycho Market Maker --- | 🧪 Testing mode: {:?}", env.testing);
+    let latest = shd::utils::evm::latest(config.rpc.clone()).await;
+    tracing::info!("--- Launching Tycho Market Maker --- | 🧪 Testing mode: {:?} | Latest block: {}", env.testing, latest);
     // ============================================== Initialisation ==============================================
     // shd::utils::uptime::hearbeats(config.clone(), env.clone()).await;
     let pft = config.pfc.r#type.as_str();
@@ -37,7 +38,7 @@ async fn main() {
 
     let base = config.addr0.clone().to_lowercase();
     let quote = config.addr1.clone().to_lowercase();
-    match shd::core::helpers::tokens(config.clone(), Some(env.tycho_api_key.as_str())).await {
+    match shd::helpers::global::tokens(config.clone(), Some(env.tycho_api_key.as_str())).await {
         Some(tokens) => {
             let base = tokens
                 .iter()
@@ -53,7 +54,7 @@ async fn main() {
                 .build(base.clone(), quote.clone())
                 .expect("Failed to build Market Maker with the given config");
             shd::core::inventory::wallet(config.clone(), env.clone()).await;
-            if let Ok(price) = mk.market_price().await {
+            if let Ok(price) = mk.fetch_market_price().await {
                 tracing::info!("Market Price: {:?}", price);
             }
             let cache = Arc::new(RwLock::new(TychoStreamState {
