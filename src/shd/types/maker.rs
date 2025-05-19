@@ -18,14 +18,16 @@ use super::{
 pub trait IMarketMaker: Send + Sync {
     fn get_prices(&self, components: &[ProtocolComponent], pts: &HashMap<String, Box<dyn ProtocolSim>>) -> Vec<f64>;
     async fn evaluate(&self, components: Vec<ProtocolComponent>, sps: Vec<f64>, reference: f64) -> Vec<CompReadjustment>;
-    async fn readjust(&self, inventory: Inventory, crs: Vec<CompReadjustment>, env: EnvConfig);
+    async fn readjust(&self, context: MarketContext, inventory: Inventory, crs: Vec<CompReadjustment>, env: EnvConfig);
 
     async fn fetch_inventory(&self, env: EnvConfig) -> Result<Inventory, String>;
-    async fn fetch_market_context(&self, ethpts: Vec<ProtoSimComp>, components: Vec<ProtocolComponent>, tokens: Vec<Token>) -> Option<MarketContext>;
+    async fn fetch_market_context(&self, components: Vec<ProtocolComponent>, protosims: HashMap<std::string::String, Box<dyn ProtocolSim>>, tokens: Vec<Token>) -> Option<MarketContext>;
     async fn fetch_eth_usd(&self) -> Result<f64, String>;
     async fn fetch_market_price(&self) -> Result<f64, String>;
 
     async fn monitor(&mut self, mtx: SharedTychoStreamState, env: EnvConfig);
+    async fn execute(&self, order: Vec<ExecutionOrder>);
+    async fn broadcast(&self);
 }
 
 /// ================== Market Maker ==================

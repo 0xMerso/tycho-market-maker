@@ -5478,6 +5478,7 @@ name = "mkmk"
 version = "0.1.0"
 dependencies = [
  "alloy 0.3.6",
+ "alloy-chains",
  "alloy-primitives",
  "anyhow",
  "async-trait",

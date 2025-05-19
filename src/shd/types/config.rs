@@ -57,11 +57,12 @@ pub struct MarketMakerConfig {
     pub rpc: String,
     pub explorer: String,
     pub spread: u32,
+    // pub max_consistent_spread: u32, // security
     pub slippage: u32,
     pub profitability: bool,
     pub max_trade_allocation: f64,
     pub broadcast: String,
-    pub sampdepths: Vec<f64>,
+    pub sampdepths: Vec<f64>, // Quoted
     pub gas_limit: u64,
     pub target_block_offset: u64,
     pub tycho_endpoint: String,

@@ -10,7 +10,7 @@ use tycho_simulation::{
 };
 
 use crate::{
-    helpers::global::{cpname, get_component_balances},
+    helpers::global::{cpname, get_alloy_chain, get_component_balances},
     types::{
         config::EnvConfig,
         maker::{CompReadjustment, ExecutionOrder, IMarketMaker, Inventory, MarketContext, MarketMaker, TradeDirection},
@@ -143,15 +143,35 @@ impl IMarketMaker for MarketMaker {
     /// @param tokens: list of ALL tokens
     /// Fetch base/ETH and quote/ETH spot prices
     /// Fetch ETH/USD
-    /// Compute base/USD and quote/USD
-    async fn fetch_market_context(&self, ethpts: Vec<ProtoSimComp>, components: Vec<ProtocolComponent>, tokens: Vec<Token>) -> Option<MarketContext> {
+    /// ! Compute base/USD and quote/USD, based on a arbitrary path ! Just a valid path !
+    async fn fetch_market_context(&self, components: Vec<ProtocolComponent>, protosims: HashMap<std::string::String, Box<dyn ProtocolSim>>, tokens: Vec<Token>) -> Option<MarketContext> {
         let eth_to_usd = self.fetch_eth_usd().await;
         let base_to_eth_vp = super::routing::find_path(components.clone(), self.base.address.to_string().to_lowercase(), self.config.gas_token.to_lowercase());
         let quote_to_eth_vp = super::routing::find_path(components.clone(), self.quote.address.to_string().to_lowercase(), self.config.gas_token.to_lowercase());
         match (base_to_eth_vp, quote_to_eth_vp, eth_to_usd) {
             (Ok(base_to_eth_vp), Ok(quote_to_eth_vp), Ok(eth_to_usd)) => {
-                let base_to_eth = super::routing::quote(ethpts.clone(), tokens.clone(), base_to_eth_vp.token_path.clone());
-                let quote_to_eth = super::routing::quote(ethpts.clone(), tokens.clone(), quote_to_eth_vp.token_path.clone());
+                // HashMap<std::string::String, Box<dyn ProtocolSim>>
+
+                let mut to_eth_ptss = vec![];
+                for cp in components.iter() {
+                    let id = cp.id.to_string().to_lowercase();
+                    if base_to_eth_vp.comp_path.contains(&id) || quote_to_eth_vp.comp_path.contains(&id) {
+                        match protosims.get(&id) {
+                            Some(protosim) => {
+                                to_eth_ptss.push(ProtoSimComp {
+                                    component: cp.clone(),
+                                    protosim: protosim.clone(),
+                                });
+                            }
+                            None => {
+                                tracing::error!("contains: couldn't find protosim for component {}", cp.id);
+                            }
+                        }
+                    }
+                }
+
+                let base_to_eth = super::routing::quote(to_eth_ptss.clone(), tokens.clone(), base_to_eth_vp.token_path.clone());
+                let quote_to_eth = super::routing::quote(to_eth_ptss.clone(), tokens.clone(), quote_to_eth_vp.token_path.clone());
                 match (base_to_eth, quote_to_eth) {
                     (Some(base_to_eth), Some(quote_to_eth)) => Some(MarketContext {
                         base_to_eth,
@@ -174,11 +194,21 @@ impl IMarketMaker for MarketMaker {
     /// Find the optimal size for a given readjustment
     // async fn size() {}
 
+    async fn execute(&self, order: Vec<ExecutionOrder>) {
+        let achain = get_alloy_chain(self.config.network.clone()).expect("Failed to get alloy chain");
+        let provider = ProviderBuilder::new().with_chain(achain).on_http(self.config.rpc.parse().expect("Failed to parse RPC_URL"));
+        tracing::debug!("Executing {} orders. Broadcast config: {}", order.len(), self.config.broadcast);
+    }
+
+    async fn broadcast(&self) {
+        tracing::debug!("Broadcasting");
+    }
+
     /// Process readjustment orders
     /// Questions, given that there might be multiple readjustments to do:
     /// - How to allocate the size of each readjustment, they are dependent on each other
     /// "Optimal swap is to swap until marginal price + fee = market price"
-    async fn readjust(&self, inventory: Inventory, mut crs: Vec<CompReadjustment>, env: EnvConfig) {
+    async fn readjust(&self, context: MarketContext, inventory: Inventory, mut crs: Vec<CompReadjustment>, env: EnvConfig) {
         // --- Ordering ---
         // Order by spread
         crs.sort_by(|a, b| {
@@ -198,26 +228,15 @@ impl IMarketMaker for MarketMaker {
                     // for b in balances.iter() {
                     //     tracing::debug!(" - Attribute: {}", b.0);
                     // }
-
+                    // --- Token & Amounts ---
                     let buying = cr.buying.clone();
                     let buying_pow = 10f64.powi(buying.decimals as i32);
                     let pool_buying_balance = balances.get(&buying.address.to_string().to_lowercase()).unwrap_or_else(|| panic!("Failed to get buying balance"));
                     let pool_buying_balance_divided = (*pool_buying_balance as f64) / buying_pow;
-
                     let selling = cr.selling.clone();
                     let selling_pow = 10f64.powi(selling.decimals as i32);
                     let pool_selling_balance = balances.get(&selling.address.to_string().to_lowercase()).unwrap_or_else(|| panic!("Failed to get selling balance"));
                     let pool_selling_balance_divided = (*pool_selling_balance as f64) / selling_pow;
-
-                    // tracing::debug!(
-                    //     " Component {} has {:.2} {} and {:.2} {}",
-                    //     cpname(cr.component.clone()),
-                    //     pool_buying_balance_divided,
-                    //     buying.symbol,
-                    //     pool_selling_balance_divided,
-                    //     selling.symbol
-                    // );
-
                     // --- Size & Allocation ---
                     let base_to_quote = selling == self.base;
                     let inventory_balance = if selling == self.base { inventory.base_balance } else { inventory.quote_balance };
@@ -226,7 +245,7 @@ impl IMarketMaker for MarketMaker {
                     let max_alloc = inventory_balance_divided * self.config.max_trade_allocation;
                     let amount_selling = inventory_balance_divided * self.config.max_trade_allocation;
                     let amount_buying = if base_to_quote { amount_selling * cr.spot } else { amount_selling / cr.spot };
-
+                    // --- Debug ---
                     let pool_msg = format!(
                         " - Pool {} | Tycho Spot: {:>12.5} vs ref {:>12.5} | Spread: {:>7.2} {} = {:>5.0} bps)",
                         cpname(cr.component.clone()),
@@ -236,12 +255,10 @@ impl IMarketMaker for MarketMaker {
                         selling.symbol,
                         cr.spread_bps,
                     );
-
                     let inventory_msg = format!(
-                        " Inventory: {:.2} {} | Optimal: {:.5} | Max: {:.5} | Selling {:.5} {} for {:.5} {}",
+                        " Inventory: {:.2} {} | Optimal: {:.} | Max: {:.5} | Selling {:.5} {} for {:.5} {}",
                         inventory_balance_divided, selling.symbol, optimal, max_alloc, amount_selling, selling.symbol, amount_buying, buying.symbol
                     );
-
                     tracing::debug!("{} | {}", pool_msg, inventory_msg);
                     // --- Prepa Exec ---
                     let powered_selling_amount = amount_selling * selling_pow;
@@ -256,6 +273,7 @@ impl IMarketMaker for MarketMaker {
                         powered_buying_amount,
                         powered_buying_amount_min_recv,
                     };
+
                     // --- Gas Fees ---
                     // --- Swap fees ---
                     // --- Profitability ---
@@ -375,13 +393,28 @@ impl IMarketMaker for MarketMaker {
                                     let prices = self.get_prices(&targets, &protosims);
                                     let readjusments = self.evaluate(targets.clone(), prices.clone(), reference).await;
                                     if !readjusments.is_empty() {
-                                        // This async block should be optimised as much as possible
-                                        let inventory = self.fetch_inventory(env.clone()).await;
-                                        // let context = self.market_context().await;
-
-                                        let elasped = time.elapsed().unwrap_or_default().as_millis();
-                                        tracing::info!(" - Evaluation until readjustments took {} ms", elasped);
-                                        self.readjust(inventory.unwrap(), readjusments, env.clone()).await;
+                                        // --- Market context ---
+                                        match self.fetch_market_context(components.clone(), protosims.clone(), atks.clone()).await {
+                                            Some(context) => {
+                                                tracing::debug!("Market context: {:?}", context);
+                                                // This async block should be optimised as much as possible
+                                                match self.fetch_inventory(env.clone()).await {
+                                                    Ok(inventory) => {
+                                                        // let context = self.market_context().await;
+                                                        let elasped = time.elapsed().unwrap_or_default().as_millis();
+                                                        tracing::info!(" - Evaluation until readjustments took {} ms", elasped);
+                                                        self.readjust(context, inventory, readjusments, env.clone()).await;
+                                                    }
+                                                    Err(e) => {
+                                                        tracing::warn!("Failed to get inventory: {:?}", e);
+                                                        continue;
+                                                    }
+                                                }
+                                            }
+                                            None => {
+                                                tracing::warn!("Failed to get market context");
+                                            }
+                                        }
                                     }
                                 }
                             }

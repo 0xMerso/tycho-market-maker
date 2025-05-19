@@ -1,0 +1,39 @@
+# =========================================== Market Maker FuLL Configuration ===========================================
+
+# === Global ===
+token0 = "ETH" # Base
+addr0 = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+token1 = "WBTC" # Quote
+addr1 = "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599"
+network = "ethereum" # "base", "unichain"
+gas_token = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" # Erc20
+gas_token_chainlink = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419" # Chainlink price feed for Gas Token (ETH) to USD
+rpc = "https://eth-mainnet.blastapi.io/1437c115-f259-4690-a2d7-8c32e658a164" # https://eth.llamarpc.com"
+explorer = "https://etherscan.io/"
+tycho_endpoint = "tycho-beta.propellerheads.xyz"
+# === Execution ===
+spread = 30 # Bps
+slippage = 50
+profitability = true
+max_trade_allocation = 0.2
+# bribe=0.5
+broadcast = "buildernet" 
+sampdepths = [500.0, 5000.0, 50000.0]
+# idea: TEE Builder, Echo, Flashbots Protect etc.
+# auto topping up of gas: automatically buy some ETH when you run low on it.
+
+gas_limit = 300000
+target_block_offset = 1
+permit2 = "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+tycho_router = "0x0178f471f219737c51d6005556d2f44de011a08a"
+# === Misc ===
+poll_interval_ms = 12000
+
+[pfc] # ======= MM Price Feed Config ======= 
+# Expected price is token0 per token1 => if token0 is ETH and token1 USDC, then price is ~2500, not 0.0004
+# type = "binance"
+# source = "https://api.binance.com/api/v3"         
+type = "chainlink"                   
+source = "0xAc559F25B1619171CbC396a50854A3240b6A4e99" # https://docs.chain.link/data-feeds/price-feeds/addresses?page=1&testnetPage=1&network=ethereum&search=btc
+# type = "custom" 
+# type = "twap" 

@@ -17,6 +17,7 @@ use tycho_simulation::evm::{
     stream::ProtocolStreamBuilder,
 };
 
+use alloy_chains::NamedChain;
 use num_bigint::BigUint;
 use tycho_simulation::protocol::models::ProtocolComponent;
 
@@ -46,6 +47,20 @@ pub fn chain(name: String) -> Option<(ChainCommon, ChainSimCore, ChainSimu)> {
         }
     }
 }
+
+/// Get the Alloy chain based on the network name
+pub fn get_alloy_chain(network: String) -> Result<NamedChain, String> {
+    match network.as_str() {
+        "ethereum" => Ok(NamedChain::Mainnet),
+        "base" => Ok(NamedChain::Base),
+        "arbitrum" => Ok(NamedChain::Arbitrum),
+        _ => {
+            tracing::error!("Unsupported network: {}", network);
+            Err("Unsupported network".to_string())
+        }
+    }
+}
+
 
 /// ? This is just for information purposes, not used in MM algo
 /// Converts a native fee (as a hex string) into a byte vector representing fee in basis points.

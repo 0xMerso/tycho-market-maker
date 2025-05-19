@@ -23,7 +23,8 @@ async fn main() {
     let env = EnvConfig::new();
     env.print();
     // let commit = shd::misc::commit();
-    let config = shd::types::config::load_market_maker_config("config/mmc.mainnet.toml");
+    // let config = shd::types::config::load_market_maker_config("config/mmc.mainnet.toml");
+    let config = shd::types::config::load_market_maker_config("config/mmc.mainnet.eth-wbtc.toml");
     config.print();
     let latest = shd::utils::evm::latest(config.rpc.clone()).await;
     tracing::info!("--- Launching Tycho Market Maker --- | 🧪 Testing mode: {:?} | Latest block: {}", env.testing, latest);

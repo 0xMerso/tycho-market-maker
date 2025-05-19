@@ -46,6 +46,7 @@ async-trait = "0.1"
 alloy = { version = "0.3.1", features = ["full", "node-bindings", "json-rpc", "rpc-client", "providers", "signer-local", "rpc-types-eth"] }
 primitive-types = "0.10.1"
 alloy-primitives = "0.8.23"
+alloy-chains = "0.1.63"
 # --- DB ---
 redis = { version = "0.26.1", features = ["tokio-comp"] }
 
