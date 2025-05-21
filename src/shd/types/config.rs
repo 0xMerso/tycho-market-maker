@@ -58,6 +58,7 @@ pub struct MarketMakerConfig {
     pub explorer: String,
     pub spread: u32,
     // pub max_consistent_spread: u32, // security
+    // pub min_profit_spread_threshold: u32 // trigger
     pub slippage: u32,
     pub profitability: bool,
     pub max_trade_allocation: f64,
@@ -107,6 +108,8 @@ impl MarketMakerConfig {
         if !(0.0..=1.0).contains(&self.max_trade_allocation) {
             return Err("max_trade_allocation must be between 0.0 and 1.0".into());
         }
+        // if broadcast mode not available for the network, reject.
+        // ! Add tons of compatibility checks
         Ok(())
     }
 

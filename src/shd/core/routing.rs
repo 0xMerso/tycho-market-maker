@@ -100,6 +100,6 @@ pub fn quote(pts: Vec<ProtoSimComp>, atks: Vec<Token>, path: Vec<String>) -> Opt
             return None;
         }
     }
-    tracing::debug!(" - One unit of token ({:?} to {:?}) quoted to ETH = {}", path.first(), path.last(), cumulative_price);
+    // tracing::debug!(" - One unit of token ({:?} to {:?}) quoted to ETH = {}", path.first(), path.last(), cumulative_price);
     Some(cumulative_price)
 }

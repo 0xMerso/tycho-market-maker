@@ -16,17 +16,17 @@ use super::{
 
 #[async_trait]
 pub trait IMarketMaker: Send + Sync {
-    fn get_prices(&self, components: &[ProtocolComponent], pts: &HashMap<String, Box<dyn ProtocolSim>>) -> Vec<f64>;
-    async fn evaluate(&self, components: Vec<ProtocolComponent>, sps: Vec<f64>, reference: f64) -> Vec<CompReadjustment>;
+    fn spot_prices(&self, psc: &Vec<ProtoSimComp>) -> Vec<f64>;
+    async fn evaluate(&self, psc: &Vec<ProtoSimComp>, sps: Vec<f64>, reference: f64) -> Vec<CompReadjustment>;
     async fn readjust(&self, context: MarketContext, inventory: Inventory, crs: Vec<CompReadjustment>, env: EnvConfig);
 
     async fn fetch_inventory(&self, env: EnvConfig) -> Result<Inventory, String>;
-    async fn fetch_market_context(&self, components: Vec<ProtocolComponent>, protosims: HashMap<std::string::String, Box<dyn ProtocolSim>>, tokens: Vec<Token>) -> Option<MarketContext>;
+    async fn fetch_market_context(&self, components: Vec<ProtocolComponent>, protosims: &HashMap<std::string::String, Box<dyn ProtocolSim>>, tokens: Vec<Token>) -> Option<MarketContext>;
     async fn fetch_eth_usd(&self) -> Result<f64, String>;
     async fn fetch_market_price(&self) -> Result<f64, String>;
 
     async fn monitor(&mut self, mtx: SharedTychoStreamState, env: EnvConfig);
-    async fn execute(&self, order: Vec<ExecutionOrder>);
+    async fn execute(&self, order: Vec<ExecutionOrder>, env: EnvConfig);
     async fn broadcast(&self);
 }
 
@@ -83,10 +83,12 @@ pub enum TradeDirection {
 
 #[derive(Debug, Clone)]
 pub struct CompReadjustment {
+    // Tycho
+    pub psc: ProtoSimComp,
+    // Recomputated
     pub direction: TradeDirection,
     pub selling: Token,
     pub buying: Token,
-    pub component: ProtocolComponent,
     pub spot: f64,
     pub reference: f64,
     pub spread: f64,
@@ -105,13 +107,16 @@ pub struct MarketContext {
     pub base_to_eth: f64,
     pub quote_to_eth: f64,
     pub eth_to_usd: f64,
+    pub gas_price_wei: u128,
 }
 
 #[derive(Debug, Clone)]
 pub struct ExecutionOrder {
-    pub cr: CompReadjustment,
+    pub adjustment: CompReadjustment,
     pub base_to_quote: bool,
     pub powered_selling_amount: f64,
     pub powered_buying_amount: f64,
     pub powered_buying_amount_min_recv: f64,
+    pub selling_amount_worth_usd: f64,
+    pub buying_amount_worth_usd: f64,
 }

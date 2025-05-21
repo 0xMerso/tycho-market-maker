@@ -14,6 +14,12 @@ pub async fn latest(provider: String) -> u64 {
     provider.get_block_number().await.unwrap_or_default()
 }
 
+/// Used to retrieve gas price
+pub async fn gas_price(provider: String) -> u128 {
+    let provider = ProviderBuilder::new().on_http(provider.parse().unwrap());
+    provider.get_gas_price().await.unwrap_or_default()
+}
+
 /// Get the balance of the owner for the specified tokens.
 pub async fn balances(provider: &RootProvider<Http<Client>>, owner: String, tokens: Vec<String>) -> Result<Vec<u128>, String> {
     let mut balances = vec![];

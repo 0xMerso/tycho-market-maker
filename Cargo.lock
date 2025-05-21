@@ -5492,6 +5492,7 @@ dependencies = [
  "futures 0.3.31",
  "hex",
  "num-bigint",
+ "num-traits",
  "primitive-types 0.10.1",
  "rand 0.8.5",
  "redis",

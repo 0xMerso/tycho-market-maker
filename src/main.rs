@@ -24,7 +24,7 @@ async fn main() {
     env.print();
     // let commit = shd::misc::commit();
     // let config = shd::types::config::load_market_maker_config("config/mmc.mainnet.toml");
-    let config = shd::types::config::load_market_maker_config("config/mmc.mainnet.eth-wbtc.toml");
+    let config = shd::types::config::load_market_maker_config("config/mmc.mainnet.eth-usdc.toml");
     config.print();
     let latest = shd::utils::evm::latest(config.rpc.clone()).await;
     tracing::info!("--- Launching Tycho Market Maker --- | 🧪 Testing mode: {:?} | Latest block: {}", env.testing, latest);
@@ -36,6 +36,8 @@ async fn main() {
         PriceFeedType::Chainlink => Box::new(ChainlinkPriceFeed),
         // @dev Add your custom price feed here
     };
+
+    // Monitoring transactions via shared cache via hashmap, no Redis
 
     let base = config.addr0.clone().to_lowercase();
     let quote = config.addr1.clone().to_lowercase();
@@ -56,7 +58,7 @@ async fn main() {
                 .expect("Failed to build Market Maker with the given config");
             shd::core::inventory::wallet(config.clone(), env.clone()).await;
             if let Ok(price) = mk.fetch_market_price().await {
-                tracing::info!("Market Price: {:?}", price);
+                tracing::info!("Market Price: {:?} ({})", price, config.pfc.r#type);
             }
             let cache = Arc::new(RwLock::new(TychoStreamState {
                 protosims: HashMap::new(),

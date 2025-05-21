@@ -29,6 +29,7 @@ dotenv = "0.15.0"
 dotenv_codegen = "0.15.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+num-traits = "0.2.19"
 # --- Async ---
 futures = "0.3.31"
 tokio = { version = "1.28", features = ["full", "tracing"] }
