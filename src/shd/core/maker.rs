@@ -7,7 +7,7 @@ use crate::{
         maker::{CompReadjustment, ExecutionOrder, IMarketMaker, Inventory, MarketContext, MarketMaker, TradeDirection},
         tycho::{ProtoSimComp, PsbConfig, SharedTychoStreamState},
     },
-    utils::r#static::{ADD_TVL_THRESHOLD, BASIS_POINT_DENO, NULL_ADDRESS},
+    utils::r#static::{ADD_TVL_THRESHOLD, BASIS_POINT_DENO, NULL_ADDRESS, SHARE_POOL_BAL_SWAP_BPS},
 };
 use alloy::providers::{Provider, ProviderBuilder};
 use async_trait::async_trait;
@@ -262,11 +262,17 @@ impl IMarketMaker for MarketMaker {
                         tracing::warn!("Cannot readjust, skipping due to pool_selling_balance_divided < 0 !");
                         continue;
                     }
-                    // --- Size & Allocation ---
+
+                    // --- Size & Allocation --- v2
+                    let depths = self.config.depths.clone();
+                    for depth in depths {}
+
+                    // --- Size & Allocation --- v1
+
                     let base_to_quote = selling == self.base; // ! Key
                     let inventory_balance = if base_to_quote { inventory.base_balance } else { inventory.quote_balance };
                     let inventory_balance_divided = (inventory_balance as f64) / selling_pow;
-                    let optimal = pool_selling_balance_divided * 100. / BASIS_POINT_DENO;
+                    let optimal = pool_selling_balance_divided * SHARE_POOL_BAL_SWAP_BPS / BASIS_POINT_DENO;
                     let max_alloc = inventory_balance_divided * self.config.max_trade_allocation; // Capping the allocation to a maximum
 
                     // let selling_amount = inventory_balance_divided * self.config.max_trade_allocation;
@@ -316,6 +322,8 @@ impl IMarketMaker for MarketMaker {
                     // );
 
                     // --- Simulation ---
+                    // ? Should be done with x amounts, to pick the best one
+                    // See sampdepths
                     match adjustment.psc.protosim.get_amount_out(powered_selling_amount_bg.clone(), &selling, &buying) {
                         Ok(result) => {
                             // --- Price Impact & Gas Fees ---
@@ -339,22 +347,19 @@ impl IMarketMaker for MarketMaker {
                             //     gas_cost_in_output * 100.0
                             // );
 
-                            // --- Profitability ---
-
-                            // let average_sell_price = amount_out_divided / selling_amount;
-
+                            // --- Swap costs --- LP Fee + Price impact
                             let average_sell_price = match base_to_quote {
                                 true => amount_out_divided / selling_amount,
                                 false => 1. / (amount_out_divided / selling_amount),
                             };
-
                             let delta = average_sell_price - adjustment.spot;
                             let price_impact_bps = ((delta / adjustment.spot) * BASIS_POINT_DENO).round();
+
+                            // --- Swap costs --- Gas
                             let average_sell_price_net_of_gas = match base_to_quote {
                                 true => (amount_out_divided - gas_cost_in_output) / selling_amount,
                                 false => 1. / ((amount_out_divided - gas_cost_in_output) / selling_amount),
                             };
-
                             let delta_net_of_gas = average_sell_price_net_of_gas - adjustment.spot;
                             let price_impact_net_of_gas_bps = ((delta_net_of_gas / adjustment.spot) * BASIS_POINT_DENO).round(); // Potential execution price, if no slippage
 
@@ -362,12 +367,17 @@ impl IMarketMaker for MarketMaker {
                             // Fee = amount * pool_fee
                             // Price impact = (amount * pool_fee) - amount_out
                             tracing::debug!(
-                                " - LP Fee + Price impact: {} (bps) | gas_cost_usd: {:.4}$ | Average sell price: {:.4} (spot = {}) | Delta: {:.4} | Price impact net of gas: {} (bps) | Average sell price net of gas: {:.4} | Delta net of gas: {:.4}",
+                                " - base_to_quote: {} | swap cost (LP/PI): {} (bps) | gas_cost_usd: {:.4}$ | Average sell price: {:.4} (spot = {}) | Delta: {:.4}",
+                                base_to_quote,
                                 price_impact_bps,
                                 gas_cost_usd,
                                 average_sell_price,
                                 adjustment.spot,
-                                delta,
+                                delta
+                            );
+
+                            tracing::debug!(
+                                " - Price impact net of gas: {} (bps) | Average sell price net of gas: {:.4} | Delta net of gas: {:.4}",
                                 price_impact_net_of_gas_bps,
                                 average_sell_price_net_of_gas,
                                 delta_net_of_gas

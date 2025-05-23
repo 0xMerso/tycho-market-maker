@@ -120,3 +120,14 @@ pub struct ExecutionOrder {
     pub selling_amount_worth_usd: f64,
     pub buying_amount_worth_usd: f64,
 }
+
+#[derive(Debug, Clone)]
+pub struct OptimalAmountResult {
+    pub adjustment: CompReadjustment,
+    pub base_to_quote: bool,
+    pub powered_selling_amount: f64,
+    pub powered_buying_amount: f64,
+    pub powered_buying_amount_min_recv: f64,
+    pub selling_amount_worth_usd: f64,
+    pub buying_amount_worth_usd: f64,
+}

@@ -63,7 +63,7 @@ pub struct MarketMakerConfig {
     pub profitability: bool,
     pub max_trade_allocation: f64,
     pub broadcast: String,
-    pub sampdepths: Vec<f64>, // Quoted
+    pub depths: Vec<f64>, // Quoted
     pub gas_limit: u64,
     pub target_block_offset: u64,
     pub tycho_endpoint: String,
@@ -88,7 +88,7 @@ impl MarketMakerConfig {
         tracing::debug!("  Profitability Check:   {}", self.profitability);
         tracing::debug!("  Max Trade Allocation:  {}", self.max_trade_allocation);
         tracing::debug!("  Broadcast:             {}", self.broadcast);
-        tracing::debug!("  Sampdepths:            {:?}", self.sampdepths);
+        tracing::debug!("  Depths:                {:?}", self.depths);
         tracing::debug!("  Gas Limit:             {}", self.gas_limit);
         tracing::debug!("  Target Block Offset:   {}", self.target_block_offset);
         tracing::debug!("  Tycho Endpoint:        {}", self.tycho_endpoint);
