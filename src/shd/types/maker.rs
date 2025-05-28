@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use async_trait::async_trait;
 use serde::Deserialize;
+use tycho_execution::encoding::models::Solution;
 use tycho_simulation::{
     models::Token,
     protocol::{models::ProtocolComponent, state::ProtocolSim},
@@ -18,16 +19,21 @@ use super::{
 pub trait IMarketMaker: Send + Sync {
     fn spot_prices(&self, psc: &Vec<ProtoSimComp>) -> Vec<f64>;
     async fn evaluate(&self, psc: &Vec<ProtoSimComp>, sps: Vec<f64>, reference: f64) -> Vec<CompReadjustment>;
-    async fn readjust(&self, context: MarketContext, inventory: Inventory, crs: Vec<CompReadjustment>, env: EnvConfig);
+    async fn readjust(&self, context: MarketContext, inventory: Inventory, crs: Vec<CompReadjustment>, env: EnvConfig) -> Vec<ExecutionOrder>;
 
     async fn fetch_inventory(&self, env: EnvConfig) -> Result<Inventory, String>;
     async fn fetch_market_context(&self, components: Vec<ProtocolComponent>, protosims: &HashMap<std::string::String, Box<dyn ProtocolSim>>, tokens: Vec<Token>) -> Option<MarketContext>;
     async fn fetch_eth_usd(&self) -> Result<f64, String>;
     async fn fetch_market_price(&self) -> Result<f64, String>;
 
-    async fn monitor(&mut self, mtx: SharedTychoStreamState, env: EnvConfig);
-    async fn execute(&self, order: Vec<ExecutionOrder>, env: EnvConfig);
+    async fn solution(&self, order: ExecutionOrder, env: EnvConfig) -> Solution;
+    fn prepare(&self, orders: Vec<ExecutionOrder>, solutions: Vec<Solution>, env: EnvConfig) -> Result<bool, String>;
+    async fn simulate(&self, orders: Vec<ExecutionOrder>, solutions: Vec<Solution>, env: EnvConfig) -> Result<bool, String>;
+
+    async fn execute(&self, order: Vec<ExecutionOrder>, context: MarketContext, inventory: Inventory, env: EnvConfig);
     async fn broadcast(&self);
+
+    async fn monitor(&mut self, mtx: SharedTychoStreamState, env: EnvConfig);
 }
 
 /// ================== Market Maker ==================
@@ -113,21 +119,31 @@ pub struct MarketContext {
 #[derive(Debug, Clone)]
 pub struct ExecutionOrder {
     pub adjustment: CompReadjustment,
-    pub base_to_quote: bool,
-    pub powered_selling_amount: f64,
-    pub powered_buying_amount: f64,
-    pub powered_buying_amount_min_recv: f64,
-    pub selling_amount_worth_usd: f64,
-    pub buying_amount_worth_usd: f64,
+    pub calculation: SwapCalculation,
+    // pub bribing: BribeCalculation,
 }
 
-#[derive(Debug, Clone)]
-pub struct OptimalAmountResult {
-    pub adjustment: CompReadjustment,
+#[derive(Clone, Debug)]
+pub struct SwapCalculation {
     pub base_to_quote: bool,
+    pub selling_amount: f64,
+    pub buying_amount: f64,
     pub powered_selling_amount: f64,
     pub powered_buying_amount: f64,
-    pub powered_buying_amount_min_recv: f64,
-    pub selling_amount_worth_usd: f64,
-    pub buying_amount_worth_usd: f64,
+    // Post-swap price evaluation
+    pub amount_out_divided: f64,
+    pub amount_out_divided_min: f64,
+    pub powered_amount_out_divided_min: f64,
+    pub average_sell_price: f64,
+    pub average_sell_price_net_gas: f64,
+    // Gas
+    pub gas_cost_eth: f64,
+    pub gas_cost_usd: f64,
+    pub gas_cost_in_output_token: f64,
+    // Valuation
+    pub selling_worth_usd: f64,
+    pub buying_worth_usd: f64,
+    // Profitability
+    pub profit_delta_bps: f64,
+    pub profitable: bool,
 }

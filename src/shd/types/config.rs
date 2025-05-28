@@ -57,6 +57,7 @@ pub struct MarketMakerConfig {
     pub rpc: String,
     pub explorer: String,
     pub spread: u32,
+    pub min_exec_spread: f64,
     // pub max_consistent_spread: u32, // security
     // pub min_profit_spread_threshold: u32 // trigger
     pub slippage: u32,
@@ -84,6 +85,7 @@ impl MarketMakerConfig {
         tracing::debug!("  Gas token:             {}", self.gas_token);
         tracing::debug!("  Gas token chainlink:   {}", self.gas_token_chainlink);
         tracing::debug!("  Spread (bps):          {}", self.spread);
+        tracing::debug!("  min_exec_spread (bps): {}", self.min_exec_spread);
         tracing::debug!("  Slippage (bps):        {}", self.slippage);
         tracing::debug!("  Profitability Check:   {}", self.profitability);
         tracing::debug!("  Max Trade Allocation:  {}", self.max_trade_allocation);
