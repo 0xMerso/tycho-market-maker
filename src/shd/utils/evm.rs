@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use alloy::{
-    providers::{Provider, ProviderBuilder, RootProvider},
+    providers::{Provider, ProviderBuilder, RootProvider, utils::Eip1559Estimation},
     transports::http::Http,
 };
 use reqwest::Client;
@@ -18,6 +18,21 @@ pub async fn latest(provider: String) -> u64 {
 pub async fn gas_price(provider: String) -> u128 {
     let provider = ProviderBuilder::new().on_http(provider.parse().unwrap());
     provider.get_gas_price().await.unwrap_or_default()
+}
+
+/// Used to retrieve gas price
+pub async fn eip1559_fees(provider: String) -> Result<Eip1559Estimation, String> {
+    let provider = ProviderBuilder::new().on_http(provider.parse().unwrap());
+    match provider.estimate_eip1559_fees(None).await {
+        Ok(fees) => {
+            tracing::debug!("EIP-1559 Fees: {:?}", fees);
+            Ok(fees)
+        }
+        Err(e) => {
+            tracing::error!("Failed to estimate EIP-1559 fees: {:?}", e);
+            Err(format!("Failed to call estimate_eip1559_fees: {:?}", e))
+        }
+    }
 }
 
 /// Get the balance of the owner for the specified tokens.

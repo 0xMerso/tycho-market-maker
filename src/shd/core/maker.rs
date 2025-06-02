@@ -5,18 +5,22 @@ use crate::{
     types::{
         config::EnvConfig,
         maker::{CompReadjustment, ExecutionOrder, IMarketMaker, Inventory, MarketContext, MarketMaker, SwapCalculation, TradeDirection},
-        sol,
         tycho::{ProtoSimComp, PsbConfig, SharedTychoStreamState},
     },
     utils::r#static::{ADD_TVL_THRESHOLD, BASIS_POINT_DENO, NULL_ADDRESS, SHARE_POOL_BAL_SWAP_BPS},
 };
 use alloy::providers::{Provider, ProviderBuilder};
+
 use async_trait::async_trait;
 use futures::StreamExt;
 use num_bigint::BigUint;
 use num_traits::cast::ToPrimitive;
 use tycho_client::feed::component_tracker::ComponentFilter;
-use tycho_execution::encoding::{evm::encoder_builder::EVMEncoderBuilder, models::Solution, tycho_encoder::TychoEncoder};
+use tycho_execution::encoding::{
+    evm::encoder_builder::EVMEncoderBuilder,
+    models::{Solution, Transaction},
+    tycho_encoder::TychoEncoder,
+};
 use tycho_simulation::{
     models::Token,
     protocol::{models::ProtocolComponent, state::ProtocolSim},
@@ -94,49 +98,60 @@ impl IMarketMaker for MarketMaker {
     /// Fetch ETH/USD
     /// ! Compute base/USD and quote/USD, based on a arbitrary path ! Just a valid path !
     async fn fetch_market_context(&self, components: Vec<ProtocolComponent>, protosims: &HashMap<std::string::String, Box<dyn ProtocolSim>>, tokens: Vec<Token>) -> Option<MarketContext> {
-        let gas_price_wei = crate::utils::evm::gas_price(self.config.rpc.clone()).await;
-        let eth_to_usd = self.fetch_eth_usd().await;
-        let base_to_eth_vp = super::routing::find_path(components.clone(), self.base.address.to_string().to_lowercase(), self.config.gas_token.to_lowercase());
-        let quote_to_eth_vp = super::routing::find_path(components.clone(), self.quote.address.to_string().to_lowercase(), self.config.gas_token.to_lowercase());
-        match (base_to_eth_vp, quote_to_eth_vp, eth_to_usd) {
-            (Ok(base_to_eth_vp), Ok(quote_to_eth_vp), Ok(eth_to_usd)) => {
-                let mut to_eth_ptss = vec![];
-                for cp in components.iter() {
-                    let id = cp.id.to_string().to_lowercase();
-                    if base_to_eth_vp.comp_path.contains(&id) || quote_to_eth_vp.comp_path.contains(&id) {
-                        match protosims.get(&id) {
-                            Some(protosim) => {
-                                // tracing::debug!("Found paths of size {} | {}", base_to_eth_vp.comp_path.len(), quote_to_eth_vp.comp_path.len());
-                                // tracing::debug!("Found paths : {} | {}", base_to_eth_vp.comp_path.join(","), quote_to_eth_vp.comp_path.join(","));
-                                to_eth_ptss.push(ProtoSimComp {
-                                    component: cp.clone(),
-                                    protosim: protosim.clone(),
-                                });
+        match crate::utils::evm::eip1559_fees(self.config.rpc.clone()).await {
+            Ok(eip1559_fees) => {
+                let native_gas_price = crate::utils::evm::gas_price(self.config.rpc.clone()).await;
+                let eth_to_usd = self.fetch_eth_usd().await;
+                let base_to_eth_vp = super::routing::find_path(components.clone(), self.base.address.to_string().to_lowercase(), self.config.gas_token.to_lowercase());
+                let quote_to_eth_vp = super::routing::find_path(components.clone(), self.quote.address.to_string().to_lowercase(), self.config.gas_token.to_lowercase());
+                match (base_to_eth_vp, quote_to_eth_vp, eth_to_usd) {
+                    (Ok(base_to_eth_vp), Ok(quote_to_eth_vp), Ok(eth_to_usd)) => {
+                        let mut to_eth_ptss = vec![];
+                        for cp in components.iter() {
+                            let id = cp.id.to_string().to_lowercase();
+                            if base_to_eth_vp.comp_path.contains(&id) || quote_to_eth_vp.comp_path.contains(&id) {
+                                match protosims.get(&id) {
+                                    Some(protosim) => {
+                                        // tracing::debug!("Found paths of size {} | {}", base_to_eth_vp.comp_path.len(), quote_to_eth_vp.comp_path.len());
+                                        // tracing::debug!("Found paths : {} | {}", base_to_eth_vp.comp_path.join(","), quote_to_eth_vp.comp_path.join(","));
+                                        to_eth_ptss.push(ProtoSimComp {
+                                            component: cp.clone(),
+                                            protosim: protosim.clone(),
+                                        });
+                                    }
+                                    None => {
+                                        tracing::error!("contains: couldn't find protosim for component {}", cp.id);
+                                    }
+                                }
                             }
-                            None => {
-                                tracing::error!("contains: couldn't find protosim for component {}", cp.id);
+                        }
+                        let base_to_eth = super::routing::quote(to_eth_ptss.clone(), tokens.clone(), base_to_eth_vp.token_path.clone());
+                        let quote_to_eth = super::routing::quote(to_eth_ptss.clone(), tokens.clone(), quote_to_eth_vp.token_path.clone());
+                        // tracing::debug!("Gas: {:?} | Native: {}", eip1559_fees, native_gas_price);
+                        match (base_to_eth, quote_to_eth) {
+                            (Some(base_to_eth), Some(quote_to_eth)) => Some(MarketContext {
+                                base_to_eth,
+                                quote_to_eth,
+                                eth_to_usd,
+                                max_fee_per_gas: eip1559_fees.max_fee_per_gas,
+                                max_priority_fee_per_gas: eip1559_fees.max_priority_fee_per_gas,
+                                native_gas_price,
+                            }),
+                            _ => {
+                                tracing::warn!("Failed to get base/ETH quote");
+                                None
                             }
                         }
                     }
-                }
-                let base_to_eth = super::routing::quote(to_eth_ptss.clone(), tokens.clone(), base_to_eth_vp.token_path.clone());
-                let quote_to_eth = super::routing::quote(to_eth_ptss.clone(), tokens.clone(), quote_to_eth_vp.token_path.clone());
-                match (base_to_eth, quote_to_eth) {
-                    (Some(base_to_eth), Some(quote_to_eth)) => Some(MarketContext {
-                        base_to_eth,
-                        quote_to_eth,
-                        eth_to_usd,
-                        gas_price_wei,
-                    }),
                     _ => {
-                        tracing::warn!("Failed to get base/ETH quote");
+                        tracing::warn!("Failed to find path for base|quote to ETH.");
                         None
                     }
                 }
             }
-            _ => {
-                tracing::warn!("Failed to find path for base|quote to ETH.");
-                None
+            Err(e) => {
+                tracing::error!("Failed to fetch EIP-1559 fees: {:?}", e);
+                return None;
             }
         }
     }
@@ -264,7 +279,7 @@ impl IMarketMaker for MarketMaker {
                     // --- Prepa Exec ---
                     let powered_selling_amount = selling_amount * selling_pow;
                     let powered_selling_amount_bg = BigUint::from(powered_selling_amount.floor() as u128);
-                    let _powered_buying_amount = buying_amount * buying_pow;
+                    let powered_buying_amount = buying_amount * buying_pow;
                     // --- Allocation valorisation with market context ---
                     let (selling_amount_worth_eth, buying_amount_worth_eth) = match base_to_quote {
                         true => (selling_amount * context.base_to_eth, buying_amount * context.quote_to_eth), // For 1 unit of selling/buying token !
@@ -288,27 +303,28 @@ impl IMarketMaker for MarketMaker {
                     match adjustment.psc.protosim.get_amount_out(powered_selling_amount_bg.clone(), &selling, &buying) {
                         Ok(result) => {
                             // --- Price Impact & Gas Fees ---
-                            let amount_out_divided = result.amount.to_f64().unwrap_or(0.0) / 10f64.powi(buying.decimals as i32); // [new]
+                            let amount_out_powered = result.amount.to_f64().unwrap_or(0.0);
+                            let amount_out_divided = amount_out_powered / 10f64.powi(buying.decimals as i32); // [new]
 
-                            let amount_out_divided_min = amount_out_divided * (BASIS_POINT_DENO - self.config.slippage as f64) / BASIS_POINT_DENO;
-                            let powered_amount_out_divided_min = amount_out_divided_min * buying_pow;
+                            let amount_out_min_divided = amount_out_divided * (BASIS_POINT_DENO - self.config.slippage as f64) / BASIS_POINT_DENO;
+                            let amount_out_min_powered = amount_out_min_divided * buying_pow;
 
                             let gas_units = result.gas.to_string().parse::<u128>().unwrap_or_default();
-                            let gas_cost_eth = (gas_units.saturating_mul(context.gas_price_wei)) as f64 / 1e18;
+                            let gas_cost_eth = (gas_units.saturating_mul(context.native_gas_price)) as f64 / 1e18; // Gwei 10^9 + Gwei 10^9 = 10^18
                             let gas_cost_usd = gas_cost_eth * context.eth_to_usd;
                             let gas_cost_in_output = match base_to_quote {
                                 true => gas_cost_eth / context.quote_to_eth,
                                 false => gas_cost_eth / context.base_to_eth,
                             };
-                            // tracing::debug!(
-                            //     " - Simulation: {} {} for {} {} | Gas cost : {:.5} $ | Gas cost in output: {:.2} %",
-                            //     selling_amount,
-                            //     selling.symbol,
-                            //     amount_out_divided,
-                            //     buying.symbol,
-                            //     gas_cost_usd,
-                            //     gas_cost_in_output * 100.0
-                            // );
+                            tracing::debug!(
+                                " - Simulation: {} {} for {} {} | Gas cost : {:.5} $ | Gas cost in output: {:.2} %",
+                                selling_amount,
+                                selling.symbol,
+                                amount_out_divided,
+                                buying.symbol,
+                                gas_cost_usd,
+                                gas_cost_in_output * 100.0
+                            );
                             // --- Swap costs --- LP Fee + Price impact
                             let average_sell_price = match base_to_quote {
                                 true => amount_out_divided / selling_amount,
@@ -346,9 +362,9 @@ impl IMarketMaker for MarketMaker {
                             };
                             let potential_profit_delta_spread_bps = potential_profit_delta / adjustment.reference * BASIS_POINT_DENO;
                             let potential_profit_delta_spread_bps_abs = potential_profit_delta_spread_bps; //.abs(); // ! Tmp abs()
-                            let profitable = potential_profit_delta_spread_bps_abs > self.config.min_exec_spread as f64;
+                            let profitable = potential_profit_delta_spread_bps_abs > self.config.min_exec_spread;
                             tracing::debug!(
-                                " - Profit: {} | average_sell_price_net_gas: {:.4} vs reference_price: {:.4} | potential_profit_delta: {:.5} | potential_profit_delta_spread_bps: {:.2}",
+                                "   ---> Profit: {} | average_sell_price_net_gas: {:.4} vs reference_price: {:.4} | potential_profit_delta: {:.5} | potential_profit_delta_spread_bps: {:.2}",
                                 if potential_profit_delta > 0. { "🟢" } else { "🟠" },
                                 average_sell_price_net_gas,
                                 adjustment.reference,
@@ -361,12 +377,16 @@ impl IMarketMaker for MarketMaker {
                                 let calculation = SwapCalculation {
                                     base_to_quote,
                                     selling_amount,
-                                    buying_amount: buying_amount,
+                                    buying_amount,
                                     powered_selling_amount,
-                                    powered_buying_amount: result.amount.to_f64().unwrap_or(0.0),
+                                    powered_buying_amount,
+                                    // Post-swap
                                     amount_out_divided,
-                                    amount_out_divided_min,
-                                    powered_amount_out_divided_min,
+                                    amount_out_powered,
+                                    amount_out_min_divided,
+                                    amount_out_min_powered,
+                                    gas_units,
+                                    // Misc
                                     average_sell_price,
                                     average_sell_price_net_gas,
                                     gas_cost_eth,
@@ -409,18 +429,18 @@ impl IMarketMaker for MarketMaker {
         let input = order.adjustment.selling.address;
         let output = order.adjustment.buying.address;
 
-        let swap = tycho_execution::encoding::models::Swap::new(order.adjustment.psc.component.clone(), input.clone(), output.clone(), split);
         let amount_in = BigUint::from((order.calculation.powered_selling_amount).floor() as u128);
-        let amount_out = BigUint::from((order.calculation.powered_buying_amount).floor() as u128);
-        let amount_out_min = BigUint::from((order.calculation.powered_amount_out_divided_min).floor() as u128);
+        let amount_out = BigUint::from((order.calculation.amount_out_powered).floor() as u128);
+        let amount_out_min = BigUint::from((order.calculation.amount_out_min_powered).floor() as u128);
         tracing::debug!(
-            " - Building Tycho solution: {} -> {} | Amount in: {} | Amount out: {} | Amount out min: {}",
-            order.adjustment.selling.symbol,
+            " - Building Tycho solution: Buying {} with {} | Amount in: {} | Amount out: {} | Amount out min: {}",
             order.adjustment.buying.symbol,
+            order.adjustment.selling.symbol,
             amount_in,
             amount_out,
             amount_out_min
         );
+        let swap = tycho_execution::encoding::models::Swap::new(order.adjustment.psc.component.clone(), input.clone(), output.clone(), split);
         Solution {
             // Addresses
             sender: tycho_simulation::tycho_core::Bytes::from_str(env.wallet_public_key.to_lowercase().as_str()).unwrap(),
@@ -440,7 +460,26 @@ impl IMarketMaker for MarketMaker {
 
     /// Convert a solution to a transaction payload
     /// Also build the approval transaction, presumed needed (never infinite approval)
-    fn prepare(&self, orders: Vec<ExecutionOrder>, solutions: Vec<Solution>, env: EnvConfig) -> Result<bool, String> {
+    fn prepare(&self, tx: Transaction, context: MarketContext, inventory: Inventory, env: EnvConfig) -> Result<bool, String> {
+        // 1. Approvals (Tycho router)
+        // 2. Swap
+        // --- No bribe for now ---
+        // let gas_limit = gas_units
+        // let swap = TransactionRequest {
+        //     to: Some(alloy_primitives::TxKind::Call(Address::from_slice(&tx.to))),
+        //     from: Some(env.wallet_public_key.parse().expect("Failed to parse wallet public key")),
+        //     value: Some(U256::from(0)),
+        //     input: TransactionInput {
+        //         input: Some(AlloyBytes::from(tx.data)),
+        //         data: None,
+        //     },
+        //     gas: Some(300_000u64),
+        //     chain_id: Some(network.chainid),
+        //     max_fee_per_gas: Some(max_fee_per_gas),
+        //     max_priority_fee_per_gas: Some(max_priority_fee_per_gas),
+        //     nonce: Some(nonce + 1),
+        //     ..Default::default()
+        // };
         Ok(true)
     }
 
@@ -459,8 +498,8 @@ impl IMarketMaker for MarketMaker {
             std::env::set_var("RPC_URL", self.config.rpc.clone());
         }
         let (_, _, chain) = crate::helpers::global::chain(self.config.network.clone()).unwrap();
-
         // --- Prepare the solutions (solutions = trades encoded with Tycho EVM Encoder) ---
+        // @dev This await section has to be done outside of the EVMEncoderBuilder for some unknown reaso, compiler error
         let mut solutions = vec![];
         for order in orders.clone() {
             solutions.push(self.solution(order, env.clone()).await);
@@ -469,38 +508,27 @@ impl IMarketMaker for MarketMaker {
         let encoder = EVMEncoderBuilder::new().chain(chain).initialize_tycho_router_with_permit2(env.wallet_private_key.clone());
         match encoder {
             Ok(encoder) => match encoder.build() {
-                Ok(encoder) => {
-                    for solution in solutions.iter() {
-                        match encoder.encode_router_calldata(vec![solution.clone()]) {
-                            Ok(encoded) => {
-                                let encoded = encoded[0].clone();
-                                // match prepare(network.clone(), solution.clone(), encoded.clone(), header, nonce) {
-                                //     Some((approval, swap)) => {
-                                //         let ep = PayloadToExecute {
-                                //             approve: approval.clone(),
-                                //             swap: swap.clone(),
-                                //         };
-                                //         // --- Logs ---
-                                //         // tracing::debug!("--- Raw Transactions ---");
-                                //         // tracing::debug!("Approval: {:?}", approval.clone());
-                                //         // tracing::debug!("Swap: {:?}", swap.clone());
-                                //         // tracing::debug!("--- Formatted Transactions ---");
-                                //         // tracing::debug!("Approval: {:?}", ep.approve);
-                                //         // tracing::debug!("Swap: {:?}", ep.swap);
-                                //         // tracing::debug!("--- End of Transactions ---");
-                                //         return Ok(ep);
-                                //     }
-                                //     None => {
-                                //         tracing::error!("Failed to prepare transactions");
-                                //     }
-                                // };
-                            }
-                            Err(e) => {
-                                tracing::error!("Failed to encode router calldata: {:?}", e);
+                Ok(encoder) => match encoder.encode_router_calldata(solutions.clone()) {
+                    Ok(encoded) => {
+                        // --- Prepare the transactions ---
+                        for i in 0..orders.len() {
+                            let order = orders.get(i);
+                            let solution = solutions.get(i);
+                            let encoded_solution = encoded.get(i);
+                            match (order, solution, encoded_solution) {
+                                (Some(order), Some(solution), Some(encoded_solution)) => {
+                                    // self.prepare(encoded_solution.clone(), context.clone(), inventory.clone(), env.clone());
+                                }
+                                _ => {
+                                    tracing::warn!("Order, solution or encoded_solution is None");
+                                }
                             }
                         }
                     }
-                }
+                    Err(e) => {
+                        tracing::error!("Failed to encode router calldata: {:?}", e);
+                    }
+                },
                 Err(e) => {
                     tracing::error!("Failed to build EVMEncoder: {:?}", e);
                 }
@@ -627,11 +655,11 @@ impl IMarketMaker for MarketMaker {
                                                 match self.fetch_inventory(env.clone()).await {
                                                     Ok(inventory) => {
                                                         // let context = self.market_context().await;
-                                                        let elasped = time.elapsed().unwrap_or_default().as_millis();
+                                                        let _elasped = time.elapsed().unwrap_or_default().as_millis();
                                                         // tracing::info!(" - Evaluation until readjustments took {} ms", elasped);
                                                         let orders = self.readjust(context.clone(), inventory.clone(), readjusments, env.clone()).await;
                                                         if orders.is_empty() {
-                                                            tracing::debug!("No readjustments to execute");
+                                                            // tracing::debug!("No readjustments to execute");
                                                         } else {
                                                             self.execute(orders, context.clone(), inventory.clone(), env.clone()).await;
                                                         }

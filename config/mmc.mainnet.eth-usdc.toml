@@ -13,7 +13,7 @@ explorer = "https://etherscan.io/"
 tycho_endpoint = "tycho-beta.propellerheads.xyz"
 # === Execution ===
 spread = 25 # Bps
-min_exec_spread = -25.0
+min_exec_spread = -50.0
 slippage = 50
 profitability = true
 max_trade_allocation = 1.0
