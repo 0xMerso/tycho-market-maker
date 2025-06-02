@@ -486,6 +486,7 @@ impl IMarketMaker for MarketMaker {
     /// No interdependencies between orders, so we can simulate them all at once
     /// In a recursive or dependent way, we would need to simulate each order one by one, possible with state overwrite
     async fn simulate(&self, orders: Vec<ExecutionOrder>, solutions: Vec<Solution>, env: EnvConfig) -> Result<bool, String> {
+        // Flashbot Bundle simu, no need for pure EVM simulation
         Ok(true)
     }
 
