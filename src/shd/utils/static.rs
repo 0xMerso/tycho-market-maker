@@ -1,4 +1,4 @@
-// Static variables
+/// ======= Static variables =======
 
 pub static HEARTBEAT_DELAY: u64 = 300;
 pub static RESTART: u64 = 60;
@@ -7,3 +7,8 @@ pub static NULL_ADDRESS: &str = "0x0000000000000000000000000000000000000000";
 pub static BASIS_POINT_DENO: f64 = 10000.;
 pub static SHARE_POOL_BAL_SWAP_BPS: f64 = 10.; // 10 bps 
 pub static COINGECKO_ETH_USD: &str = "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd";
+
+/// --- Exec ---
+pub static APPROVE_FN_SIGNATURE: &str = "approve(address,uint256)";
+pub static DEFAULT_APPROVE_GAS: u128 = 100_000;
+pub static DEFAULT_SWAP_GAS: u128 = 500_000;

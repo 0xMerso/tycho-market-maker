@@ -4,13 +4,23 @@ use crate::{
     helpers::global::{cpname, get_alloy_chain, get_component_balances},
     types::{
         config::EnvConfig,
-        maker::{CompReadjustment, ExecutionOrder, IMarketMaker, Inventory, MarketContext, MarketMaker, SwapCalculation, TradeDirection},
+        maker::{CompReadjustment, ExecutionOrder, IMarketMaker, Inventory, MarketContext, MarketMaker, PreparedTransaction, SwapCalculation, TradeDirection},
         tycho::{ProtoSimComp, PsbConfig, SharedTychoStreamState},
     },
-    utils::r#static::{ADD_TVL_THRESHOLD, BASIS_POINT_DENO, NULL_ADDRESS, SHARE_POOL_BAL_SWAP_BPS},
+    utils::r#static::{ADD_TVL_THRESHOLD, APPROVE_FN_SIGNATURE, BASIS_POINT_DENO, DEFAULT_APPROVE_GAS, DEFAULT_SWAP_GAS, NULL_ADDRESS, SHARE_POOL_BAL_SWAP_BPS},
 };
-use alloy::providers::{Provider, ProviderBuilder};
+use alloy::{
+    consensus::transaction,
+    providers::{Provider, ProviderBuilder},
+    rpc::types::{
+        TransactionInput, TransactionRequest,
+        simulate::{SimBlock, SimulatePayload},
+    },
+    signers::local::PrivateKeySigner,
+    sol_types::SolValue,
+};
 
+use alloy_primitives::{Address, B256, U256};
 use async_trait::async_trait;
 use futures::StreamExt;
 use num_bigint::BigUint;
@@ -27,6 +37,7 @@ use tycho_simulation::{
 };
 
 use super::pricefeed::chainlink;
+use alloy_primitives::Bytes as AlloyBytes;
 
 #[async_trait]
 impl IMarketMaker for MarketMaker {
@@ -98,10 +109,13 @@ impl IMarketMaker for MarketMaker {
     /// Fetch ETH/USD
     /// ! Compute base/USD and quote/USD, based on a arbitrary path ! Just a valid path !
     async fn fetch_market_context(&self, components: Vec<ProtocolComponent>, protosims: &HashMap<std::string::String, Box<dyn ProtocolSim>>, tokens: Vec<Token>) -> Option<MarketContext> {
+        let time = std::time::SystemTime::now();
         match crate::utils::evm::eip1559_fees(self.config.rpc.clone()).await {
             Ok(eip1559_fees) => {
                 let native_gas_price = crate::utils::evm::gas_price(self.config.rpc.clone()).await;
                 let eth_to_usd = self.fetch_eth_usd().await;
+                let provider = ProviderBuilder::new().on_http(self.config.rpc.clone().parse().unwrap());
+                let block: alloy::rpc::types::Block = provider.get_block_by_number(alloy::eips::BlockNumberOrTag::Latest, false).await.unwrap().unwrap();
                 let base_to_eth_vp = super::routing::find_path(components.clone(), self.base.address.to_string().to_lowercase(), self.config.gas_token.to_lowercase());
                 let quote_to_eth_vp = super::routing::find_path(components.clone(), self.quote.address.to_string().to_lowercase(), self.config.gas_token.to_lowercase());
                 match (base_to_eth_vp, quote_to_eth_vp, eth_to_usd) {
@@ -128,6 +142,8 @@ impl IMarketMaker for MarketMaker {
                         let base_to_eth = super::routing::quote(to_eth_ptss.clone(), tokens.clone(), base_to_eth_vp.token_path.clone());
                         let quote_to_eth = super::routing::quote(to_eth_ptss.clone(), tokens.clone(), quote_to_eth_vp.token_path.clone());
                         // tracing::debug!("Gas: {:?} | Native: {}", eip1559_fees, native_gas_price);
+                        let elasped = time.elapsed().unwrap_or_default().as_millis();
+                        tracing::debug!(" - Market context fetched in {} ms", elasped);
                         match (base_to_eth, quote_to_eth) {
                             (Some(base_to_eth), Some(quote_to_eth)) => Some(MarketContext {
                                 base_to_eth,
@@ -136,6 +152,7 @@ impl IMarketMaker for MarketMaker {
                                 max_fee_per_gas: eip1559_fees.max_fee_per_gas,
                                 max_priority_fee_per_gas: eip1559_fees.max_priority_fee_per_gas,
                                 native_gas_price,
+                                block,
                             }),
                             _ => {
                                 tracing::warn!("Failed to get base/ETH quote");
@@ -306,7 +323,8 @@ impl IMarketMaker for MarketMaker {
                             let amount_out_powered = result.amount.to_f64().unwrap_or(0.0);
                             let amount_out_divided = amount_out_powered / 10f64.powi(buying.decimals as i32); // [new]
 
-                            let amount_out_min_divided = amount_out_divided * (BASIS_POINT_DENO - self.config.slippage as f64) / BASIS_POINT_DENO;
+                            let slippage_bps = self.config.slippage * BASIS_POINT_DENO;
+                            let amount_out_min_divided = amount_out_divided * (BASIS_POINT_DENO - slippage_bps) / BASIS_POINT_DENO;
                             let amount_out_min_powered = amount_out_min_divided * buying_pow;
 
                             let gas_units = result.gas.to_string().parse::<u128>().unwrap_or_default();
@@ -432,8 +450,10 @@ impl IMarketMaker for MarketMaker {
         let amount_in = BigUint::from((order.calculation.powered_selling_amount).floor() as u128);
         let amount_out = BigUint::from((order.calculation.amount_out_powered).floor() as u128);
         let amount_out_min = BigUint::from((order.calculation.amount_out_min_powered).floor() as u128);
+
         tracing::debug!(
-            " - Building Tycho solution: Buying {} with {} | Amount in: {} | Amount out: {} | Amount out min: {}",
+            " - {} : Building Tycho solution: Buying {} with {} | Amount in: {} | Amount out: {} | Amount out min: {}",
+            cpname(order.adjustment.psc.component.clone()),
             order.adjustment.buying.symbol,
             order.adjustment.selling.symbol,
             amount_in,
@@ -441,6 +461,8 @@ impl IMarketMaker for MarketMaker {
             amount_out_min
         );
         let swap = tycho_execution::encoding::models::Swap::new(order.adjustment.psc.component.clone(), input.clone(), output.clone(), split);
+        // tracing::debug!(" - Swap: {:?}", swap);
+        // Swap { component: ProtocolComponent { id: "88e6a0c2ddd26feeb64f039a2c41296fcb3f5640", protocol_system: "uniswap_v3", protocol_type_name: "uniswap_v3_pool", chain: Ethereum, tokens: [Bytes(0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48), Byte (0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2)], contract_addresses: [], static_attributes: {"tick_spacing": Bytes(0x0a), "fee": Bytes(0x01f4), "pool_address": Bytes(0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640)}, change: Update, creation_tx: Bytes(0x125e0b641d4a4b08806bf52c0c6757648c9963bcda8681e4f996f09e00d4c2cc), created_at: 2021-05-05T21:42:11 }, token_in: Bytes(0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2), token_out: Bytes(0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48), split: 0.0
         Solution {
             // Addresses
             sender: tycho_simulation::tycho_core::Bytes::from_str(env.wallet_public_key.to_lowercase().as_str()).unwrap(),
@@ -449,7 +471,7 @@ impl IMarketMaker for MarketMaker {
             checked_token: output.clone(),
             // Others fields
             given_amount: amount_in.clone(),
-            slippage: Some(self.config.slippage as f64), // Slippage in bps
+            slippage: Some(self.config.slippage as f64), // Slippage in decimal < 1, because 1.0 = 100%
             exact_out: false,                            // It's an exact in solution
             expected_amount: Some(amount_out),
             checked_amount: Some(amount_out_min), // The amount out will not be checked in execution
@@ -460,40 +482,53 @@ impl IMarketMaker for MarketMaker {
 
     /// Convert a solution to a transaction payload
     /// Also build the approval transaction, presumed needed (never infinite approval)
-    fn prepare(&self, tx: Transaction, context: MarketContext, inventory: Inventory, env: EnvConfig) -> Result<bool, String> {
-        // 1. Approvals (Tycho router)
-        // 2. Swap
-        // --- No bribe for now ---
-        // let gas_limit = gas_units
-        // let swap = TransactionRequest {
-        //     to: Some(alloy_primitives::TxKind::Call(Address::from_slice(&tx.to))),
-        //     from: Some(env.wallet_public_key.parse().expect("Failed to parse wallet public key")),
-        //     value: Some(U256::from(0)),
-        //     input: TransactionInput {
-        //         input: Some(AlloyBytes::from(tx.data)),
-        //         data: None,
-        //     },
-        //     gas: Some(300_000u64),
-        //     chain_id: Some(network.chainid),
-        //     max_fee_per_gas: Some(max_fee_per_gas),
-        //     max_priority_fee_per_gas: Some(max_priority_fee_per_gas),
-        //     nonce: Some(nonce + 1),
-        //     ..Default::default()
-        // };
-        Ok(true)
-    }
+    fn encode(&self, solution: Solution, tx: Transaction, context: MarketContext, inventory: Inventory, env: EnvConfig) -> Result<PreparedTransaction, String> {
+        let max_priority_fee_per_gas = context.max_priority_fee_per_gas; // 1 Gwei, not suited for L2s.
+        let max_fee_per_gas = context.max_fee_per_gas;
 
-    /// No interdependencies between orders, so we can simulate them all at once
-    /// In a recursive or dependent way, we would need to simulate each order one by one, possible with state overwrite
-    async fn simulate(&self, orders: Vec<ExecutionOrder>, solutions: Vec<Solution>, env: EnvConfig) -> Result<bool, String> {
-        // Flashbot Bundle simu, no need for pure EVM simulation
-        Ok(true)
+        // 1. Approvals (Tycho router) with Permit2
+        let amount: u128 = solution.given_amount.clone().to_string().parse().expect("Couldn't convert given_amount to u128"); // ?
+        let args = (Address::from_str(&self.config.permit2).expect("Couldn't convert permit2 to address"), amount);
+        let data = tycho_execution::encoding::evm::utils::encode_input(APPROVE_FN_SIGNATURE, args.abi_encode());
+        let sender = solution.sender.clone().to_string().parse().expect("Failed to parse sender");
+        let approval = TransactionRequest {
+            to: Some(alloy::primitives::TxKind::Call(solution.given_token.clone().to_string().parse().expect("Failed to parse given_token"))),
+            from: Some(sender),
+            value: None,
+            input: TransactionInput {
+                input: Some(AlloyBytes::from(data)),
+                data: None,
+            },
+            gas: Some(DEFAULT_APPROVE_GAS),
+            chain_id: Some(self.config.chainid),
+            max_fee_per_gas: Some(max_fee_per_gas),
+            max_priority_fee_per_gas: Some(max_priority_fee_per_gas),
+            nonce: Some(inventory.nonce),
+            ..Default::default()
+        };
+
+        // 2. Swap --- No bribe for now ---
+        let swap = TransactionRequest {
+            to: Some(alloy_primitives::TxKind::Call(Address::from_slice(&tx.to))),
+            from: Some(env.wallet_public_key.parse().expect("Failed to parse wallet public key")),
+            value: Some(U256::from(0)),
+            input: TransactionInput {
+                input: Some(AlloyBytes::from(tx.data)),
+                data: None,
+            },
+            gas: Some(DEFAULT_SWAP_GAS),
+            chain_id: Some(self.config.chainid),
+            max_fee_per_gas: Some(max_fee_per_gas),
+            max_priority_fee_per_gas: Some(max_priority_fee_per_gas),
+            nonce: Some(inventory.nonce + 1),
+            ..Default::default()
+        };
+
+        Ok(PreparedTransaction { approval, swap })
     }
 
     /// Entrypoint for executing the orders
-    async fn execute(&self, orders: Vec<ExecutionOrder>, context: MarketContext, inventory: Inventory, env: EnvConfig) {
-        let alloy_chain = get_alloy_chain(self.config.network.clone()).expect("Failed to get alloy chain");
-        let provider = ProviderBuilder::new().with_chain(alloy_chain).on_http(self.config.rpc.parse().expect("Failed to parse RPC_URL"));
+    async fn prepare(&self, orders: Vec<ExecutionOrder>, context: MarketContext, inventory: Inventory, env: EnvConfig) -> Vec<PreparedTransaction> {
         tracing::debug!("Executing {} orders. Broadcast config: {}", orders.len(), self.config.broadcast);
         unsafe {
             std::env::set_var("RPC_URL", self.config.rpc.clone());
@@ -505,38 +540,89 @@ impl IMarketMaker for MarketMaker {
         for order in orders.clone() {
             solutions.push(self.solution(order, env.clone()).await);
         }
+        let mut transactions = vec![];
         // --- Encode the solutions ---
         let encoder = EVMEncoderBuilder::new().chain(chain).initialize_tycho_router_with_permit2(env.wallet_private_key.clone());
         match encoder {
             Ok(encoder) => match encoder.build() {
-                Ok(encoder) => match encoder.encode_router_calldata(solutions.clone()) {
-                    Ok(encoded) => {
-                        // --- Prepare the transactions ---
-                        for i in 0..orders.len() {
-                            let order = orders.get(i);
-                            let solution = solutions.get(i);
-                            let encoded_solution = encoded.get(i);
-                            match (order, solution, encoded_solution) {
-                                (Some(order), Some(solution), Some(encoded_solution)) => {
-                                    // self.prepare(encoded_solution.clone(), context.clone(), inventory.clone(), env.clone());
-                                }
-                                _ => {
-                                    tracing::warn!("Order, solution or encoded_solution is None");
+                Ok(encoder) => {
+                    // for s in solutions.iter() {
+                    // tracing::debug!("Solution: {:?}", s);
+                    // match encoder.encode_router_calldata(vec![s.clone()]) {
+                    match encoder.encode_router_calldata(solutions.clone()) {
+                        Ok(encoded) => {
+                            // --- Prepare the transactions ---
+                            tracing::debug!("Encoded {} solutions", encoded.len());
+                            for i in 0..orders.len() {
+                                // Looping = executing multiple trades, potential conflicts
+                                // Need to handle inventory, nonce, etc.
+                                // For now it doesn't handle that, for testing purposes
+                                let order = orders.get(i);
+                                let solution = solutions.get(i);
+                                let esolution = encoded.get(i);
+                                match (order, solution, esolution) {
+                                    (Some(order), Some(solution), Some(esolution)) => match self.encode(solution.clone(), esolution.clone(), context.clone(), inventory.clone(), env.clone()) {
+                                        Ok(prepared) => {
+                                            transactions.push(prepared);
+                                            tracing::debug!("Prepared transaction #{}: Approval to {} | Swap to {}", i + 1, solution.given_token, solution.checked_token);
+                                        }
+                                        Err(e) => {
+                                            tracing::error!("Failed to prepare transaction: {:?}", e);
+                                        }
+                                    },
+                                    _ => {
+                                        tracing::warn!("Order, solution or encoded_solution is None");
+                                    }
                                 }
                             }
                         }
+                        Err(e) => {
+                            tracing::error!("Failed to encode router calldata: {:?}", e);
+                        }
                     }
-                    Err(e) => {
-                        tracing::error!("Failed to encode router calldata: {:?}", e);
-                    }
-                },
+                    // }
+                }
                 Err(e) => {
-                    tracing::error!("Failed to build EVMEncoder: {:?}", e);
+                    tracing::error!("Failed to build EVMEncoder #2: {:?}", e);
                 }
             },
             Err(e) => {
-                tracing::error!("Failed to build EVMEncoder: {:?}", e);
+                tracing::error!("Failed to build EVMEncoder #1: {:?}", e);
             }
+        };
+        transactions
+    }
+
+    /// No interdependencies between orders, so we can simulate them all at once
+    /// In a recursive or dependent way, we would need to simulate each order one by one, possible with state overwrite
+    async fn simulate(&self, transactions: Vec<PreparedTransaction>, env: EnvConfig) {
+        let alloy_chain = get_alloy_chain(self.config.network.clone()).expect("Failed to get alloy chain");
+        let rpc = self.config.rpc.parse::<url::Url>().unwrap().clone(); // ! Custom per network
+        let pk = env.wallet_private_key.clone();
+        let wallet = PrivateKeySigner::from_bytes(&B256::from_str(&pk).expect("Failed to convert swapper pk to B256")).expect("Failed to private key signer");
+        let signer = alloy::network::EthereumWallet::from(wallet.clone());
+        let provider = ProviderBuilder::new().with_chain(alloy_chain).wallet(signer.clone()).on_http(rpc);
+        // Flashbot Bundle simu, no need for pure EVM simulation
+        let mut transactions = transactions.clone();
+        transactions.retain(|t| {
+            let sender = t.approval.from.unwrap_or_default().to_string().to_lowercase();
+            let matching = wallet.address().to_string().eq_ignore_ascii_case(sender.clone().as_str());
+            !matching
+        });
+        // Using only the first transaction for now
+        tracing::debug!("Simulating {} transactions (keeping only the first for now)", transactions.len());
+        let first = transactions.first().expect("No transactions found");
+        // Bundle simulation
+        let calls = vec![first.approval.clone(), first.swap.clone()];
+        let payload = SimulatePayload {
+            block_state_calls: vec![SimBlock {
+                block_overrides: None,
+                state_overrides: None,
+                calls,
+            }],
+            trace_transfers: true,
+            validation: true,
+            return_full_transactions: true,
         };
     }
 
@@ -651,7 +737,7 @@ impl IMarketMaker for MarketMaker {
                                         // --- Market context --- Need ALL components and thus all the protosims too
                                         match self.fetch_market_context(components.clone(), &protosims, atks.clone()).await {
                                             Some(context) => {
-                                                tracing::debug!("Market context: {:?}", context);
+                                                context.print();
                                                 // This async block should be optimised as much as possible
                                                 match self.fetch_inventory(env.clone()).await {
                                                     Ok(inventory) => {
@@ -662,7 +748,7 @@ impl IMarketMaker for MarketMaker {
                                                         if orders.is_empty() {
                                                             // tracing::debug!("No readjustments to execute");
                                                         } else {
-                                                            self.execute(orders, context.clone(), inventory.clone(), env.clone()).await;
+                                                            self.prepare(orders, context.clone(), inventory.clone(), env.clone()).await;
                                                         }
                                                     }
                                                     Err(e) => {

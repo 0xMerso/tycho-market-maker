@@ -6,6 +6,7 @@ addr0 = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
 token1 = "USDC" # Quote
 addr1 = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
 network = "ethereum" # "base", "unichain"
+chainid = 1
 gas_token = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" # Erc20
 gas_token_chainlink = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419" # Chainlink price feed for Gas Token (ETH) to USD
 rpc = "https://eth-mainnet.blastapi.io/1437c115-f259-4690-a2d7-8c32e658a164" # https://eth.llamarpc.com"
@@ -14,7 +15,7 @@ tycho_endpoint = "tycho-beta.propellerheads.xyz"
 # === Execution ===
 spread = 25 # Bps
 min_exec_spread = -50.0
-slippage = 50
+slippage = 0.0005
 profitability = true
 max_trade_allocation = 1.0
 # bribe=0.5

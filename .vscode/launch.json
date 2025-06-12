@@ -39,6 +39,9 @@
                     "kind": "bin"
                 }
             },
+             "env": {
+                "RUST_LOG": "debug"  
+            },
             "args": [],
             "cwd": "${workspaceFolder}"
         }

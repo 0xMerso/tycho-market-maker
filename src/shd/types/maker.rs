@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use alloy::rpc::types::TransactionRequest;
 use async_trait::async_trait;
 use serde::Deserialize;
 use tycho_execution::encoding::models::{Solution, Transaction};
@@ -28,12 +29,14 @@ pub trait IMarketMaker: Send + Sync {
     async fn fetch_eth_usd(&self) -> Result<f64, String>;
     async fn fetch_market_price(&self) -> Result<f64, String>;
 
-    // 3 functions to encode, prepare and sign swap transactions, ready for execution
+    // Functions to build Tycho solution, encode, prepare, sign transactions
     async fn solution(&self, order: ExecutionOrder, env: EnvConfig) -> Solution;
-    fn prepare(&self, tx: Transaction, context: MarketContext, inventory: Inventory, env: EnvConfig) -> Result<bool, String>;
-    async fn execute(&self, order: Vec<ExecutionOrder>, context: MarketContext, inventory: Inventory, env: EnvConfig);
+    // Encode the Tycho solution into a transaction
+    fn encode(&self, solution: Solution, encoded: Transaction, context: MarketContext, inventory: Inventory, env: EnvConfig) -> Result<PreparedTransaction, String>;
+    // Prepare the transactions for execution (format, tycho encoder, approvals, swap)
+    async fn prepare(&self, order: Vec<ExecutionOrder>, context: MarketContext, inventory: Inventory, env: EnvConfig) -> Vec<PreparedTransaction>;
     // Simulate the bundles
-    async fn simulate(&self, orders: Vec<ExecutionOrder>, solutions: Vec<Solution>, env: EnvConfig) -> Result<bool, String>;
+    async fn simulate(&self, transactions: Vec<PreparedTransaction>, env: EnvConfig);
     // Broadcasts the swaps to the network via bundles + bids
     async fn broadcast(&self);
     // Infinite loop that monitors the Tycho stream state, looking for opportunities
@@ -120,6 +123,23 @@ pub struct MarketContext {
     pub max_fee_per_gas: u128,          // maximum base fee : gwei but why ?
     pub max_priority_fee_per_gas: u128, // base_fee_per_gas : 10^9 : gwei
     pub native_gas_price: u128,         // gwei: to be used for gas cost calculations
+    pub block: alloy::rpc::types::Block,
+}
+
+// Impl print for MarketContext
+impl MarketContext {
+    pub fn print(&self) {
+        tracing::info!(
+            "Market Context: Base to ETH: {:.6} | Quote to ETH: {:.6} | ETH to USD: {:.2} | Max Fee per Gas: {} | Max Priority Fee per Gas: {} | Native Gas Price: {} | Block: {:?}",
+            self.base_to_eth,
+            self.quote_to_eth,
+            self.eth_to_usd,
+            self.max_fee_per_gas,
+            self.max_priority_fee_per_gas,
+            self.native_gas_price,
+            self.block.header.number
+        );
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -154,4 +174,10 @@ pub struct SwapCalculation {
     // Profitability
     pub profit_delta_bps: f64,
     pub profitable: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct PreparedTransaction {
+    pub approval: TransactionRequest,
+    pub swap: TransactionRequest,
 }

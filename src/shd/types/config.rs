@@ -52,6 +52,7 @@ pub struct MarketMakerConfig {
     pub token1: String,
     pub addr1: String,
     pub network: String,
+    pub chainid: u64,
     pub gas_token: String,
     pub gas_token_chainlink: String,
     pub rpc: String,
@@ -60,7 +61,7 @@ pub struct MarketMakerConfig {
     pub min_exec_spread: f64,
     // pub max_consistent_spread: u32, // security
     // pub min_profit_spread_threshold: u32 // trigger
-    pub slippage: u32,
+    pub slippage: f64,
     pub profitability: bool,
     pub max_trade_allocation: f64,
     pub broadcast: String,
@@ -77,7 +78,7 @@ pub struct MarketMakerConfig {
 impl MarketMakerConfig {
     pub fn print(&self) {
         tracing::debug!("Market Maker Config:");
-        tracing::debug!("  Network:               {}", self.network);
+        tracing::debug!("  Network:               {} with ID {}", self.network, self.chainid);
         tracing::debug!("  Token0:                {} ({})", self.token0, self.addr0);
         tracing::debug!("  Token1:                {} ({})", self.token1, self.addr1);
         tracing::debug!("  RPC:                   {}", self.rpc);
@@ -86,7 +87,7 @@ impl MarketMakerConfig {
         tracing::debug!("  Gas token chainlink:   {}", self.gas_token_chainlink);
         tracing::debug!("  Spread (bps):          {}", self.spread);
         tracing::debug!("  min_exec_spread (bps): {}", self.min_exec_spread);
-        tracing::debug!("  Slippage (bps):        {}", self.slippage);
+        tracing::debug!("  Slippage:              {} ({} in bps)", self.slippage, self.slippage * 10000.0);
         tracing::debug!("  Profitability Check:   {}", self.profitability);
         tracing::debug!("  Max Trade Allocation:  {}", self.max_trade_allocation);
         tracing::debug!("  Broadcast:             {}", self.broadcast);
@@ -104,8 +105,8 @@ impl MarketMakerConfig {
         if self.spread > 10_000 {
             return Err("spread must be ≤ 10000 BPS (100%)".into());
         }
-        if self.slippage > 10_000 {
-            return Err("slippage must be ≤ 10000 BPS (100%)".into());
+        if self.slippage > 1. {
+            return Err("slippage must be ≤ 1.0 (100%)".into());
         }
         if !(0.0..=1.0).contains(&self.max_trade_allocation) {
             return Err("max_trade_allocation must be between 0.0 and 1.0".into());
