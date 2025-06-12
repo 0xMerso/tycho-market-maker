@@ -564,7 +564,6 @@ impl IMarketMaker for MarketMaker {
                                     (Some(order), Some(solution), Some(esolution)) => match self.encode(solution.clone(), esolution.clone(), context.clone(), inventory.clone(), env.clone()) {
                                         Ok(prepared) => {
                                             transactions.push(prepared);
-                                            tracing::debug!("Prepared transaction #{}: Approval to {} | Swap to {}", i + 1, solution.given_token, solution.checked_token);
                                         }
                                         Err(e) => {
                                             tracing::error!("Failed to prepare transaction: {:?}", e);
