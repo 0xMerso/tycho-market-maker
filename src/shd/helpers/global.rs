@@ -193,7 +193,7 @@ pub async fn tokens(mmc: MarketMakerConfig, key: Option<&str>) -> Option<Vec<Tok
         Ok(client) => {
             let time = std::time::SystemTime::now();
             let (chain, _, _) = chain(mmc.network.clone()).expect("Invalid chain");
-            match client.get_all_tokens(chain, Some(100), Some(1), 500).await {
+            match client.get_all_tokens(chain, Some(100), Some(1), 1000).await {
                 Ok(result) => {
                     let tokens = sanitize(result);
                     let elasped = time.elapsed().unwrap_or_default().as_millis();

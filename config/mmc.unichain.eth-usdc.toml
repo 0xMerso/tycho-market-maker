@@ -1,0 +1,39 @@
+# =========================================== Market Maker FuLL Configuration ===========================================
+
+# === Global ===
+token0 = "ETH" # Base
+addr0 = "0x4200000000000000000000000000000000000006"
+token1 = "USDC" # Quote
+addr1 = "0x078D782b760474a361dDA0AF3839290b0EF57AD6"
+network = "unichain" # "base", "unichain"
+chainid = 130 
+gas_token = "0x4200000000000000000000000000000000000006" # Erc20
+gas_token_chainlink = "0x0000000000000000000000000000000000000000" # Chainlink price feed for Gas Token (ETH) to USD
+rpc = "https://unichain-mainnet.blastapi.io/1437c115-f259-4690-a2d7-8c32e658a164" # https://unichain.drpc.org"
+explorer = "https://uniscan.xyz/"
+tycho_endpoint = "tycho-unichain-beta.propellerheads.xyz"
+# === Execution ===
+spread = 30 # Bps
+min_exec_spread = -50.0
+slippage = 0.0005
+profitability = true
+max_trade_allocation = 1.0
+# bribe=0.5
+broadcast = "classic"
+depths = [50.0, 250.0, 500.0, 750.0, 1000.0, 1250.0, 1500.0]
+
+gas_limit = 300000
+target_block_offset = 1
+permit2 = "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+tycho_router = "0xFfA5ec2e444e4285108e4a17b82dA495c178427B"
+# === Misc ===
+poll_interval_ms = 1000
+
+[pfc] # ======= MM Price Feed Config ======= 
+# Expected price is token0 per token1 => if token0 is ETH and token1 USDC, then price is ~2500, not 0.0004
+type = "binance"
+source = "https://api.binance.com/api/v3"         
+# type = "chainlink"                   
+# source = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419"
+# type = "custom" 
+# type = "twap" 

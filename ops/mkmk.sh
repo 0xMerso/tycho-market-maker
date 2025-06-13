@@ -42,4 +42,5 @@ function start() {
     # rm -rf dump.rdb
 }
 
+export CONFIG_PATH="config/mmc.base.eth-usdc.toml"
 start $1

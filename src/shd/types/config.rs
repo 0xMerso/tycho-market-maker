@@ -8,6 +8,7 @@ use super::maker::PriceFeedConfig;
 /// Environment configuration expected
 #[derive(Debug, Clone)]
 pub struct EnvConfig {
+    pub path: String,
     pub testing: bool,
     // APIs
     pub heartbeat: String,
@@ -26,6 +27,7 @@ impl Default for EnvConfig {
 impl EnvConfig {
     pub fn new() -> Self {
         EnvConfig {
+            path: utils::misc::get("CONFIG_PATH"),
             testing: utils::misc::get("TESTING") == "true",
             heartbeat: utils::misc::get("HEARTBEAT"),
             wallet_public_key: utils::misc::get("WALLET_PUBLIC_KEY"),

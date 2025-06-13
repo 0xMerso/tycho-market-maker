@@ -4,14 +4,14 @@
 token0 = "ETH" # Base
 addr0 = "0x4200000000000000000000000000000000000006"
 token1 = "USDC" # Quote
-addr1 = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-network = "unichain" # "base", "unichain"
-chainid = 130 
+addr1 = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+network = "base" # "base", "unichain"
+chainid = 8453 
 gas_token = "0x4200000000000000000000000000000000000006" # Erc20
-gas_token_chainlink = "0x0000000000000000000000000000000000000000" # Chainlink price feed for Gas Token (ETH) to USD
-rpc = "https://unichain-mainnet.blastapi.io/1437c115-f259-4690-a2d7-8c32e658a164" # https://unichain.drpc.org"
-explorer = "https://uniscan.xyz/"
-tycho_endpoint = "tycho-unichain-beta.propellerheads.xyz"
+gas_token_chainlink = "0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70" # Chainlink price feed for Gas Token (ETH) to USD
+rpc = "https://base-mainnet.blastapi.io/1437c115-f259-4690-a2d7-8c32e658a164" # https://unichain.drpc.org"
+explorer = "https://basescan.xyz/"
+tycho_endpoint = "tycho-base-beta.propellerheads.xyz"
 # === Execution ===
 spread = 30 # Bps
 min_exec_spread = -50.0
@@ -19,13 +19,13 @@ slippage = 0.0005
 profitability = true
 max_trade_allocation = 1.0
 # bribe=0.5
-broadcast = "buildernet"
+broadcast = "classic"
 depths = [50.0, 250.0, 500.0, 750.0, 1000.0, 1250.0, 1500.0]
 
 gas_limit = 300000
 target_block_offset = 1
 permit2 = "0x000000000022D473030F116dDEE9F6B43aC78BA3"
-tycho_router = "0x9bdc3be75440dbe563527cb39bb11cfbd1e21b09"
+tycho_router = "0xea3207778e39EB02D72C9D3c4Eac7E224ac5d369"
 # === Misc ===
 poll_interval_ms = 1000
 
@@ -34,6 +34,6 @@ poll_interval_ms = 1000
 # type = "binance"
 # source = "https://api.binance.com/api/v3"         
 type = "chainlink"                   
-source = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419"
+source = "0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70"
 # type = "custom" 
 # type = "twap" 

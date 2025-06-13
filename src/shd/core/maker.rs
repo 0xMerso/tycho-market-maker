@@ -601,17 +601,17 @@ impl IMarketMaker for MarketMaker {
         let wallet = PrivateKeySigner::from_bytes(&B256::from_str(&pk).expect("Failed to convert swapper pk to B256")).expect("Failed to private key signer");
         let signer = alloy::network::EthereumWallet::from(wallet.clone());
         let provider = ProviderBuilder::new().with_chain(alloy_chain).wallet(signer.clone()).on_http(rpc);
-        // Flashbot Bundle simu, no need for pure EVM simulation
         let mut transactions = transactions.clone();
         transactions.retain(|t| {
             let sender = t.approval.from.unwrap_or_default().to_string().to_lowercase();
             let matching = wallet.address().to_string().eq_ignore_ascii_case(sender.clone().as_str());
             !matching
         });
-        // Using only the first transaction for now
+        // Pure EVM simulation
+        // Later, on mainnet, with flashbot bundle simu, it won't need it
         tracing::debug!("Simulating {} transactions (keeping only the first for now)", transactions.len());
+        // Using only the first transaction for now
         let first = transactions.first().expect("No transactions found");
-        // Bundle simulation
         let calls = vec![first.approval.clone(), first.swap.clone()];
         let payload = SimulatePayload {
             block_state_calls: vec![SimBlock {
