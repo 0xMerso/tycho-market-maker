@@ -80,11 +80,17 @@ impl IMarketMaker for MarketMaker {
     /// Should be stored in memory and updated after each readjustment only
     async fn fetch_inventory(&self, env: EnvConfig) -> Result<Inventory, String> {
         let provider = ProviderBuilder::new().on_http(self.config.rpc.clone().parse().expect("Failed to parse RPC_URL"));
-        let tokens = [self.base.clone(), self.quote.clone()].iter().map(|t| t.address.to_string()).collect::<Vec<String>>();
-        match crate::utils::evm::balances(&provider, env.wallet_public_key.clone(), tokens.clone()).await {
+        let tokens = vec![self.base.clone(), self.quote.clone()];
+        let addresses = tokens.iter().map(|t| t.address.to_string()).collect::<Vec<String>>();
+        match crate::utils::evm::balances(&provider, env.wallet_public_key.clone(), addresses.clone()).await {
             Ok(balances) => match provider.get_transaction_count(env.wallet_public_key.to_string().parse().unwrap()).await {
                 Ok(nonce) => {
-                    tracing::debug!("Inventory evaluation | Balances: {:?} | Nonce {} | Wallet {}", balances, nonce, env.wallet_public_key);
+                    tracing::debug!("Inventory evaluation: Nonce {} | Wallet {}", nonce, env.wallet_public_key);
+                    for (x, tk) in tokens.iter().enumerate() {
+                        let balance = balances.get(x).cloned().unwrap_or_default();
+                        let divided = balance as f64 / 10f64.powi(tk.decimals as i32);
+                        tracing::debug!(" - Token: {}: {} = {}", tk.symbol, balance, divided);
+                    }
                     Ok(Inventory {
                         base_balance: balances[0],
                         quote_balance: balances[1],
@@ -594,7 +600,7 @@ impl IMarketMaker for MarketMaker {
 
     /// No interdependencies between orders, so we can simulate them all at once
     /// In a recursive or dependent way, we would need to simulate each order one by one, possible with state overwrite
-    async fn simulate(&self, transactions: Vec<PreparedTransaction>, env: EnvConfig) {
+    async fn simulate(&self, transactions: Vec<PreparedTransaction>, env: EnvConfig) -> Vec<bool> {
         let alloy_chain = get_alloy_chain(self.config.network.clone()).expect("Failed to get alloy chain");
         let rpc = self.config.rpc.parse::<url::Url>().unwrap().clone(); // ! Custom per network
         let pk = env.wallet_private_key.clone();
@@ -623,6 +629,7 @@ impl IMarketMaker for MarketMaker {
             validation: true,
             return_full_transactions: true,
         };
+        vec![]
     }
 
     /// Broadcast the transaction to the network
@@ -747,7 +754,8 @@ impl IMarketMaker for MarketMaker {
                                                         if orders.is_empty() {
                                                             // tracing::debug!("No readjustments to execute");
                                                         } else {
-                                                            self.prepare(orders, context.clone(), inventory.clone(), env.clone()).await;
+                                                            let transactions = self.prepare(orders, context.clone(), inventory.clone(), env.clone()).await;
+                                                            let simulation = self.simulate(transactions, env.clone()).await;
                                                         }
                                                     }
                                                     Err(e) => {
