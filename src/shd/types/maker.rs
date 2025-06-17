@@ -57,6 +57,8 @@ pub struct MarketMaker {
     pub base: Token,
     // Quote token from Tycho Client
     pub quote: Token,
+    // Snapshots of the market, price, etc.
+    // pub snapshots: HashMap<String, MarketSnapshot>,
 }
 
 /// ================== Builder ==================
@@ -124,22 +126,6 @@ pub struct MarketContext {
     pub max_priority_fee_per_gas: u128, // base_fee_per_gas : 10^9 : gwei
     pub native_gas_price: u128,         // gwei: to be used for gas cost calculations
     pub block: alloy::rpc::types::Block,
-}
-
-// Impl print for MarketContext
-impl MarketContext {
-    pub fn print(&self) {
-        tracing::info!(
-            "Market Context: Base to ETH: {:.6} | Quote to ETH: {:.6} | ETH to USD: {:.2} | Max Fee per Gas: {} | Max Priority Fee per Gas: {} | Native Gas Price: {} | Block: {:?}",
-            self.base_to_eth,
-            self.quote_to_eth,
-            self.eth_to_usd,
-            self.max_fee_per_gas,
-            self.max_priority_fee_per_gas,
-            self.native_gas_price,
-            self.block.header.number
-        );
-    }
 }
 
 #[derive(Debug, Clone)]

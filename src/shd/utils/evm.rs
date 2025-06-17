@@ -25,7 +25,7 @@ pub async fn eip1559_fees(provider: String) -> Result<Eip1559Estimation, String>
     let provider = ProviderBuilder::new().on_http(provider.parse().unwrap());
     match provider.estimate_eip1559_fees(None).await {
         Ok(fees) => {
-            tracing::debug!("EIP-1559 Fees: {:?}", fees);
+            // tracing::debug!("EIP-1559 Fees: {:?}", fees);
             Ok(fees)
         }
         Err(e) => {

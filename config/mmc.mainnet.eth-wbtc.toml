@@ -1,6 +1,7 @@
 # =========================================== Market Maker FuLL Configuration ===========================================
 
 # === Global ===
+tag = "⚪️"
 token0 = "ETH" # Base
 addr0 = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
 token1 = "WBTC" # Quote

@@ -10,5 +10,5 @@ pub static COINGECKO_ETH_USD: &str = "https://api.coingecko.com/api/v3/simple/pr
 
 /// --- Exec ---
 pub static APPROVE_FN_SIGNATURE: &str = "approve(address,uint256)";
-pub static DEFAULT_APPROVE_GAS: u128 = 100_000;
-pub static DEFAULT_SWAP_GAS: u128 = 500_000;
+pub static DEFAULT_APPROVE_GAS: u64 = 100_000;
+pub static DEFAULT_SWAP_GAS: u64 = 500_000;

@@ -1,6 +1,7 @@
 # =========================================== Market Maker FuLL Configuration ===========================================
 
 # === Global ===
+tag = "🔵"
 token0 = "ETH" # Base
 addr0 = "0x4200000000000000000000000000000000000006"
 token1 = "USDC" # Quote
@@ -13,8 +14,8 @@ rpc = "https://base-mainnet.blastapi.io/1437c115-f259-4690-a2d7-8c32e658a164" # 
 explorer = "https://basescan.xyz/"
 tycho_endpoint = "tycho-base-beta.propellerheads.xyz"
 # === Execution ===
-spread = 30 # Bps
-min_exec_spread = -50.0
+spread = 15 # Bps
+min_exec_spread = -75.0
 slippage = 0.0005
 profitability = true
 max_trade_allocation = 1.0

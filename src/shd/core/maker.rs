@@ -3,7 +3,7 @@ use std::{collections::HashMap, str::FromStr};
 use crate::{
     helpers::global::{cpname, get_alloy_chain, get_component_balances},
     types::{
-        config::EnvConfig,
+        config::{EnvConfig, NetworkName},
         maker::{CompReadjustment, ExecutionOrder, IMarketMaker, Inventory, MarketContext, MarketMaker, PreparedTransaction, SwapCalculation, TradeDirection},
         tycho::{ProtoSimComp, PsbConfig, SharedTychoStreamState},
     },
@@ -38,6 +38,23 @@ use tycho_simulation::{
 
 use super::pricefeed::chainlink;
 use alloy_primitives::Bytes as AlloyBytes;
+
+// Impl print for MarketContext
+// Implemented here for tracing/log purposes, prefix path has to be maker.rs file
+impl MarketContext {
+    pub fn print(&self) {
+        tracing::info!(
+            "Market Context: Base to ETH: {:.6} | Quote to ETH: {:.6} | ETH to USD: {:.2} | Max Fee per Gas: {} | Max Priority Fee per Gas: {} | Native Gas Price: {} | Block: {:?}",
+            self.base_to_eth,
+            self.quote_to_eth,
+            self.eth_to_usd,
+            self.max_fee_per_gas,
+            self.max_priority_fee_per_gas,
+            self.native_gas_price,
+            self.block.header.number
+        );
+    }
+}
 
 #[async_trait]
 impl IMarketMaker for MarketMaker {
@@ -85,12 +102,14 @@ impl IMarketMaker for MarketMaker {
         match crate::utils::evm::balances(&provider, env.wallet_public_key.clone(), addresses.clone()).await {
             Ok(balances) => match provider.get_transaction_count(env.wallet_public_key.to_string().parse().unwrap()).await {
                 Ok(nonce) => {
-                    tracing::debug!("Inventory evaluation: Nonce {} | Wallet {}", nonce, env.wallet_public_key);
+                    let mut msgs = vec![];
                     for (x, tk) in tokens.iter().enumerate() {
                         let balance = balances.get(x).cloned().unwrap_or_default();
                         let divided = balance as f64 / 10f64.powi(tk.decimals as i32);
-                        tracing::debug!(" - Token: {}: {} = {}", tk.symbol, balance, divided);
+                        // tracing::debug!(" - Inventory: Got {} of {}", divided, tk.symbol);
+                        msgs.push(format!("{:.3} of {}", divided, tk.symbol));
                     }
+                    tracing::debug!("Inventory evaluation: Nonce {} | Wallet {} | 💵 Holding {}", nonce, env.wallet_public_key, msgs.join(" and "));
                     Ok(Inventory {
                         base_balance: balances[0],
                         quote_balance: balances[1],
@@ -149,7 +168,7 @@ impl IMarketMaker for MarketMaker {
                         let quote_to_eth = super::routing::quote(to_eth_ptss.clone(), tokens.clone(), quote_to_eth_vp.token_path.clone());
                         // tracing::debug!("Gas: {:?} | Native: {}", eip1559_fees, native_gas_price);
                         let elasped = time.elapsed().unwrap_or_default().as_millis();
-                        tracing::debug!(" - Market context fetched in {} ms", elasped);
+                        tracing::debug!("Market context fetched in {} ms", elasped);
                         match (base_to_eth, quote_to_eth) {
                             (Some(base_to_eth), Some(quote_to_eth)) => Some(MarketContext {
                                 base_to_eth,
@@ -167,7 +186,7 @@ impl IMarketMaker for MarketMaker {
                         }
                     }
                     _ => {
-                        tracing::warn!("Failed to find path for base|quote to ETH.");
+                        tracing::error!("Failed to find path for base|quote to ETH.");
                         None
                     }
                 }
@@ -193,6 +212,16 @@ impl IMarketMaker for MarketMaker {
             let spread = spot - reference;
             let spread_bps = spread / reference * BASIS_POINT_DENO;
             // Check if the spread is above the threshold
+            let symbol = if spread_bps < 0. as f64 { "buy 📈" } else { "sell 📉" };
+            tracing::debug!(
+                "   - Evaluating pool {}: Spot: {:.5} | Reference: {:.5} | Spread: {:.5} | Spread BPS: {:<3.2} | Should {}",
+                cpname(psc.component.clone()),
+                spot,
+                reference,
+                spread,
+                spread_bps,
+                symbol
+            );
             if spread_bps.abs() > self.config.spread as f64 {
                 match spread_bps > 0. {
                     true => {
@@ -279,14 +308,14 @@ impl IMarketMaker for MarketMaker {
                     let optimal = pool_selling_balance_divided * SHARE_POOL_BAL_SWAP_BPS / BASIS_POINT_DENO;
                     // Sample depth
                     let max_alloc = inventory_balance_divided * self.config.max_trade_allocation; // Capping the allocation to a maximum
-                    // let selling_amount = inventory_balance_divided * self.config.max_trade_allocation;
                     // ! ------------- Tmp -------------
-                    let selling_amount = optimal;
+                    // let selling_amount = optimal; // For demo in logs
+                    let selling_amount = inventory_balance_divided * self.config.max_trade_allocation; // For testing
                     // -------------
                     let buying_amount = if base_to_quote { selling_amount * adjustment.spot } else { selling_amount / adjustment.spot };
                     // --- Debug ---
                     let pool_msg = format!(
-                        " - Pool {} | Tycho Spot: {:>12.5} vs ref {:>12.5} | Spread: {:>7.2} {} = {:>5.0} bps)",
+                        "   - Pool {} | Tycho Spot: {:>12.5} vs ref {:>12.5} | Spread: {:>7.2} {} = {:>5.0} bps",
                         cpname(adjustment.psc.component.clone()),
                         adjustment.spot,
                         adjustment.reference,
@@ -341,7 +370,7 @@ impl IMarketMaker for MarketMaker {
                                 false => gas_cost_eth / context.base_to_eth,
                             };
                             tracing::debug!(
-                                " - Simulation: {} {} for {} {} | Gas cost : {:.5} $ | Gas cost in output: {:.2} %",
+                                "   - Swap: {:.5} {} for {:.5} {} | Gas cost : {:.5} $ | Gas cost in output: {:.2} %",
                                 selling_amount,
                                 selling.symbol,
                                 amount_out_divided,
@@ -388,8 +417,8 @@ impl IMarketMaker for MarketMaker {
                             let potential_profit_delta_spread_bps_abs = potential_profit_delta_spread_bps; //.abs(); // ! Tmp abs()
                             let profitable = potential_profit_delta_spread_bps_abs > self.config.min_exec_spread;
                             tracing::debug!(
-                                "   ---> Profit: {} | average_sell_price_net_gas: {:.4} vs reference_price: {:.4} | potential_profit_delta: {:.5} | potential_profit_delta_spread_bps: {:.2}",
-                                if potential_profit_delta > 0. { "🟢" } else { "🟠" },
+                                "   => Profit: {}  with average_sell_price_net_gas: {:.4} vs reference_price: {:.4} | potential_profit_delta: {:.5} | potential_profit_delta_spread_bps: {:.2}",
+                                if potential_profit_delta > 0. { "🟢" } else { "🔴" },
                                 average_sell_price_net_gas,
                                 adjustment.reference,
                                 potential_profit_delta,
@@ -426,7 +455,7 @@ impl IMarketMaker for MarketMaker {
                                     calculation,
                                 };
                                 orders.push(order);
-                                tracing::debug!(" ----------------- New order pushed -----------------");
+                                // tracing::debug!(" ----------------- New order pushed -----------------");
                             }
                         }
                         Err(e) => {
@@ -458,13 +487,15 @@ impl IMarketMaker for MarketMaker {
         let amount_out_min = BigUint::from((order.calculation.amount_out_min_powered).floor() as u128);
 
         tracing::debug!(
-            " - {} : Building Tycho solution: Buying {} with {} | Amount in: {} | Amount out: {} | Amount out min: {}",
+            " - {} : Building Tycho solution: Buying {} with {} | Amount in: {} | Amount out: {} | Amount out min: {} => {} of {}",
             cpname(order.adjustment.psc.component.clone()),
             order.adjustment.buying.symbol,
             order.adjustment.selling.symbol,
             amount_in,
             amount_out,
-            amount_out_min
+            amount_out_min,
+            order.calculation.amount_out_min_divided,
+            order.adjustment.buying.symbol
         );
         let swap = tycho_execution::encoding::models::Swap::new(order.adjustment.psc.component.clone(), input.clone(), output.clone(), split);
         // tracing::debug!(" - Swap: {:?}", swap);
@@ -539,7 +570,7 @@ impl IMarketMaker for MarketMaker {
         unsafe {
             std::env::set_var("RPC_URL", self.config.rpc.clone());
         }
-        let (_, _, chain) = crate::helpers::global::chain(self.config.network.clone()).unwrap();
+        let (_, _, chain) = crate::helpers::global::chain(self.config.network.as_str().to_string()).unwrap();
         // --- Prepare the solutions (solutions = trades encoded with Tycho EVM Encoder) ---
         // @dev This await section has to be done outside of the EVMEncoderBuilder for some unknown reaso, compiler error
         let mut solutions = vec![];
@@ -558,7 +589,7 @@ impl IMarketMaker for MarketMaker {
                     match encoder.encode_router_calldata(solutions.clone()) {
                         Ok(encoded) => {
                             // --- Prepare the transactions ---
-                            tracing::debug!("Encoded {} solutions", encoded.len());
+                            // tracing::debug!("Encoded {} solutions", encoded.len());
                             for i in 0..orders.len() {
                                 // Looping = executing multiple trades, potential conflicts
                                 // Need to handle inventory, nonce, etc.
@@ -601,34 +632,75 @@ impl IMarketMaker for MarketMaker {
     /// No interdependencies between orders, so we can simulate them all at once
     /// In a recursive or dependent way, we would need to simulate each order one by one, possible with state overwrite
     async fn simulate(&self, transactions: Vec<PreparedTransaction>, env: EnvConfig) -> Vec<bool> {
-        let alloy_chain = get_alloy_chain(self.config.network.clone()).expect("Failed to get alloy chain");
+        let alloy_chain = get_alloy_chain(self.config.network.as_str().to_string()).expect("Failed to get alloy chain");
         let rpc = self.config.rpc.parse::<url::Url>().unwrap().clone(); // ! Custom per network
         let pk = env.wallet_private_key.clone();
         let wallet = PrivateKeySigner::from_bytes(&B256::from_str(&pk).expect("Failed to convert swapper pk to B256")).expect("Failed to private key signer");
         let signer = alloy::network::EthereumWallet::from(wallet.clone());
-        let provider = ProviderBuilder::new().with_chain(alloy_chain).wallet(signer.clone()).on_http(rpc);
         let mut transactions = transactions.clone();
         transactions.retain(|t| {
             let sender = t.approval.from.unwrap_or_default().to_string().to_lowercase();
             let matching = wallet.address().to_string().eq_ignore_ascii_case(sender.clone().as_str());
-            !matching
+            matching
         });
         // Pure EVM simulation
         // Later, on mainnet, with flashbot bundle simu, it won't need it
+        let mut simulations = HashMap::new();
+        for i in 0..transactions.len() {
+            simulations.insert(i, false);
+        }
         tracing::debug!("Simulating {} transactions (keeping only the first for now)", transactions.len());
-        // Using only the first transaction for now
-        let first = transactions.first().expect("No transactions found");
-        let calls = vec![first.approval.clone(), first.swap.clone()];
-        let payload = SimulatePayload {
-            block_state_calls: vec![SimBlock {
-                block_overrides: None,
-                state_overrides: None,
-                calls,
-            }],
-            trace_transfers: true,
-            validation: true,
-            return_full_transactions: true,
-        };
+        let provider = ProviderBuilder::new().with_chain(alloy_chain).wallet(signer.clone()).on_http(rpc.clone());
+        if !transactions.is_empty() {
+            // Tmp: using only the first transaction for now
+            let first = transactions.first().expect("No transactions found");
+            let transactions = vec![first.clone()];
+            // Call the first transaction, approval + swap
+
+            for (x, tx) in transactions.iter().enumerate() {
+                let calls = vec![tx.approval.clone(), tx.swap.clone()];
+                let payload = SimulatePayload {
+                    block_state_calls: vec![SimBlock {
+                        block_overrides: None,
+                        state_overrides: None,
+                        calls,
+                    }],
+                    trace_transfers: true,
+                    validation: true,
+                    return_full_transactions: true,
+                };
+                // Simulate the transaction
+
+                // match self.config.netname {
+                //     NetworkName::Mainnet => {}
+                //     NetworkName::Base => {}
+                //     NetworkName::Unichain => {}
+                // };
+
+                match provider.simulate(&payload).await {
+                    Ok(output) => {
+                        for block in output.iter() {
+                            tracing::trace!("Simulated Block {}:", block.inner.header.number);
+                            for (x, tx) in block.calls.iter().enumerate() {
+                                tracing::trace!("  Tx #{}: Gas: {} | Simulation status: {}", x, tx.gas_used, tx.status);
+                                if !tx.status {
+                                    tracing::error!("Simulation failed for tx #{}. No broadcast.", x);
+                                    // is_simulation_success = false;
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to simulate: {:?}", e);
+                    }
+                };
+
+                // Save the simulation result
+                simulations.insert(x, true);
+            }
+            // let mut is_simulation_success = true;
+            // is_simulation_success
+        }
         vec![]
     }
 
@@ -641,7 +713,7 @@ impl IMarketMaker for MarketMaker {
     /// Monitor the ProtocolStreamBuilder for new pairs and updates, evaluate if MM bot has opportunities
     async fn monitor(&mut self, mtx: SharedTychoStreamState, env: EnvConfig) {
         loop {
-            tracing::debug!("Connecting ProtocolStreamBuilder for {}", self.config.network);
+            tracing::debug!("Connecting ProtocolStreamBuilder for {}", self.config.network.as_str().to_string());
             let psbc = PsbConfig {
                 filter: ComponentFilter::with_tvl_range(ADD_TVL_THRESHOLD, ADD_TVL_THRESHOLD),
             };
@@ -660,12 +732,13 @@ impl IMarketMaker for MarketMaker {
                                 let time = std::time::SystemTime::now();
                                 let reference = self.fetch_market_price().await.unwrap_or_default();
                                 tracing::info!(
-                                    " 💎 '{}' stream: block # {} with {:<2} states updates | Market price: {}", // , + {} pairs, - {} pairs",
-                                    self.config.network.clone(),
+                                    "{} '{}' stream: block # {} with {:<2} states updates | Market price: {} | Min exec spread: {}", // , + {} pairs, - {} pairs",
+                                    self.config.tag,
+                                    self.config.network.as_str().to_string(),
                                     msg.block_number,
                                     msg.states.len(),
-                                    reference // msg.new_pairs.len(),
-                                              // msg.removed_pairs.len()
+                                    reference,
+                                    self.config.min_exec_spread,
                                 );
                                 if !self.ready {
                                     // --- First stream ---
@@ -737,6 +810,7 @@ impl IMarketMaker for MarketMaker {
                                     }
 
                                     // --- Evaluate ---
+
                                     let prices = self.spot_prices(&targets);
                                     let readjusments = self.evaluate(&targets.clone(), prices.clone(), reference).await;
                                     if !readjusments.is_empty() {
@@ -768,6 +842,8 @@ impl IMarketMaker for MarketMaker {
                                                 tracing::warn!("Failed to get market context");
                                             }
                                         }
+                                    } else {
+                                        tracing::debug!("   - No readjustments found");
                                     }
                                 }
                             }
@@ -783,7 +859,7 @@ impl IMarketMaker for MarketMaker {
                     }
                 },
                 Err(e) => {
-                    tracing::warn!("Failed to build stream on {}: {:?}. Exiting.", self.config.network, e.to_string());
+                    tracing::warn!("Failed to build stream on {}: {:?}. Exiting.", self.config.network.as_str().to_string(), e.to_string());
                     return;
                 }
             };

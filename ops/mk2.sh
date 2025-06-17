@@ -20,16 +20,16 @@ function start() {
     # sleep 1
     # ------------- Execute -------------
     if [ "$1" = "test" ]; then
-        export RUST_LOG="off,mkmk=trace,shd=trace,test=trace"
+        export RUST_LOG="off,mk2=trace,shd=trace,test=trace"
         cargo test -- --nocapture
     else
         echo "Building MarketMaker program (might take a few minutes the first time) ..."
-        cargo build --bin mkmk -q 2>/dev/null
+        cargo build --bin mk2 -q 2>/dev/null
         echo "Build successful. Executing..."
         (
             trap - SIGINT
-            export RUST_LOG="off,mkmk=trace,shd=trace"
-            cargo run --bin mkmk -q # 2>/dev/null
+            export RUST_LOG="off,mk2=trace,shd=trace"
+            cargo run --bin mk2 -q # 2>/dev/null
         )
         echo "Program has finished or was interrupted. Continuing with the rest of the shell script ..."
         status+=($?)
@@ -42,5 +42,8 @@ function start() {
     # rm -rf dump.rdb
 }
 
+# export CONFIG_PATH="config/mmc.mainnet.eth-usdc.toml"
+# export CONFIG_PATH="config/mmc.mainnet.eth-wbtc.toml"
+# export CONFIG_PATH="config/mmc.unichain.eth-usdc.toml"
 export CONFIG_PATH="config/mmc.base.eth-usdc.toml"
 start $1

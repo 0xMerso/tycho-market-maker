@@ -66,7 +66,7 @@ async fn main() {
                 atks: tokens.clone(),
             }));
             loop {
-                tracing::debug!("Launching stream for network {}", config.network);
+                tracing::debug!("Launching stream for network {}", config.network.as_str());
                 let state = Arc::clone(&cache);
                 match AssertUnwindSafe(mk.monitor(state.clone(), env.clone())).catch_unwind().await {
                     Ok(_) => {
@@ -77,7 +77,7 @@ async fn main() {
                     }
                 }
                 let delay = if env.testing { RESTART / 10 } else { RESTART };
-                tracing::debug!("Waiting {} seconds before restarting stream for {}", delay, config.network);
+                tracing::debug!("Waiting {} seconds before restarting stream for {}", delay, config.network.as_str());
                 tokio::time::sleep(tokio::time::Duration::from_millis(delay * 1000)).await;
             }
         }

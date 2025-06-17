@@ -18,6 +18,34 @@ pub struct EnvConfig {
     pub wallet_private_key: String,
 }
 
+/// Enum for network
+#[derive(Debug, Clone, Deserialize)]
+pub enum NetworkName {
+    Ethereum,
+    Base,
+    Unichain,
+}
+
+impl NetworkName {
+    /// Convert a Network enum to a string
+    pub fn as_str(&self) -> &str {
+        match self {
+            NetworkName::Ethereum => "ethereum",
+            NetworkName::Base => "base",
+            NetworkName::Unichain => "unichain",
+        }
+    }
+    /// Convert a string to a NetworkName enum
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "ethereum" => Some(NetworkName::Ethereum),
+            "base" => Some(NetworkName::Base),
+            "unichain" => Some(NetworkName::Unichain),
+            _ => None,
+        }
+    }
+}
+
 impl Default for EnvConfig {
     fn default() -> Self {
         Self::new()
@@ -53,6 +81,7 @@ pub struct MarketMakerConfig {
     pub addr0: String,
     pub token1: String,
     pub addr1: String,
+    pub tag: String,
     pub network: String,
     pub chainid: u64,
     pub gas_token: String,
@@ -80,7 +109,8 @@ pub struct MarketMakerConfig {
 impl MarketMakerConfig {
     pub fn print(&self) {
         tracing::debug!("Market Maker Config:");
-        tracing::debug!("  Network:               {} with ID {}", self.network, self.chainid);
+        tracing::debug!("  Network:               {} with ID {}", self.network.as_str(), self.chainid);
+        tracing::debug!("  Tag:                   {}", self.tag);
         tracing::debug!("  Token0:                {} ({})", self.token0, self.addr0);
         tracing::debug!("  Token1:                {} ({})", self.token1, self.addr1);
         tracing::debug!("  RPC:                   {}", self.rpc);

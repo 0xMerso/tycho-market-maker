@@ -61,7 +61,7 @@ pub fn find_path(cps: Vec<ProtocolComponent>, input: String, target: String) -> 
 pub fn quote(pts: Vec<ProtoSimComp>, atks: Vec<Token>, path: Vec<String>) -> Option<f64> {
     // If ETH, return 1. Else, if the path is empty, return None.
     if path.len() == 1 {
-        tracing::debug!(" - Path is just ETH. Returning quote of 1.0");
+        // tracing::debug!(" - Path is just ETH. Returning quote of 1.0");
         return Some(1.0);
     } else if path.len() < 2 {
         tracing::error!("🔺 Path is too short: {:?}", path);
