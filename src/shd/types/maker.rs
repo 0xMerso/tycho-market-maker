@@ -36,9 +36,9 @@ pub trait IMarketMaker: Send + Sync {
     // Prepare the transactions for execution (format, tycho encoder, approvals, swap)
     async fn prepare(&self, order: Vec<ExecutionOrder>, context: MarketContext, inventory: Inventory, env: EnvConfig) -> Vec<PreparedTransaction>;
     // Simulate the bundles
-    async fn simulate(&self, transactions: Vec<PreparedTransaction>, env: EnvConfig) -> Vec<bool>;
+    async fn simulate(&self, transactions: Vec<PreparedTransaction>, env: EnvConfig) -> Vec<PreparedTransaction>;
     // Broadcasts the swaps to the network via bundles + bids
-    async fn broadcast(&self);
+    async fn broadcast(&self, transactions: Vec<PreparedTransaction>, env: EnvConfig);
     // Infinite loop that monitors the Tycho stream state, looking for opportunities
     async fn monitor(&mut self, mtx: SharedTychoStreamState, env: EnvConfig);
 }
@@ -59,6 +59,9 @@ pub struct MarketMaker {
     pub quote: Token,
     // Snapshots of the market, price, etc.
     // pub snapshots: HashMap<String, MarketSnapshot>,
+
+    // Used to limit the bot to 1 single swap exec in his entire lifetime, for testing purpose
+    pub single: bool,
 }
 
 /// ================== Builder ==================
@@ -80,6 +83,7 @@ impl MarketMakerBuilder {
             initialised: false,
             base,
             quote,
+            single: false,
         })
     }
 }
@@ -166,4 +170,18 @@ pub struct SwapCalculation {
 pub struct PreparedTransaction {
     pub approval: TransactionRequest,
     pub swap: TransactionRequest,
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct ExecTxResult {
+    pub sent: bool,
+    pub status: bool,
+    pub hash: String,
+    pub error: Option<String>,
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct ExecutedPayload {
+    pub approval: ExecTxResult,
+    pub swap: ExecTxResult,
 }

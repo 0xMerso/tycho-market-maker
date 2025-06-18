@@ -1,3 +1,5 @@
+use std::sync::atomic::AtomicBool;
+
 /// ======= Static variables =======
 
 pub static HEARTBEAT_DELAY: u64 = 300;
@@ -12,3 +14,5 @@ pub static COINGECKO_ETH_USD: &str = "https://api.coingecko.com/api/v3/simple/pr
 pub static APPROVE_FN_SIGNATURE: &str = "approve(address,uint256)";
 pub static DEFAULT_APPROVE_GAS: u64 = 100_000;
 pub static DEFAULT_SWAP_GAS: u64 = 500_000;
+
+pub static HAS_EXECUTED: AtomicBool = AtomicBool::new(false);

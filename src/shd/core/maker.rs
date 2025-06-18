@@ -4,10 +4,10 @@ use crate::{
     helpers::global::{cpname, get_alloy_chain, get_component_balances},
     types::{
         config::{EnvConfig, NetworkName},
-        maker::{CompReadjustment, ExecutionOrder, IMarketMaker, Inventory, MarketContext, MarketMaker, PreparedTransaction, SwapCalculation, TradeDirection},
+        maker::{CompReadjustment, ExecutedPayload, ExecutionOrder, IMarketMaker, Inventory, MarketContext, MarketMaker, PreparedTransaction, SwapCalculation, TradeDirection},
         tycho::{ProtoSimComp, PsbConfig, SharedTychoStreamState},
     },
-    utils::r#static::{ADD_TVL_THRESHOLD, APPROVE_FN_SIGNATURE, BASIS_POINT_DENO, DEFAULT_APPROVE_GAS, DEFAULT_SWAP_GAS, NULL_ADDRESS, SHARE_POOL_BAL_SWAP_BPS},
+    utils::r#static::{ADD_TVL_THRESHOLD, APPROVE_FN_SIGNATURE, BASIS_POINT_DENO, DEFAULT_APPROVE_GAS, DEFAULT_SWAP_GAS, HAS_EXECUTED, NULL_ADDRESS, SHARE_POOL_BAL_SWAP_BPS},
 };
 use alloy::{
     consensus::transaction,
@@ -422,7 +422,7 @@ impl IMarketMaker for MarketMaker {
                             let profitable = potential_profit_delta_spread_bps_abs > self.config.min_exec_spread;
                             tracing::debug!(
                                 "   => Profit: {}  with average_sell_price_net_gas: {:.4} vs reference_price: {:.4} | potential_profit_delta: {:.5} | potential_profit_delta_spread_bps: {:.2}",
-                                if potential_profit_delta > 0. { "🟢" } else { "🔴" },
+                                if potential_profit_delta > 0. { "💵" } else { "🔻" },
                                 average_sell_price_net_gas,
                                 adjustment.reference,
                                 potential_profit_delta,
@@ -635,7 +635,8 @@ impl IMarketMaker for MarketMaker {
 
     /// No interdependencies between orders, so we can simulate them all at once
     /// In a recursive or dependent way, we would need to simulate each order one by one, possible with state overwrite
-    async fn simulate(&self, transactions: Vec<PreparedTransaction>, env: EnvConfig) -> Vec<bool> {
+    /// Logic depends on the network, even for simulation
+    async fn simulate(&self, transactions: Vec<PreparedTransaction>, env: EnvConfig) -> Vec<PreparedTransaction> {
         let alloy_chain = get_alloy_chain(self.config.network.as_str().to_string()).expect("Failed to get alloy chain");
         let rpc = self.config.rpc.parse::<url::Url>().unwrap().clone(); // ! Custom per network
         let pk = env.wallet_private_key.clone();
@@ -655,6 +656,7 @@ impl IMarketMaker for MarketMaker {
         }
         tracing::debug!("Simulating {} transactions (keeping only the first for now)", transactions.len());
         let provider = ProviderBuilder::new().with_chain(alloy_chain).wallet(signer.clone()).on_http(rpc.clone());
+        let mut succeeded = vec![];
         if !transactions.is_empty() {
             // Tmp: using only the first transaction for now
             let first = transactions.first().expect("No transactions found");
@@ -663,6 +665,7 @@ impl IMarketMaker for MarketMaker {
 
             for (x, tx) in transactions.iter().enumerate() {
                 let calls = vec![tx.approval.clone(), tx.swap.clone()];
+                let names = vec!["approval".to_string(), "swap".to_string()];
                 let payload = SimulatePayload {
                     block_state_calls: vec![SimBlock {
                         block_overrides: None,
@@ -683,14 +686,16 @@ impl IMarketMaker for MarketMaker {
 
                 match provider.simulate(&payload).await {
                     Ok(output) => {
-                        dbg!(output.clone());
                         for block in output.iter() {
                             tracing::trace!(" 🧪 Simulated Block {}:", block.inner.header.number);
-                            for (x, tx) in block.calls.iter().enumerate() {
-                                tracing::trace!("  Tx #{}: Gas: {} | Simulation status: {}", x, tx.gas_used, tx.status);
-                                if !tx.status {
-                                    tracing::error!("Simulation failed for tx #{}. No broadcast.", x);
-                                    // is_simulation_success = false;
+                            for (x, scr) in block.calls.iter().enumerate() {
+                                let name = names.get(x).unwrap();
+                                tracing::trace!("  SimCallResult for '{}': Gas: {} | Simulation status: {}", name, scr.gas_used, scr.status);
+                                if !scr.status {
+                                    let reason = scr.error.clone().unwrap().message;
+                                    tracing::error!("Simulation failed on SimCallResult on '{}'. No broadcast. Reason: {}", name, reason);
+                                } else {
+                                    succeeded.push(tx.clone());
                                 }
                             }
                         }
@@ -699,20 +704,99 @@ impl IMarketMaker for MarketMaker {
                         tracing::error!("Failed to simulate: {:?}", e);
                     }
                 };
-
                 // Save the simulation result
                 simulations.insert(x, true);
             }
-            // let mut is_simulation_success = true;
-            // is_simulation_success
         }
-        vec![]
+        succeeded
     }
 
     /// Broadcast the transaction to the network
     /// Swap are sensitive to MEV so we need to be careful
-    async fn broadcast(&self) {
+    /// Logic depends on the network
+    async fn broadcast(&self, transactions: Vec<PreparedTransaction>, env: EnvConfig) {
         tracing::debug!("Broadcasting");
+        let alloy_chain = get_alloy_chain(self.config.network.as_str().to_string()).expect("Failed to get alloy chain");
+        let rpc = self.config.rpc.parse::<url::Url>().unwrap().clone(); // ! Custom per network
+        let pk = env.wallet_private_key.clone();
+        let wallet = PrivateKeySigner::from_bytes(&B256::from_str(&pk).expect("Failed to convert swapper pk to B256")).expect("Failed to private key signer");
+        let signer = alloy::network::EthereumWallet::from(wallet.clone());
+        let provider = ProviderBuilder::new().with_chain(alloy_chain).wallet(signer.clone()).on_http(rpc.clone());
+        let mut exec = ExecutedPayload::default();
+        let netname = NetworkName::from_str(self.config.network.as_str()).unwrap();
+        match netname {
+            NetworkName::Ethereum | NetworkName::Base | NetworkName::Unichain => {
+                // Mainnet
+
+                for (x, tx) in transactions.iter().enumerate() {
+                    tracing::debug!("Tx: #{} | Broadcasting on {} | Method: {}", x, self.config.network.as_str().to_string(), self.config.broadcast);
+                    if HAS_EXECUTED.load(std::sync::atomic::Ordering::Relaxed) {
+                        tracing::info!("⏩ Skipping broadcast - already executed a transaction in this session");
+                        return;
+                    }
+                    match provider.send_transaction(tx.approval.clone()).await {
+                        Ok(approve) => {
+                            exec.approval.sent = true;
+                            HAS_EXECUTED.store(true, std::sync::atomic::Ordering::Relaxed);
+                            tracing::debug!("Waiting for receipt on approval tx: {:?}", approve.tx_hash());
+                            exec.approval.hash = approve.tx_hash().to_string();
+                            tracing::debug!("Explorer: {}tx/{}", self.config.explorer, approve.tx_hash());
+                            match approve.get_receipt().await {
+                                Ok(receipt) => {
+                                    tracing::debug!("Approval receipt: status: {:?}", receipt.status());
+                                    exec.approval.status = receipt.status();
+                                    if receipt.status() {
+                                        tracing::debug!("Approval transaction succeeded");
+                                        // --- Broadcast Swap ---
+                                        exec.swap.sent = true;
+                                        match provider.send_transaction(tx.swap.clone()).await {
+                                            Ok(swap) => {
+                                                exec.swap.hash = swap.tx_hash().to_string();
+                                                tracing::debug!("Waiting for receipt on swap tx: {:?}", swap.tx_hash());
+                                                tracing::debug!("Explorer: {}tx/{}", self.config.explorer, swap.tx_hash());
+                                                match swap.get_receipt().await {
+                                                    Ok(receipt) => {
+                                                        tracing::debug!("Swap receipt: status: {:?}", receipt.status());
+                                                        exec.swap.status = receipt.status();
+                                                        if receipt.status() {
+                                                            tracing::debug!("Swap transaction succeeded");
+                                                        } else {
+                                                            tracing::error!("Swap transaction failed");
+                                                        }
+                                                    }
+                                                    Err(e) => {
+                                                        tracing::error!("Failed to wait for swap transaction: {:?}", e);
+                                                        exec.swap.error = Some(e.to_string());
+                                                    }
+                                                }
+                                            }
+                                            Err(e) => {
+                                                tracing::error!("Failed to send swap transaction: {:?}", e);
+                                                exec.swap.error = Some(e.to_string());
+                                            }
+                                        }
+                                    } else {
+                                        tracing::error!("Approval transaction failed");
+                                    }
+                                }
+                                Err(e) => {
+                                    tracing::error!("Failed to wait for approval transaction: {:?}", e);
+                                    exec.approval.error = Some(e.to_string());
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to send approval transaction: {:?}", e);
+                            exec.approval.error = Some(e.to_string());
+                        }
+                    }
+                }
+            }
+            _ => {
+                // Other networks
+                tracing::error!("Broadcast not implemented for network {}", self.config.network.as_str().to_string());
+            }
+        }
     }
 
     /// Monitor the ProtocolStreamBuilder for new pairs and updates, evaluate if MM bot has opportunities
@@ -834,7 +918,8 @@ impl IMarketMaker for MarketMaker {
                                                             // tracing::debug!("No readjustments to execute");
                                                         } else {
                                                             let transactions = self.prepare(orders, context.clone(), inventory.clone(), env.clone()).await;
-                                                            let simulation = self.simulate(transactions, env.clone()).await;
+                                                            let simulated = self.simulate(transactions, env.clone()).await;
+                                                            let broadcast = self.broadcast(simulated, env.clone()).await;
                                                         }
                                                     }
                                                     Err(e) => {

@@ -11,14 +11,14 @@ chainid = 8453
 gas_token = "0x4200000000000000000000000000000000000006" # Erc20
 gas_token_chainlink = "0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70" # Chainlink price feed for Gas Token (ETH) to USD
 rpc = "https://base-mainnet.blastapi.io/1437c115-f259-4690-a2d7-8c32e658a164" # https://unichain.drpc.org"
-explorer = "https://basescan.xyz/"
+explorer = "https://basescan.org/"
 tycho_endpoint = "tycho-base-beta.propellerheads.xyz"
 # === Execution ===
 spread = 15 # Bps
 min_exec_spread = -50.0
 slippage = 0.0005
 profitability = true
-max_trade_allocation = 1.0
+max_trade_allocation = 0.5
 # bribe=0.5
 broadcast = "classic"
 depths = [50.0, 250.0, 500.0, 750.0, 1000.0, 1250.0, 1500.0]
