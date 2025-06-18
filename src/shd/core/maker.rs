@@ -681,10 +681,9 @@ impl IMarketMaker for MarketMaker {
                 //     NetworkName::Unichain => {}
                 // };
 
-                // !
-
                 match provider.simulate(&payload).await {
                     Ok(output) => {
+                        dbg!(output.clone());
                         for block in output.iter() {
                             tracing::trace!(" 🧪 Simulated Block {}:", block.inner.header.number);
                             for (x, tx) in block.calls.iter().enumerate() {
@@ -692,7 +691,6 @@ impl IMarketMaker for MarketMaker {
                                 if !tx.status {
                                     tracing::error!("Simulation failed for tx #{}. No broadcast.", x);
                                     // is_simulation_success = false;
-                                    dbg!(tx);
                                 }
                             }
                         }
