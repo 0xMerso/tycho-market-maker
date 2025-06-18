@@ -44,6 +44,7 @@ function start() {
 
 # export CONFIG_PATH="config/mmc.mainnet.eth-usdc.toml"
 # export CONFIG_PATH="config/mmc.mainnet.eth-wbtc.toml"
-# export CONFIG_PATH="config/mmc.unichain.eth-usdc.toml"
-export CONFIG_PATH="config/mmc.base.eth-usdc.toml"
+# export CONFIG_PATH="config/mmc.mainnet.usdc-dai.toml"
+export CONFIG_PATH="config/mmc.unichain.eth-usdc.toml"
+# export CONFIG_PATH="config/mmc.base.eth-usdc.toml"
 start $1

@@ -65,6 +65,10 @@ impl IMarketMaker for MarketMaker {
     }
 
     async fn fetch_eth_usd(&self) -> Result<f64, String> {
+        if self.config.gas_token_chainlink.is_empty() {
+            tracing::warn!("No gas token chainlink found, using Coingecko");
+            return Ok(super::pricefeed::coingecko().await.unwrap_or(0.));
+        }
         chainlink(self.config.rpc.clone(), self.config.gas_token_chainlink.clone()).await
     }
 
@@ -677,15 +681,18 @@ impl IMarketMaker for MarketMaker {
                 //     NetworkName::Unichain => {}
                 // };
 
+                // !
+
                 match provider.simulate(&payload).await {
                     Ok(output) => {
                         for block in output.iter() {
-                            tracing::trace!("Simulated Block {}:", block.inner.header.number);
+                            tracing::trace!(" 🧪 Simulated Block {}:", block.inner.header.number);
                             for (x, tx) in block.calls.iter().enumerate() {
                                 tracing::trace!("  Tx #{}: Gas: {} | Simulation status: {}", x, tx.gas_used, tx.status);
                                 if !tx.status {
                                     tracing::error!("Simulation failed for tx #{}. No broadcast.", x);
                                     // is_simulation_success = false;
+                                    dbg!(tx);
                                 }
                             }
                         }
@@ -765,7 +772,7 @@ impl IMarketMaker for MarketMaker {
                                         }
                                     }
                                     self.ready = true;
-                                    tracing::info!(" ✅ ProtocolStreamBuilder initialised successfully. Monitoring {} on {} components", targets, components.len());
+                                    tracing::info!("✅ ProtocolStreamBuilder initialised successfully. Monitoring {} on {} components\n", targets, components.len());
                                 } else {
                                     // --- Update protosims ---
                                     if !msg.states.is_empty() {

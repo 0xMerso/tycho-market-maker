@@ -9,13 +9,13 @@ addr1 = "0x078D782b760474a361dDA0AF3839290b0EF57AD6"
 network = "unichain" # "base", "unichain"
 chainid = 130 
 gas_token = "0x4200000000000000000000000000000000000006" # Erc20
-gas_token_chainlink = "0x0000000000000000000000000000000000000000" # Chainlink price feed for Gas Token (ETH) to USD
+gas_token_chainlink = "" # Do not exist yet
 rpc = "https://unichain-mainnet.blastapi.io/1437c115-f259-4690-a2d7-8c32e658a164" # https://unichain.drpc.org"
 explorer = "https://uniscan.xyz/"
 tycho_endpoint = "tycho-unichain-beta.propellerheads.xyz"
 # === Execution ===
-spread = 30 # Bps
-min_exec_spread = -50.0
+spread = 1 # Bps
+min_exec_spread = -10.0
 slippage = 0.0005
 profitability = true
 max_trade_allocation = 1.0

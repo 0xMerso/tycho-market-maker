@@ -15,7 +15,7 @@ explorer = "https://basescan.xyz/"
 tycho_endpoint = "tycho-base-beta.propellerheads.xyz"
 # === Execution ===
 spread = 15 # Bps
-min_exec_spread = -75.0
+min_exec_spread = -50.0
 slippage = 0.0005
 profitability = true
 max_trade_allocation = 1.0

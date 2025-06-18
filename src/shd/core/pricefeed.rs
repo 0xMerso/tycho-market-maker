@@ -5,7 +5,10 @@ use alloy_primitives::Address;
 use async_trait::async_trait;
 use serde::Deserialize;
 
-use crate::types::{config::MarketMakerConfig, sol::IChainLinkPF};
+use crate::{
+    types::{config::MarketMakerConfig, sol::IChainLinkPF},
+    utils::r#static::COINGECKO_ETH_USD,
+};
 
 #[async_trait]
 pub trait PriceFeed: Send + Sync {
@@ -25,6 +28,29 @@ impl PriceFeedType {
             "binance" => PriceFeedType::Binance,
             _ => panic!("Unknown price feed type: {}", s),
         }
+    }
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+pub struct CoinGeckoResponse {
+    pub ethereum: CryptoPrice,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+pub struct CryptoPrice {
+    pub usd: f64,
+}
+
+/// Retrieve eth usd price
+pub async fn coingecko() -> Option<f64> {
+    match reqwest::get(COINGECKO_ETH_USD).await {
+        Ok(response) => match response.json::<CoinGeckoResponse>().await {
+            Ok(data) => Some(data.ethereum.usd),
+            Err(_) => None,
+        },
+        Err(_) => None,
     }
 }
 
@@ -104,7 +130,7 @@ pub async fn chainlink(rpc: String, pfeed: String) -> Result<f64, String> {
         }
         _ => {
             let msg = format!("Error fetching price from chainlink oracle: {:?}", pfeed);
-            tracing::error!("{}", msg);
+            // tracing::error!("{}", msg);
             Err(msg)
         }
     }

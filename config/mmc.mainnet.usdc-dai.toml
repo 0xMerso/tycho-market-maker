@@ -1,0 +1,38 @@
+# =========================================== Market Maker FuLL Configuration ===========================================
+
+# === Global ===
+tag = "⚪️"
+token0 = "USDC" # Quote
+addr0 = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+token1 = "DAI" # Base
+addr1 = "0x6b175474e89094c44da98b954eedeac495271d0f"
+network = "ethereum" # "base", "unichain"
+chainid = 1
+gas_token = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" # Erc20
+gas_token_chainlink = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419" # Chainlink price feed for Gas Token (ETH) to USD
+rpc = "https://eth-mainnet.blastapi.io/1437c115-f259-4690-a2d7-8c32e658a164" # https://eth.llamarpc.com"
+explorer = "https://etherscan.io/"
+tycho_endpoint = "tycho-beta.propellerheads.xyz"
+# === Execution ===
+spread = 5 # Bps
+min_exec_spread = -10.0
+slippage = 0.0005
+profitability = true
+max_trade_allocation = 1.0
+# bribe=0.5
+broadcast = "buildernet" 
+depths = [50.0, 250.0, 500.0, 750.0, 1000.0, 1250.0, 1500.0]
+gas_limit = 300000
+target_block_offset = 1
+permit2 = "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+tycho_router = "0xfD0b31d2E955fA55e3fa641Fe90e08b677188d35"
+# === Misc ===
+poll_interval_ms = 12000
+[pfc] # ======= MM Price Feed Config ======= 
+# Expected price is token0 per token1 => if token0 is ETH and token1 USDC, then price is ~2500, not 0.0004
+# type = "binance"
+# source = "https://api.binance.com/api/v3"         
+type = "chainlink"                   
+source = "0xAed0c38402a5d19df6E4c03F4E2DceD6e29c1ee9" #! Not good, it's DAI/USD, it should be USD_C/DAI, but fine for test
+# type = "custom"  
+# type = "twap" 
