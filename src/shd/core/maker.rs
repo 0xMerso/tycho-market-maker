@@ -714,7 +714,7 @@ impl IMarketMaker for MarketMaker {
     /// Broadcast the transaction to the network
     /// Swap are sensitive to MEV so we need to be careful
     /// Logic depends on the network
-    async fn broadcast(&self, transactions: Vec<PreparedTransaction>, env: EnvConfig) {
+    async fn broadcast(&self, prepared: Vec<PreparedTransaction>, env: EnvConfig) {
         tracing::debug!("Broadcasting");
         let alloy_chain = get_alloy_chain(self.config.network.as_str().to_string()).expect("Failed to get alloy chain");
         let rpc = self.config.rpc.parse::<url::Url>().unwrap().clone(); // ! Custom per network
@@ -728,60 +728,47 @@ impl IMarketMaker for MarketMaker {
             NetworkName::Ethereum | NetworkName::Base | NetworkName::Unichain => {
                 // Mainnet
 
-                for (x, tx) in transactions.iter().enumerate() {
-                    tracing::debug!("Tx: #{} | Broadcasting on {} | Method: {}", x, self.config.network.as_str().to_string(), self.config.broadcast);
+                for (x, tx) in prepared.iter().enumerate() {
                     if HAS_EXECUTED.load(std::sync::atomic::Ordering::Relaxed) {
-                        tracing::info!("⏩ Skipping broadcast - already executed a transaction in this session");
+                        tracing::info!("⏩ Skipping broadcast - already executed a transaction in the program lifetime");
                         return;
                     }
+                    tracing::debug!("Trade: #{} | Broadcasting on {} | Method: {}", x, self.config.network.as_str().to_string(), self.config.broadcast);
+                    // --- Sending, without waiting for receipt ---
+                    let time = std::time::SystemTime::now();
                     match provider.send_transaction(tx.approval.clone()).await {
                         Ok(approve) => {
+                            let approval_time = time.elapsed().unwrap_or_default().as_millis();
+                            tracing::debug!("Explorer: {}tx/{} | Approval shoot took {} ms", self.config.explorer, approve.tx_hash(), approval_time);
                             exec.approval.sent = true;
-                            HAS_EXECUTED.store(true, std::sync::atomic::Ordering::Relaxed);
-                            tracing::debug!("Waiting for receipt on approval tx: {:?}", approve.tx_hash());
                             exec.approval.hash = approve.tx_hash().to_string();
-                            tracing::debug!("Explorer: {}tx/{}", self.config.explorer, approve.tx_hash());
-                            match approve.get_receipt().await {
-                                Ok(receipt) => {
-                                    tracing::debug!("Approval receipt: status: {:?}", receipt.status());
-                                    exec.approval.status = receipt.status();
-                                    if receipt.status() {
-                                        tracing::debug!("Approval transaction succeeded");
-                                        // --- Broadcast Swap ---
-                                        exec.swap.sent = true;
-                                        match provider.send_transaction(tx.swap.clone()).await {
-                                            Ok(swap) => {
-                                                exec.swap.hash = swap.tx_hash().to_string();
-                                                tracing::debug!("Waiting for receipt on swap tx: {:?}", swap.tx_hash());
-                                                tracing::debug!("Explorer: {}tx/{}", self.config.explorer, swap.tx_hash());
-                                                match swap.get_receipt().await {
-                                                    Ok(receipt) => {
-                                                        tracing::debug!("Swap receipt: status: {:?}", receipt.status());
-                                                        exec.swap.status = receipt.status();
-                                                        if receipt.status() {
-                                                            tracing::debug!("Swap transaction succeeded");
-                                                        } else {
-                                                            tracing::error!("Swap transaction failed");
-                                                        }
-                                                    }
-                                                    Err(e) => {
-                                                        tracing::error!("Failed to wait for swap transaction: {:?}", e);
-                                                        exec.swap.error = Some(e.to_string());
-                                                    }
-                                                }
-                                            }
-                                            Err(e) => {
-                                                tracing::error!("Failed to send swap transaction: {:?}", e);
-                                                exec.swap.error = Some(e.to_string());
-                                            }
+                            HAS_EXECUTED.store(true, std::sync::atomic::Ordering::Relaxed);
+                            match provider.send_transaction(tx.swap.clone()).await {
+                                Ok(swap) => {
+                                    let swap_time = time.elapsed().unwrap_or_default().as_millis();
+                                    tracing::debug!("Explorer: {}tx/{} | Swap (+ approval) shoot took {} ms", self.config.explorer, swap.tx_hash(), swap_time);
+                                    exec.swap.sent = true;
+                                    exec.swap.hash = swap.tx_hash().to_string();
+                                    //  --- Wait for receipt ---
+                                    let time = std::time::SystemTime::now();
+                                    let approve_receipt = approve.get_receipt().await;
+                                    let swap_receipt = swap.get_receipt().await;
+                                    let total_time = time.elapsed().unwrap_or_default().as_millis();
+                                    tracing::debug!("Approval get_receipt + Swap get_receipt took {} ms", total_time);
+                                    match (approve_receipt, swap_receipt) {
+                                        (Ok(approval_receipt), Ok(swap_receipt)) => {
+                                            tracing::debug!("Approval receipt: status: {:?}", approval_receipt.status());
+                                            exec.approval.status = approval_receipt.status();
+                                            exec.swap.status = swap_receipt.status();
                                         }
-                                    } else {
-                                        tracing::error!("Approval transaction failed");
+                                        _ => {
+                                            tracing::error!("Failed to get receipt");
+                                        }
                                     }
                                 }
                                 Err(e) => {
-                                    tracing::error!("Failed to wait for approval transaction: {:?}", e);
-                                    exec.approval.error = Some(e.to_string());
+                                    tracing::error!("Failed to send swap transaction: {:?}", e);
+                                    exec.swap.error = Some(e.to_string());
                                 }
                             }
                         }
