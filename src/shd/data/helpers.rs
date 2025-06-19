@@ -52,16 +52,35 @@ pub async fn ping() {
 
 /// Connect to Redis
 pub async fn connect() -> Result<MultiplexedConnection, RedisError> {
-    let endpoint = std::env::var("REDIS_HOST");
+    let endpoint = std::env::var("REDIS_HOST"); // Contain port too
     let endpoint = match endpoint {
         Ok(endpoint) => endpoint,
-        Err(_) => "127.0.0.1:42777".to_string(),
+        Err(_) => "127.0.0.1:42044".to_string(), // ! Default to update ?
     };
     let endpoint = format!("redis://{}", endpoint);
     // log::info!("Redis endpoint: {}", endpoint);
     let client = Client::open(endpoint);
     match client {
         Ok(client) => client.get_multiplexed_tokio_connection().await,
+        Err(e) => {
+            tracing::error!("Redis Client Error: {}", e);
+            Err(e)
+        }
+    }
+}
+
+/// Connect to Redis
+pub fn copubsub() -> Result<redis::Client, RedisError> {
+    let endpoint = std::env::var("REDIS_HOST"); // Contain port too
+    let endpoint = match endpoint {
+        Ok(endpoint) => endpoint,
+        Err(_) => "127.0.0.1:42044".to_string(), // ! Default to update ?
+    };
+    let endpoint = format!("redis://{}", endpoint);
+    tracing::info!("copubsub: endpoint: {}", endpoint);
+    let client = Client::open(endpoint);
+    match client {
+        Ok(client) => Ok(client),
         Err(e) => {
             tracing::error!("Redis Client Error: {}", e);
             Err(e)

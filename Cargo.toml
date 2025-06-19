@@ -75,14 +75,3 @@ path = "src/mk2.rs"
 name = "moni"
 path = "src/moni.rs"
 
-[[bin]]
-name = "consumer"
-path = "src/shd/data/consumer.rs"
-
-[[bin]]
-name = "producer"
-path = "src/shd/data/producer.rs"
-
-#redis
-REDIS_PORT=6379
-REDIS_ADDRESS="localhost"

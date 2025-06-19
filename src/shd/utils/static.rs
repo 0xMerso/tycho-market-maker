@@ -16,3 +16,6 @@ pub static DEFAULT_APPROVE_GAS: u64 = 100_000;
 pub static DEFAULT_SWAP_GAS: u64 = 500_000;
 
 pub static HAS_EXECUTED: AtomicBool = AtomicBool::new(false);
+
+/// Monitoring
+pub static CHANNEL_REDIS: &str = "chrdmm"; // Channel Redis MM

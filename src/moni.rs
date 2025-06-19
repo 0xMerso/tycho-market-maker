@@ -35,4 +35,7 @@ async fn main() {
     tracing::info!("--- Launching MM monitoring program with {} mk2 instances --- | 🧪 Testing mode: {:?}", configs.len(), env.testing);
     // ============================================== Initialisation ==============================================
     // shd::utils::uptime::hearbeats(config.clone(), env.clone()).await;
+    // ============================================== Start ==============================================
+    shd::data::receiver::listen().await;
+    tracing::info!("Monitoring program finished");
 }
