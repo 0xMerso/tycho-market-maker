@@ -58,7 +58,10 @@ primitive-types = "0.10.1"
 alloy-primitives = "0.8.23"
 alloy-chains = "0.1.63"
 # --- DB ---
-redis = { version = "0.26.1", features = ["tokio-comp"] }
+redis = { version = "0.26.1", features = ["tokio-comp", "aio", "connection-manager"]  }
+# redis = { version = "0.26.1", features = ["tokio-comp"]  }
+ 
+
 
 [lib]
 name = "shd"
