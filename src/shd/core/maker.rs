@@ -737,6 +737,12 @@ impl IMarketMaker for MarketMaker {
                     tracing::debug!("Trade: #{} | Broadcasting on {} | Method: {}", x, self.config.network.as_str().to_string(), self.config.broadcast);
                     // --- Sending, without waiting for receipt ---
                     let time = std::time::SystemTime::now();
+
+                    if env.testing {
+                        tracing::info!("⏩ Skipping broadcast - 🧪 Testing mode enabled");
+                        return;
+                    }
+
                     match provider.send_transaction(tx.approval.clone()).await {
                         Ok(approve) => {
                             let approval_time = time.elapsed().unwrap_or_default().as_millis();

@@ -1,0 +1,34 @@
+# =========================================== Market Maker FuLL Configuration ===========================================
+tag = ""
+token0 = ""
+addr0 = ""
+token1 = ""
+addr1 = ""
+network = ""
+chainid = ""
+gas_token = ""
+gas_token_chainlink = ""
+rpc = ""
+explorer = ""
+tycho_endpoint = ""
+poll_interval_ms = ""
+# === Execution ===
+spread = ""
+min_exec_spread = ""
+slippage = ""
+profitability = ""
+max_trade_allocation = ""
+# bribe=0.5
+broadcast = ""
+depths = ""
+# Idea: TEE Builder, Echo, Flashbots Protect etc.
+# Auto topping up of gas: automatically buy some ETH when you run low on it.
+gas_limit = ""
+target_block_offset = ""
+permit2 = ""
+tycho_router = ""
+
+[pfc] # ======= MM Price Feed Config ======= 
+# Expected price is token0 per token1 => if token0 is ETH and token1 USDC, then price is ~2500, not 0.0004
+type = ""
+source = ""

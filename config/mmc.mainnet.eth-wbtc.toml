@@ -21,7 +21,7 @@ profitability = true
 max_trade_allocation = 0.5
 # bribe=0.5
 broadcast = "buildernet" 
-sampdepths = [500.0, 5000.0, 50000.0]
+depths = [50.0, 250.0, 500.0, 750.0, 1000.0, 1250.0, 1500.0]
 # idea: TEE Builder, Echo, Flashbots Protect etc.
 # auto topping up of gas: automatically buy some ETH when you run low on it.
 

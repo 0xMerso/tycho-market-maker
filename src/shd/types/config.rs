@@ -18,6 +18,15 @@ pub struct EnvConfig {
     pub wallet_private_key: String,
 }
 
+/// Environment configuration expected
+#[derive(Debug, Clone)]
+pub struct MoniEnvConfig {
+    pub paths: String,
+    pub testing: bool,
+    // APIs
+    pub heartbeat: String,
+}
+
 /// Enum for network
 #[derive(Debug, Clone, Deserialize)]
 pub enum NetworkName {
@@ -71,6 +80,29 @@ impl EnvConfig {
         tracing::debug!("  Public key:            {}", self.wallet_public_key);
         // tracing::debug!("  Private Key:           🤐");
         tracing::debug!("  Tycho API Key:         {}...", &self.tycho_api_key[..5]);
+    }
+}
+
+impl Default for MoniEnvConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl MoniEnvConfig {
+    pub fn new() -> Self {
+        MoniEnvConfig {
+            paths: utils::misc::get("CONFIGS_PATHS"),
+            testing: utils::misc::get("TESTING") == "true",
+            heartbeat: utils::misc::get("HEARTBEAT"),
+        }
+    }
+
+    pub fn print(&self) {
+        tracing::debug!("MoniEnvConfig:");
+        tracing::debug!("  Paths:                 {}", self.paths);
+        tracing::debug!("  Testing:               {}", self.testing);
+        tracing::debug!("  Heartbeat:             {}", self.heartbeat);
     }
 }
 

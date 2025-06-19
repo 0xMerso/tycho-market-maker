@@ -11,14 +11,6 @@ NC='\033[0m'
 
 function start() {
     trap '' SIGINT
-    # ------------- Redis -------------
-    # rm -rf dump.rdb
-    # ps -ef | grep redis-server | grep -v grep | awk '{print $2}' | xargs kill 2>/dev/null
-    # redis-server --port 42777 --bind 127.0.0.1 2>&1 >/dev/null &
-    # # redis-server src/shared/config/redis.conf --bind 127.0.0.1 2>&1 >/dev/null &
-    # echo "Redis ready #$(ps -ef | grep redis-server | grep -v grep | awk '{print $2}')"
-    # sleep 1
-    # ------------- Execute -------------
     if [ "$1" = "test" ]; then
         export RUST_LOG="off,mk2=trace,shd=trace,test=trace"
         cargo test -- --nocapture
@@ -38,8 +30,7 @@ function start() {
             exit 1
         fi
     fi
-    # ps -ef | grep redis-server | grep -v grep | awk '{print $2}' | xargs kill 2>/dev/null
-    # rm -rf dump.rdb
+
 }
 
 # export CONFIG_PATH="config/mmc.mainnet.eth-usdc.toml"
