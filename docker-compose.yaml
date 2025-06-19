@@ -1,0 +1,69 @@
+# This is a docker-compose file for the Tycho Market Maker
+# To validate it, run: docker compose config
+
+networks:
+  tmm: 
+    external: true
+
+services:
+
+  mk2:
+    build: 
+      context: .
+      dockerfile: ops/Dockerfile
+      args:
+        - PROGRAM=mk2
+        - BUILD_TYPE=debug # ! To adapt
+    ports:
+      - "42042:42042"
+    depends_on:
+    
+      redis:
+        condition: service_healthy
+    env_file:
+      - config/.env.ex # ! Tmp
+    environment:
+      - RUST_LOG="off,mk2=trace,shd=trace,moni=trace,test=trace"
+      - REDIS_HOST=redis
+    restart: always
+    networks:
+      - tmm
+
+  moni:
+    build: 
+      context: .
+      dockerfile: ops/Dockerfile
+      args:
+        - PROGRAM=moni
+        - BUILD_TYPE=debug # ! To adapt
+    ports:
+      - "42043:42043"
+    depends_on:
+      redis:
+        condition: service_healthy
+    env_file:
+      - config/.env.ex # ! Tmp
+    environment:
+      - RUST_LOG="off,mk2=trace,shd=trace,moni=trace,test=trace"
+      - REDIS_HOST=redis
+    restart: always
+    networks:
+      - tmm
+
+  redis:
+    image: redis:latest
+    restart: always
+    ports:
+      - "42044:42044"
+    environment:
+      - BUILD_TYPE=debug
+      - REDIS_HOST=redis
+      - REDIS_PORT=42044
+      - REDIS_ARGS="--loglevel verbose"
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      interval: 1s
+      timeout: 3s
+      retries: 5
+    networks:
+      - tmm

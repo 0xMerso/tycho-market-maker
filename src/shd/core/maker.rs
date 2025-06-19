@@ -730,6 +730,7 @@ impl IMarketMaker for MarketMaker {
 
                 for (x, tx) in prepared.iter().enumerate() {
                     if HAS_EXECUTED.load(std::sync::atomic::Ordering::Relaxed) {
+                        // ! This is a hack to prevent the program from executing transactions in testing phase
                         tracing::info!("⏩ Skipping broadcast - already executed a transaction in the program lifetime");
                         return;
                     }
