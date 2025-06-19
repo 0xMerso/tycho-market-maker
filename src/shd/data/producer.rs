@@ -12,3 +12,76 @@
 
 // Give generics function with <T> to interact with redis stream
 // Isolate redis function to have a clean code
+
+trait RedisTrait {
+    fn connect(client_options: RedicClientOptions) -> Result<Redis, Box<dyn std::error::Error>>;
+}
+
+pub struct RedicClientOptions {
+    pub connection_address: String,
+    pub port: i64,
+}
+
+pub struct Redis {
+    pub client: redis::Client,
+}
+
+impl RedisTrait for Redis {
+    fn connect(client_options: RedicClientOptions) -> Result<Redis, Box<dyn std::error::Error>> {
+        let redis_url: String = format!("redis://{}:{}", client_options.connection_address, client_options.port);
+
+        match redis::Client::open(redis_url.as_str()) {
+            Ok(client) => Ok(Redis { client }),
+            Err(e) => Err(Box::new(e)),
+        }
+    }
+}
+
+fn main() {
+    dotenv::dotenv().ok();
+    let port = std::env::var("REDIS_PORT").unwrap().parse::<i64>().unwrap();
+    let address = std::env::var("REDIS_ADDRESS").unwrap();
+    let redis_config = RedicClientOptions {
+        connection_address: address.to_string(),
+        port,
+    };
+    println!("redis_config: {:?}", redis_config.connection_address);
+    match Redis::connect(redis_config) {
+        Ok(client) => match client.client.get_connection() {
+            Ok(mut conn) => {
+                let mut pubsub = conn.as_pubsub();
+
+                println!("pubsub");
+                match pubsub.subscribe("channel") {
+                    Ok(_pubs) => loop {
+                        println!("pubsub loop");
+                        match pubsub.get_message() {
+                            Ok(msg) => match msg.get_payload::<String>() {
+                                Ok(payload) => {
+                                    println!("000");
+                                    println!("Message Received : {:?}", payload.parse::<String>().unwrap());
+                                }
+                                Err(e) => {
+                                    println!("111");
+                                    println!("Error while getting payload : {:?}", e.to_string());
+                                }
+                            },
+                            Err(e) => {
+                                println!("Error {:?}", e.to_string())
+                            }
+                        }
+                    },
+                    Err(e) => {
+                        println!("{:?}", e.to_string())
+                    }
+                }
+            }
+            Err(e) => {
+                println!("Error while getting connection {:?}", e.to_string());
+            }
+        },
+        Err(e) => {
+            println!("{:?}", e.to_string())
+        }
+    }
+}

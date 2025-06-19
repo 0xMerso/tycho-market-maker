@@ -60,8 +60,7 @@ alloy-chains = "0.1.63"
 # --- DB ---
 redis = { version = "0.26.1", features = ["tokio-comp", "aio", "connection-manager"]  }
 # redis = { version = "0.26.1", features = ["tokio-comp"]  }
- 
-
+# redis = "*" : it tells Cargo “accept any published version of the redis crate” : never recommended for production; instead pin a version or range 
 
 [lib]
 name = "shd"
@@ -75,3 +74,15 @@ path = "src/mk2.rs"
 [[bin]]
 name = "moni"
 path = "src/moni.rs"
+
+[[bin]]
+name = "consumer"
+path = "src/shd/data/consumer.rs"
+
+[[bin]]
+name = "producer"
+path = "src/shd/data/producer.rs"
+
+#redis
+REDIS_PORT=6379
+REDIS_ADDRESS="localhost"
