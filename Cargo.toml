@@ -59,13 +59,16 @@ alloy-primitives = "0.8.23"
 alloy-chains = "0.1.63"
 # --- DB ---
 redis = { version = "0.26.1", features = ["tokio-comp", "aio", "connection-manager"]  }
-# redis = { version = "0.26.1", features = ["tokio-comp"]  }
+sea-orm = { version = "^0.12.0", features = [ "sqlx-mysql", "runtime-async-std-native-tls", "macros" ] }
+
 # redis = "*" : it tells Cargo “accept any published version of the redis crate” : never recommended for production; instead pin a version or range 
+# sea-orm = { version = "0.12", features = ["postgres", "runtime-async-std-native-tls"] }
+# https://www.sea-ql.org/SeaORM/
+
 
 [lib]
 name = "shd"
 path = "src/shd/lib.rs"
-
 
 [[bin]]
 name = "mk2"
@@ -74,4 +77,8 @@ path = "src/mk2.rs"
 [[bin]]
 name = "moni"
 path = "src/moni.rs"
+
+[[bin]]
+name = "neon"
+path = "src/shd/data/neon.rs"
 

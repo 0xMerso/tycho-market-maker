@@ -1,25 +1,23 @@
 use crate::utils::r#static::CHANNEL_REDIS;
 
-use std::{thread, time::Duration};
-
 use redis::Commands;
+use serde::Serialize;
+use serde_json;
 
-pub async fn publish() {
+pub fn publish<T: Serialize>(event: &T) {
+    let time = std::time::SystemTime::now();
     match crate::data::helpers::copubsub() {
         Ok(client) => match client.get_connection() {
             Ok(mut conn) => {
-                for _i in 0..50 {
-                    let msg = format!("this is test {:?} ", _i);
-                    match conn.publish::<&str, &str, ()>(CHANNEL_REDIS, &msg) {
-                        Ok(_) => {
-                            println!("message has been send {:?}", msg)
-                        }
-                        Err(e) => {
-                            println!("Publish message error {:?}", e.to_string())
-                        }
+                let msg = serde_json::to_string(event).unwrap();
+                match conn.publish::<&str, &str, ()>(CHANNEL_REDIS, &msg) {
+                    Ok(_) => {
+                        let elasped = time.elapsed().unwrap_or_default().as_millis();
+                        tracing::debug!("Message has been sent {:?}. Took {} ms", msg, elasped);
                     }
-
-                    thread::sleep(Duration::from_secs(1));
+                    Err(e) => {
+                        tracing::debug!("Publish message error {:?}", e.to_string())
+                    }
                 }
             }
             Err(e) => {

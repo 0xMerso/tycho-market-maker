@@ -6,6 +6,7 @@ use shd::{
     types::{
         config::EnvConfig,
         maker::{IMarketMaker, MarketMakerBuilder},
+        moni::TradeEvent,
         tycho::TychoStreamState,
     },
     utils::r#static::RESTART,
@@ -36,9 +37,7 @@ async fn main() {
         PriceFeedType::Chainlink => Box::new(ChainlinkPriceFeed),
         // @dev Add your custom price feed here
     };
-
     // Monitoring transactions via shared cache via hashmap, no Redis
-
     let base = config.addr0.clone().to_lowercase();
     let quote = config.addr1.clone().to_lowercase();
     match shd::helpers::global::tokens(config.clone(), Some(env.tycho_api_key.as_str())).await {

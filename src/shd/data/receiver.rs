@@ -1,7 +1,7 @@
 use crate::utils::r#static::CHANNEL_REDIS;
 
 /// Listen to the Redis channel and print the messages
-pub async fn listen() {
+pub fn listen() {
     match crate::data::helpers::copubsub() {
         Ok(client) => match client.get_connection() {
             Ok(mut conn) => {
@@ -12,7 +12,7 @@ pub async fn listen() {
                         match pubsub.get_message() {
                             Ok(msg) => match msg.get_payload::<String>() {
                                 Ok(payload) => {
-                                    tracing::info!("Message Received: {}", payload.parse::<String>().unwrap());
+                                    tracing::info!("Message Received: {}. Pushing to DB.", payload.parse::<String>().unwrap());
                                 }
                                 Err(e) => {
                                     tracing::error!("Error while getting payload: {}", e.to_string());

@@ -25,6 +25,8 @@ pub struct MoniEnvConfig {
     pub testing: bool,
     // APIs
     pub heartbeat: String,
+    pub database_url: String,
+    pub database_name: String,
 }
 
 /// Enum for network
@@ -95,6 +97,8 @@ impl MoniEnvConfig {
             paths: utils::misc::get("CONFIGS_PATHS"),
             testing: utils::misc::get("TESTING") == "true",
             heartbeat: utils::misc::get("HEARTBEAT"),
+            database_url: utils::misc::get("DATABASE_URL"),
+            database_name: utils::misc::get("DATABASE_NAME"),
         }
     }
 
@@ -103,6 +107,7 @@ impl MoniEnvConfig {
         tracing::debug!("  Paths:                 {}", self.paths);
         tracing::debug!("  Testing:               {}", self.testing);
         tracing::debug!("  Heartbeat:             {}", self.heartbeat);
+        tracing::debug!("  Database Name:         {}", self.database_name);
     }
 }
 
