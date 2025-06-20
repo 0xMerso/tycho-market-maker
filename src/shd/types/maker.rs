@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use alloy::rpc::types::TransactionRequest;
 use async_trait::async_trait;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tycho_execution::encoding::models::{Solution, Transaction};
 use tycho_simulation::{
     models::Token,
@@ -88,7 +88,7 @@ impl MarketMakerBuilder {
     }
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PriceFeedConfig {
     pub r#type: String, // "binance" or "chainlink"
     pub source: String, // https if type is "binance", of 0xAddress if type is "chainlink"

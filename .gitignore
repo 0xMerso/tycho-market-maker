@@ -3,3 +3,4 @@
 .env.prod*
 config/.env.*
 dump.rdb
+/src/generated/prisma

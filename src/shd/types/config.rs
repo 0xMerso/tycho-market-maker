@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{fs, time::Duration};
 
 use crate::utils;
@@ -107,11 +107,12 @@ impl MoniEnvConfig {
         tracing::debug!("  Paths:                 {}", self.paths);
         tracing::debug!("  Testing:               {}", self.testing);
         tracing::debug!("  Heartbeat:             {}", self.heartbeat);
+        tracing::debug!("  Database URL:          {}", self.database_url);
         tracing::debug!("  Database Name:         {}", self.database_name);
     }
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MarketMakerConfig {
     // Exact match with config (e.g. mmc.toml)
     pub token0: String,

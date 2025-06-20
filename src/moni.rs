@@ -36,6 +36,20 @@ async fn main() {
     // ============================================== Initialisation ==============================================
     // shd::utils::uptime::hearbeats(config.clone(), env.clone()).await;
     // ============================================== Start ==============================================
-    shd::data::receiver::listen();
+    tracing::info!("🐘 Testing connection to PgSQL Neon");
+    match shd::data::neon::connect().await {
+        Ok(db) => {
+            tracing::info!("🐘 Neon connected");
+            tracing::info!("🐘 Inserting {} bots into DB", configs.len());
+            for config in configs.iter() {
+                let _ = shd::data::neon::create::bot(&db, config.clone()).await;
+            }
+        }
+        Err(err) => {
+            tracing::error!("Error: {}", err);
+        }
+    }
+
+    // shd::data::receiver::listen();
     tracing::info!("Monitoring program finished");
 }

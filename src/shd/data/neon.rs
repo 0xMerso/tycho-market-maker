@@ -1,51 +1,64 @@
 // main.rs
 
-use futures::executor::block_on;
-use sea_orm::{ConnectionTrait, Database, DbBackend, DbErr, Statement};
-use shd::types::config::MoniEnvConfig;
+use sea_orm::{ActiveModelTrait, ConnectionTrait, Database, DatabaseConnection, DbBackend, DbErr, Set, Statement};
+use serde_json::json;
 
-// Change this according to your database implementation,
-// or supply it as an environment variable.
-// the whole database URL string follows the following format:
+use crate::{entity::bot, types::config::MoniEnvConfig};
+
+// The whole database URL string follows the following format:
 // "protocol://username:password@host:port/database"
 // We put the database name (that last bit) in a separate variable simply for convenience.
 
-async fn run() -> Result<(), DbErr> {
-    println!("Running Neon");
+pub async fn connect() -> Result<DatabaseConnection, DbErr> {
+    tracing::info!("Connecting to Neon");
     dotenv::from_filename("config/.env.moni.ex").ok(); // Use .env.ex for testing purposes
     let env = MoniEnvConfig::new();
     env.print();
-
     let db = Database::connect(env.database_url.clone()).await?;
-    let db = &match db.get_database_backend() {
-        DbBackend::MySql => {
-            // db.execute(Statement::from_string(db.get_database_backend(), format!("CREATE DATABASE IF NOT EXISTS `{}`;", env.clone())))
-            //     .await?;
-
-            // let url = format!("{}/{}", env.database_url.clone(), env.clone());
-            // Database::connect(&url).await?
-        }
+    match db.get_database_backend() {
         DbBackend::Postgres => {
-            // db.execute(Statement::from_string(db.get_database_backend(), format!("DROP DATABASE IF EXISTS \"{}\";", env.clone())))
-            //     .await?;
-            // db.execute(Statement::from_string(db.get_database_backend(), format!("CREATE DATABASE \"{}\";", env.clone())))
-            //     .await?;
-
-            // let url = format!("{}/{}", env.database_url.clone(), env.clone());
-            // Database::connect(&url).await?
+            db.execute(Statement::from_string(db.get_database_backend(), format!("DROP DATABASE IF EXISTS \"{}\";", env.database_url.clone())))
+                .await?;
+            db.execute(Statement::from_string(db.get_database_backend(), format!("CREATE DATABASE \"{}\";", env.database_url.clone())))
+                .await?;
+            tracing::info!("🐘 Connecting to Neon at {}", env.database_url);
+            Database::connect(&env.database_url).await
         }
         _ => {
             panic!("Unsupported database backend");
         }
-    };
-    println!("Neon connected");
-    Ok(())
+    }
 }
 
-#[tokio::main]
-async fn main() {
-    match run().await {
-        Ok(_) => println!("Neon finished"),
-        Err(err) => println!("Neon error: {}", err),
+pub mod create {
+
+    use crate::types::config::MarketMakerConfig;
+
+    use super::*;
+
+    /// Insert a new Bot and return its full Model (with id, timestamps, …)
+    pub async fn bot(db: &DatabaseConnection, mmc: MarketMakerConfig) -> Result<bot::Model, sea_orm::DbErr> {
+        let now = chrono::Utc::now().naive_utc();
+        let config = json!(mmc);
+
+        let new_bot = bot::ActiveModel {
+            config: Set(config),
+            created_at: Set(now),
+            updated_at: Set(now),
+            deleted_at: Set(None),
+            ..Default::default()
+        };
+
+        // let inserted: bot::Model = new_bot.insert(db).await?;
+        match new_bot.insert(db).await {
+            Ok(inserted) => {
+                tracing::info!("🐘 Inserted succeeded: {}", inserted.id);
+                Ok(inserted)
+            }
+            Err(err) => {
+                tracing::error!("🐘 Error inserting: {}", err);
+                Err(err)
+            }
+        }
     }
 }
