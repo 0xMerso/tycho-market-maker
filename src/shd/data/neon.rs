@@ -30,36 +30,65 @@ pub async fn connect() -> Result<DatabaseConnection, DbErr> {
     }
 }
 
+pub mod pull {
+    use sea_orm::{DatabaseConnection, EntityTrait};
+
+    use crate::entity::bot;
+
+    pub async fn bots(db: &DatabaseConnection) -> Result<Vec<bot::Model>, sea_orm::DbErr> {
+        let models = bot::Entity::find().all(db).await?;
+        Ok(models)
+    }
+}
+
 pub mod create {
 
-    use crate::types::config::MarketMakerConfig;
+    use crate::{entity::trade, types::config::MarketMakerConfig};
 
     use super::*;
 
     /// Insert a new Bot and return its full Model (with id, timestamps, …)
-    pub async fn bot(db: &DatabaseConnection, mmc: MarketMakerConfig) {
-        // -> Result<bot::Model, sea_orm::DbErr> {
+    pub async fn bot(db: &DatabaseConnection, mmc: MarketMakerConfig) -> Result<bot::Model, sea_orm::DbErr> {
         let now = chrono::Utc::now().naive_utc();
         let config = json!(mmc);
-
-        let new_bot = bot::ActiveModel {
+        let model = bot::ActiveModel {
             config: Set(config),
             created_at: Set(now),
             updated_at: Set(now),
             deleted_at: Set(None),
             ..Default::default()
         };
+        match model.insert(db).await {
+            Ok(inserted) => {
+                tracing::info!("🐘 Inserted 'bot' succeeded: {}", inserted.id);
+                Ok(inserted)
+            }
+            Err(err) => {
+                tracing::error!("🐘 Error inserting: {}", err);
+                Err(err)
+            }
+        }
+    }
 
-        // let inserted: bot::Model = new_bot.insert(db).await?;
-        // match new_bot.insert(db).await {
-        //     Ok(inserted) => {
-        //         tracing::info!("🐘 Inserted succeeded: {}", inserted.id);
-        //         Ok(inserted)
-        //     }
-        //     Err(err) => {
-        //         tracing::error!("🐘 Error inserting: {}", err);
-        //         Err(err)
-        //     }
-        // }
+    /// Insert a new Bot and return its full Model (with id, timestamps, …)
+    pub async fn trade(db: &DatabaseConnection, mmc: MarketMakerConfig) -> Result<trade::Model, sea_orm::DbErr> {
+        let now = chrono::Utc::now().naive_utc();
+        let config = json!(mmc);
+        let model = trade::ActiveModel {
+            created_at: Set(now),
+            updated_at: Set(now),
+            deleted_at: Set(None),
+            ..Default::default()
+        };
+        match model.insert(db).await {
+            Ok(inserted) => {
+                tracing::info!("🐘 Inserted 'trade' succeeded: {}", inserted.id);
+                Ok(inserted)
+            }
+            Err(err) => {
+                tracing::error!("🐘 Error inserting: {}", err);
+                Err(err)
+            }
+        }
     }
 }

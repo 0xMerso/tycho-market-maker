@@ -200,6 +200,11 @@ impl MarketMakerConfig {
         tracing::debug!("  Price Feed Config:     {:?}", self.price_feed_config);
     }
 
+    // Print network-[base_token-quote_token]-price_feed_config.name
+    pub fn shortname(&self) -> String {
+        format!("{}-{}-{}-{}", self.network_name, self.base_token, self.quote_token, self.price_feed_config.r#type)
+    }
+
     pub fn validate(&self) -> Result<(), String> {
         if self.target_spread_bps > 10_000 {
             return Err("target_spread_bps must be ≤ 10000 BPS (100%)".into());

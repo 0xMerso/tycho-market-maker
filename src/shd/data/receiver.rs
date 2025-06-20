@@ -6,7 +6,7 @@ pub fn listen() {
         Ok(client) => match client.get_connection() {
             Ok(mut conn) => {
                 let mut pubsub = conn.as_pubsub();
-                tracing::info!("Listening to the Redis pubsub channel: {}", CHANNEL_REDIS);
+                tracing::info!("Redis pub-sub channel: '{}'", CHANNEL_REDIS);
                 match pubsub.subscribe(CHANNEL_REDIS) {
                     Ok(_pubs) => loop {
                         match pubsub.get_message() {

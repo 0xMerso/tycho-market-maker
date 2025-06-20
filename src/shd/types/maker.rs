@@ -147,9 +147,9 @@ pub struct SwapCalculation {
     pub powered_selling_amount: f64,
     pub powered_buying_amount: f64,
     // Post-swap price evaluation
-    pub amount_out_divided: f64,
+    pub amount_out_normalized: f64,
     pub amount_out_powered: f64,
-    pub amount_out_min_divided: f64,
+    pub amount_out_min_normalized: f64,
     pub amount_out_min_powered: f64,
     pub average_sell_price: f64,
     pub average_sell_price_net_gas: f64,

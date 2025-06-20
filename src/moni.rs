@@ -1,10 +1,11 @@
 use std::{collections::HashMap, panic::AssertUnwindSafe, sync::Arc};
 
 use futures::FutureExt;
+use serde_json;
 use shd::{
     core::pricefeed::{BinancePriceFeed, ChainlinkPriceFeed, PriceFeed, PriceFeedType},
     types::{
-        config::MoniEnvConfig,
+        config::{MarketMakerConfig, MoniEnvConfig},
         maker::{IMarketMaker, MarketMakerBuilder},
         tycho::TychoStreamState,
     },
@@ -36,20 +37,33 @@ async fn main() {
     // ============================================== Initialisation ==============================================
     // shd::utils::uptime::hearbeats(config.clone(), env.clone()).await;
     // ============================================== Start ==============================================
-    tracing::info!("🐘 Testing connection to PgSQL Neon");
+    tracing::info!("🐘 Init and test connection to Neon, Prisma, SeaORM, to PgSQL");
     match shd::data::neon::connect().await {
         Ok(db) => {
             tracing::info!("🐘 Neon connected");
             tracing::info!("🐘 Inserting {} bots into DB", configs.len());
-            for config in configs.iter() {
-                let _ = shd::data::neon::create::bot(&db, config.clone()).await;
+            match shd::data::neon::pull::bots(&db).await {
+                Ok(bots) => {
+                    tracing::info!("🐘 Found {} bots in DB", bots.len());
+                    for bot in bots.iter() {
+                        let config = bot.config.clone();
+                        let config: MarketMakerConfig = serde_json::from_str(&config.as_str().unwrap()).unwrap();
+                        tracing::info!("Got config: {}", config.shortname());
+                    }
+                }
+                Err(err) => {
+                    tracing::error!("Error: {}", err);
+                }
             }
+            // for config in configs.iter() {
+            //     let _ = shd::data::neon::create::bot(&db, config.clone()).await;
+            // }
+            tracing::info!("🐘 Starting infinite listening of the Redis pub-sub channel: {}, for MM events", configs.len());
+            shd::data::receiver::listen();
         }
         Err(err) => {
             tracing::error!("Error: {}", err);
         }
     }
-
-    // shd::data::receiver::listen();
     tracing::info!("Monitoring program finished");
 }

@@ -267,216 +267,161 @@ impl IMarketMaker for MarketMaker {
     /// "Optimal swap is to swap until marginal price + fee = market price"
     async fn readjust(&self, context: MarketContext, inventory: Inventory, mut adjustments: Vec<CompReadjustment>, env: EnvConfig) -> Vec<ExecutionOrder> {
         // --- Ordering ---
-        // Order by spread (absolute value)
-        adjustments.sort_by(|a, b| {
-            if a.spread_bps > b.spread_bps {
-                std::cmp::Ordering::Greater
-            } else if a.spread_bps < b.spread_bps {
-                std::cmp::Ordering::Less
-            } else {
-                std::cmp::Ordering::Equal
-            }
-        });
+        adjustments.sort_by(|a, b| a.spread_bps.partial_cmp(&b.spread_bps).unwrap_or(std::cmp::Ordering::Equal));
         let mut orders = vec![];
-        // tracing::debug!("Profitability evaluation: {}", self.config.profitability);
-        for adjustment in adjustments.iter() {
-            match get_component_balances(self.config.clone(), adjustment.psc.component.clone(), env.tycho_api_key.clone()).await {
-                Some(balances) => {
-                    // for b in balances.iter() {
-                    //     tracing::debug!(" - Attribute: {}", b.0);
-                    // }
-                    // --- Token & Amounts ---
-                    let buying = adjustment.buying.clone();
-                    let buying_pow = 10f64.powi(buying.decimals as i32);
-                    let pool_buying_balance = balances.get(&buying.address.to_string().to_lowercase()).unwrap_or_else(|| panic!("Failed to get buying balance"));
-                    let pool_buying_balance_divided = (*pool_buying_balance as f64) / buying_pow;
-                    if pool_buying_balance_divided < f64::EPSILON {
-                        tracing::info!("pool_buying_balance_divided < 0 !");
-                    }
-                    let selling = adjustment.selling.clone();
-                    let selling_pow = 10f64.powi(selling.decimals as i32);
-                    let pool_selling_balance = balances.get(&selling.address.to_string().to_lowercase()).unwrap_or_else(|| panic!("Failed to get selling balance"));
-                    let pool_selling_balance_divided = (*pool_selling_balance as f64) / selling_pow;
-                    if pool_selling_balance_divided < f64::EPSILON {
-                        tracing::warn!("Cannot readjust, skipping due to pool_selling_balance_divided < 0 !");
-                        continue;
-                    }
-                    let base_to_quote = selling == self.base; // ! Key
-                    // --- Size & Allocation --- v2
-                    // let depths = self.config.depths.clone();
-                    // for depth in depths {}
-                    // --- Size & Allocation --- v1
-                    let inventory_balance = if base_to_quote { inventory.base_balance } else { inventory.quote_balance };
-                    let inventory_balance_divided = (inventory_balance as f64) / selling_pow;
-                    // Percentage of the pool balance
-                    let optimal = pool_selling_balance_divided * SHARE_POOL_BAL_SWAP_BPS / BASIS_POINT_DENO;
-                    // Sample depth
-                    let max_alloc = inventory_balance_divided * self.config.max_inventory_ratio;
-                    // ! ------------- Tmp -------------
-                    // let selling_amount = optimal; // For demo in logs
-                    let selling_amount = inventory_balance_divided * self.config.max_inventory_ratio; // For testing
-                    // -------------
-                    let buying_amount = if base_to_quote { selling_amount * adjustment.spot } else { selling_amount / adjustment.spot };
-                    // --- Debug ---
-                    let pool_msg = format!(
-                        "   - Pool {} | Tycho Spot: {:>12.5} vs ref {:>12.5} | Spread: {:>7.2} {} = {:>5.0} bps",
-                        cpname(adjustment.psc.component.clone()),
-                        adjustment.spot,
-                        adjustment.reference,
-                        adjustment.spread,
-                        self.quote.symbol,
-                        adjustment.spread_bps,
-                    );
-                    let inventory_msg = format!(
-                        " Inventory: {:.2} {} | Optimal: {:.} | Max: {:.5} | Selling {:.5} {} for {:.5} {}",
-                        inventory_balance_divided, selling.symbol, optimal, max_alloc, selling_amount, selling.symbol, buying_amount, buying.symbol
-                    );
-                    tracing::debug!("{} | {}", pool_msg, inventory_msg);
-                    // --- Prepa Exec ---
-                    let powered_selling_amount = selling_amount * selling_pow;
-                    let powered_selling_amount_bg = BigUint::from(powered_selling_amount.floor() as u128);
-                    let powered_buying_amount = buying_amount * buying_pow;
-                    // --- Allocation valorisation with market context ---
-                    let (selling_amount_worth_eth, buying_amount_worth_eth) = match base_to_quote {
-                        true => (selling_amount * context.base_to_eth, buying_amount * context.quote_to_eth), // For 1 unit of selling/buying token !
-                        false => (selling_amount * context.quote_to_eth, buying_amount * context.base_to_eth), // For 1 unit of selling/buying token !
-                    };
-                    let (selling_amount_worth_usd, buying_amount_worth_usd) = (selling_amount_worth_eth * context.eth_to_usd, buying_amount_worth_eth * context.eth_to_usd);
-                    // tracing::info!(
-                    //     " - selling_amount_worth_eth: {} $ETH | buying_amount_worth_eth: {} $ETH ",
-                    //     selling_amount_worth_eth,
-                    //     buying_amount_worth_eth
-                    // );
-                    // tracing::info!(
-                    //     " - selling_amount_worth_usd: {} $    | buying_amount_worth_usd: {} $",
-                    //     selling_amount_worth_usd,
-                    //     buying_amount_worth_usd
-                    // );
-
-                    // --- Simulation ---
-                    // ? Should be done with x amounts, to pick the best one
-                    // See sampdepths
-                    match adjustment.psc.protosim.get_amount_out(powered_selling_amount_bg.clone(), &selling, &buying) {
-                        Ok(result) => {
-                            // --- Price Impact & Gas Fees ---
-                            let amount_out_powered = result.amount.to_f64().unwrap_or(0.0);
-                            let amount_out_divided = amount_out_powered / 10f64.powi(buying.decimals as i32); // [new]
-
-                            let slippage_bps = self.config.max_slippage_pct * BASIS_POINT_DENO;
-                            let amount_out_min_divided = amount_out_divided * (BASIS_POINT_DENO - slippage_bps) / BASIS_POINT_DENO;
-                            let amount_out_min_powered = amount_out_min_divided * buying_pow;
-
-                            let gas_units = result.gas.to_string().parse::<u128>().unwrap_or_default();
-                            let gas_cost_eth = (gas_units.saturating_mul(context.native_gas_price)) as f64 / 1e18; // Gwei 10^9 + Gwei 10^9 = 10^18
-                            let gas_cost_usd = gas_cost_eth * context.eth_to_usd;
-                            let gas_cost_in_output = match base_to_quote {
-                                true => gas_cost_eth / context.quote_to_eth,
-                                false => gas_cost_eth / context.base_to_eth,
-                            };
-                            tracing::debug!(
-                                "   - Swap: {:.5} {} for {:.5} {} | Gas cost : {:.5} $ | Gas cost in output: {:.2} %",
-                                selling_amount,
-                                selling.symbol,
-                                amount_out_divided,
-                                buying.symbol,
-                                gas_cost_usd,
-                                gas_cost_in_output * 100.0
-                            );
-                            // --- Swap costs --- LP Fee + Price impact
-                            let average_sell_price = match base_to_quote {
-                                true => amount_out_divided / selling_amount,
-                                false => 1. / (amount_out_divided / selling_amount),
-                            };
-                            let delta = average_sell_price - adjustment.spot;
-                            let price_impact_bps = ((delta / adjustment.spot) * BASIS_POINT_DENO).round();
-                            // --- Swap costs --- Gas
-                            let average_sell_price_net_gas = match base_to_quote {
-                                true => (amount_out_divided - gas_cost_in_output) / selling_amount,
-                                false => 1. / ((amount_out_divided - gas_cost_in_output) / selling_amount),
-                            };
-                            let delta_net_of_gas = average_sell_price_net_gas - adjustment.spot;
-                            let price_impact_net_of_gas_bps = ((delta_net_of_gas / adjustment.spot) * BASIS_POINT_DENO).round(); // Potential execution price, if no slippage
-                            // ? Make the disctinction between price impact and pool fee | Fee = amount * pool_fee | Price impact = (amount * pool_fee) - amount_out
-                            // tracing::debug!(
-                            //     " - base_to_quote: {} | swap cost (LP/PI): {} (bps) | gas_cost_usd: {:.4}$ | Average sell price: {:.4} (spot = {}) | Delta: {:.4}",
-                            //     base_to_quote,
-                            //     price_impact_bps,
-                            //     gas_cost_usd,
-                            //     average_sell_price,
-                            //     adjustment.spot,
-                            //     delta
-                            // );
-
-                            // tracing::debug!(
-                            //     " - Price impact net of gas: {} (bps) | Average sell price net of gas: {:.4} | Delta net of gas: {:.4}",
-                            //     price_impact_net_of_gas_bps,
-                            //     average_sell_price_net_gas,
-                            //     delta_net_of_gas
-                            // );
-                            let potential_profit_delta = match base_to_quote {
-                                true => average_sell_price_net_gas - adjustment.reference,
-                                false => adjustment.reference - average_sell_price_net_gas,
-                            };
-                            let potential_profit_delta_spread_bps = potential_profit_delta / adjustment.reference * BASIS_POINT_DENO;
-                            let potential_profit_delta_spread_bps_abs = potential_profit_delta_spread_bps; //.abs(); // ! Tmp abs()
-                            let profitable = potential_profit_delta_spread_bps_abs > self.config.min_exec_spread_bps;
-                            tracing::debug!(
-                                "   => Profit: {}  with average_sell_price_net_gas: {:.4} vs reference_price: {:.4} | potential_profit_delta: {:.5} | potential_profit_delta_spread_bps: {:.2}",
-                                if potential_profit_delta > 0. { "💵" } else { "🔻" },
-                                average_sell_price_net_gas,
-                                adjustment.reference,
-                                potential_profit_delta,
-                                potential_profit_delta_spread_bps
-                            );
-                            if profitable {
-                                // Compensation -> Skipped
-                                // --- Prepa execution ---
-                                let calculation = SwapCalculation {
-                                    base_to_quote,
-                                    selling_amount,
-                                    buying_amount,
-                                    powered_selling_amount,
-                                    powered_buying_amount,
-                                    // Post-swap
-                                    amount_out_divided,
-                                    amount_out_powered,
-                                    amount_out_min_divided,
-                                    amount_out_min_powered,
-                                    gas_units,
-                                    // Misc
-                                    average_sell_price,
-                                    average_sell_price_net_gas,
-                                    gas_cost_eth,
-                                    gas_cost_usd,
-                                    gas_cost_in_output_token: gas_cost_in_output,
-                                    selling_worth_usd: selling_amount_worth_usd,
-                                    buying_worth_usd: buying_amount_worth_usd,
-                                    profit_delta_bps: potential_profit_delta_spread_bps_abs,
-                                    profitable,
-                                };
-                                let order = ExecutionOrder {
-                                    adjustment: adjustment.clone(),
-                                    calculation,
-                                };
-                                orders.push(order);
-                                // tracing::debug!(" ----------------- New order pushed -----------------");
-                            }
-                        }
-                        Err(e) => {
-                            tracing::warn!("Failed to simulate get amount out: {:?}", e);
-                            continue;
-                        }
-                    }
-                }
+        for adjustment in &adjustments {
+            let balances_opt = get_component_balances(self.config.clone(), adjustment.psc.component.clone(), env.tycho_api_key.clone()).await;
+            let balances = match balances_opt {
+                Some(b) => b,
                 None => {
                     tracing::warn!("Failed to get component balances");
+                    continue;
+                }
+            };
+            // --- Token & Amounts ---
+            let buying = &adjustment.buying;
+            let buying_pow = 10f64.powi(buying.decimals as i32);
+            let buying_addr = buying.address.to_string().to_lowercase();
+            let pool_buying_balance = match balances.get(&buying_addr) {
+                Some(bal) => bal,
+                None => {
+                    tracing::warn!("Failed to get buying balance for {}", buying_addr);
+                    continue;
+                }
+            };
+            let pool_buying_balance_normalized = (*pool_buying_balance as f64) / buying_pow;
+            if pool_buying_balance_normalized < f64::EPSILON {
+                tracing::info!("pool_buying_balance_normalized < 0 !");
+            }
+            let selling = &adjustment.selling;
+            let selling_pow = 10f64.powi(selling.decimals as i32);
+            let selling_addr = selling.address.to_string().to_lowercase();
+            let pool_selling_balance = match balances.get(&selling_addr) {
+                Some(bal) => bal,
+                None => {
+                    tracing::warn!("Failed to get selling balance for {}", selling_addr);
+                    continue;
+                }
+            };
+            let pool_selling_balance_normalized = (*pool_selling_balance as f64) / selling_pow;
+            if pool_selling_balance_normalized < f64::EPSILON {
+                tracing::warn!("Cannot readjust, skipping due to pool_selling_balance_normalized < 0 !");
+                continue;
+            }
+            let base_to_quote = *selling == self.base;
+            let inventory_balance = if base_to_quote { inventory.base_balance } else { inventory.quote_balance };
+            let inventory_balance_normalized = (inventory_balance as f64) / selling_pow;
+            let optimal = pool_selling_balance_normalized * SHARE_POOL_BAL_SWAP_BPS / BASIS_POINT_DENO;
+            let max_alloc = inventory_balance_normalized * self.config.max_inventory_ratio;
+            let selling_amount = max_alloc; // For testing
+            let buying_amount = if base_to_quote { selling_amount * adjustment.spot } else { selling_amount / adjustment.spot };
+            let pool_msg = format!(
+                "   - Pool {} | Tycho Spot: {:>12.5} vs ref {:>12.5} | Spread: {:>7.2} {} = {:>5.0} bps",
+                cpname(adjustment.psc.component.clone()),
+                adjustment.spot,
+                adjustment.reference,
+                adjustment.spread,
+                self.quote.symbol,
+                adjustment.spread_bps,
+            );
+            let inventory_msg = format!(
+                " Inventory: {:.2} {} | Optimal: {:.} | Max: {:.5} | Selling {:.5} {} for {:.5} {}",
+                inventory_balance_normalized, selling.symbol, optimal, max_alloc, selling_amount, selling.symbol, buying_amount, buying.symbol
+            );
+            tracing::debug!("{} | {}", pool_msg, inventory_msg);
+            let powered_selling_amount = selling_amount * selling_pow;
+            let powered_selling_amount_bg = BigUint::from(powered_selling_amount.floor() as u128);
+            let powered_buying_amount = buying_amount * buying_pow;
+            let (selling_amount_worth_eth, buying_amount_worth_eth) = if base_to_quote {
+                (selling_amount * context.base_to_eth, buying_amount * context.quote_to_eth)
+            } else {
+                (selling_amount * context.quote_to_eth, buying_amount * context.base_to_eth)
+            };
+            let (selling_amount_worth_usd, buying_amount_worth_usd) = (selling_amount_worth_eth * context.eth_to_usd, buying_amount_worth_eth * context.eth_to_usd);
+            match adjustment.psc.protosim.get_amount_out(powered_selling_amount_bg.clone(), selling, buying) {
+                Ok(result) => {
+                    let amount_out_powered = result.amount.to_f64().unwrap_or(0.0);
+                    let amount_out_normalized = amount_out_powered / 10f64.powi(buying.decimals as i32);
+                    let slippage_bps = self.config.max_slippage_pct * BASIS_POINT_DENO;
+                    let amount_out_min_normalized = amount_out_normalized * (BASIS_POINT_DENO - slippage_bps) / BASIS_POINT_DENO;
+                    let amount_out_min_powered = amount_out_min_normalized * buying_pow;
+                    let gas_units = result.gas.to_string().parse::<u128>().unwrap_or_default();
+                    let gas_cost_eth = (gas_units.saturating_mul(context.native_gas_price)) as f64 / 1e18;
+                    let gas_cost_usd = gas_cost_eth * context.eth_to_usd;
+                    let gas_cost_in_output = if base_to_quote { gas_cost_eth / context.quote_to_eth } else { gas_cost_eth / context.base_to_eth };
+                    tracing::debug!(
+                        "   - Swap: {:.5} {} for {:.5} {} | Gas cost : {:.5} $ | Gas cost in output: {:.2} %",
+                        selling_amount,
+                        selling.symbol,
+                        amount_out_normalized,
+                        buying.symbol,
+                        gas_cost_usd,
+                        gas_cost_in_output * 100.0
+                    );
+                    let average_sell_price = if base_to_quote {
+                        amount_out_normalized / selling_amount
+                    } else {
+                        1. / (amount_out_normalized / selling_amount)
+                    };
+                    let delta = average_sell_price - adjustment.spot;
+                    let price_impact_bps = ((delta / adjustment.spot) * BASIS_POINT_DENO).round();
+                    let average_sell_price_net_gas = if base_to_quote {
+                        (amount_out_normalized - gas_cost_in_output) / selling_amount
+                    } else {
+                        1. / ((amount_out_normalized - gas_cost_in_output) / selling_amount)
+                    };
+                    let delta_net_of_gas = average_sell_price_net_gas - adjustment.spot;
+                    let price_impact_net_of_gas_bps = ((delta_net_of_gas / adjustment.spot) * BASIS_POINT_DENO).round();
+                    let potential_profit_delta = if base_to_quote {
+                        average_sell_price_net_gas - adjustment.reference
+                    } else {
+                        adjustment.reference - average_sell_price_net_gas
+                    };
+                    let potential_profit_delta_spread_bps = potential_profit_delta / adjustment.reference * BASIS_POINT_DENO;
+                    let profitable = potential_profit_delta_spread_bps > self.config.min_exec_spread_bps;
+                    tracing::debug!(
+                        "   => Profit: {}  with average_sell_price_net_gas: {:.4} vs reference_price: {:.4} | potential_profit_delta: {:.5} | potential_profit_delta_spread_bps: {:.2}",
+                        if potential_profit_delta > 0. { "💵" } else { "🔻" },
+                        average_sell_price_net_gas,
+                        adjustment.reference,
+                        potential_profit_delta,
+                        potential_profit_delta_spread_bps
+                    );
+                    if profitable {
+                        let calculation = SwapCalculation {
+                            base_to_quote,
+                            selling_amount,
+                            buying_amount,
+                            powered_selling_amount,
+                            powered_buying_amount,
+                            amount_out_normalized,
+                            amount_out_powered,
+                            amount_out_min_normalized,
+                            amount_out_min_powered,
+                            gas_units,
+                            average_sell_price,
+                            average_sell_price_net_gas,
+                            gas_cost_eth,
+                            gas_cost_usd,
+                            gas_cost_in_output_token: gas_cost_in_output,
+                            selling_worth_usd: selling_amount_worth_usd,
+                            buying_worth_usd: buying_amount_worth_usd,
+                            profit_delta_bps: potential_profit_delta_spread_bps,
+                            profitable,
+                        };
+                        let order = ExecutionOrder {
+                            adjustment: adjustment.clone(),
+                            calculation,
+                        };
+                        orders.push(order);
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to simulate get amount out: {:?}", e);
+                    continue;
                 }
             }
         }
-
-        // Make sure no conflict between readjustments
-        // Make sure we don't run out of gas by keeping a minimum post-swap balance to 0.01 ETH
-        // if !self.config.profitability {}
         orders
     }
 
@@ -498,7 +443,7 @@ impl IMarketMaker for MarketMaker {
             amount_in,
             amount_out,
             amount_out_min,
-            order.calculation.amount_out_min_divided,
+            order.calculation.amount_out_min_normalized,
             order.adjustment.buying.symbol
         );
         let swap = tycho_execution::encoding::models::Swap::new(order.adjustment.psc.component.clone(), input.clone(), output.clone(), split);
