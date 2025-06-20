@@ -4,3 +4,5 @@
 config/.env.*
 dump.rdb
 /src/generated/prisma
+node_modules
+src/generated
