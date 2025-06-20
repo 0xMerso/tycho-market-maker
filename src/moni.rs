@@ -27,7 +27,7 @@ async fn main() {
     let paths = env.paths.split(",").collect::<Vec<&str>>();
     for path in paths.iter() {
         let config = shd::types::config::load_market_maker_config(path);
-        let latest = shd::utils::evm::latest(config.rpc.clone()).await;
+        let latest = shd::utils::evm::latest(config.rpc_url.clone()).await;
         tracing::info!(" - Config: {} | Latest block: {}", path, latest);
         config.print();
         configs.push(config);

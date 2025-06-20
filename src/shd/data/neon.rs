@@ -37,7 +37,8 @@ pub mod create {
     use super::*;
 
     /// Insert a new Bot and return its full Model (with id, timestamps, …)
-    pub async fn bot(db: &DatabaseConnection, mmc: MarketMakerConfig) -> Result<bot::Model, sea_orm::DbErr> {
+    pub async fn bot(db: &DatabaseConnection, mmc: MarketMakerConfig) {
+        // -> Result<bot::Model, sea_orm::DbErr> {
         let now = chrono::Utc::now().naive_utc();
         let config = json!(mmc);
 
@@ -50,15 +51,15 @@ pub mod create {
         };
 
         // let inserted: bot::Model = new_bot.insert(db).await?;
-        match new_bot.insert(db).await {
-            Ok(inserted) => {
-                tracing::info!("🐘 Inserted succeeded: {}", inserted.id);
-                Ok(inserted)
-            }
-            Err(err) => {
-                tracing::error!("🐘 Error inserting: {}", err);
-                Err(err)
-            }
-        }
+        // match new_bot.insert(db).await {
+        //     Ok(inserted) => {
+        //         tracing::info!("🐘 Inserted succeeded: {}", inserted.id);
+        //         Ok(inserted)
+        //     }
+        //     Err(err) => {
+        //         tracing::error!("🐘 Error inserting: {}", err);
+        //         Err(err)
+        //     }
+        // }
     }
 }

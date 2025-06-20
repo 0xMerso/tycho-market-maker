@@ -139,7 +139,7 @@ pub async fn scope(config: MarketMakerConfig, key: Option<&str>) -> Vec<Token> {
             return vec![]
         }
     };
-    let targets = [config.addr0.clone().to_lowercase(), config.addr1.clone().to_lowercase()];
+    let targets = [config.base_token_address.clone().to_lowercase(), config.quote_token_address.clone().to_lowercase()];
     let tokens = atks
         .iter()
         .filter(|t| {
@@ -155,11 +155,11 @@ pub async fn scope(config: MarketMakerConfig, key: Option<&str>) -> Vec<Token> {
 /// Get the tokens from the Tycho API
 /// Filters are hardcoded for now.
 pub async fn specific(mmc: MarketMakerConfig, key: Option<&str>, addresses: Vec<String>) -> Option<Vec<Token>> {
-    tracing::info!("Getting tokens for network {}", mmc.network.as_str().to_string());
-    match HttpRPCClient::new(format!("https://{}", mmc.tycho_endpoint).as_str(), key) {
+    tracing::info!("Getting tokens for network {}", mmc.network_name.as_str().to_string());
+    match HttpRPCClient::new(format!("https://{}", mmc.tycho_api).as_str(), key) {
         Ok(client) => {
             let addresses = addresses.iter().map(|a| Bytes::from_str(a.to_lowercase().as_str()).unwrap()).collect::<Vec<Bytes>>();
-            let (chain, _, _) = chain(mmc.network.as_str().to_string()).expect("Invalid chain");
+            let (chain, _, _) = chain(mmc.network_name.as_str().to_string()).expect("Invalid chain");
             let req = TokensRequestBody {
                 token_addresses: Some(addresses.clone()),
                 min_quality: Some(100),
@@ -173,7 +173,7 @@ pub async fn specific(mmc: MarketMakerConfig, key: Option<&str>, addresses: Vec<
                     Some(tokens)
                 }
                 Err(e) => {
-                    tracing::error!("Failed to get tokens on network {}: {:?}", mmc.network.as_str().to_string(), e.to_string());
+                    tracing::error!("Failed to get tokens on network {}: {:?}", mmc.network_name.as_str().to_string(), e.to_string());
                     None
                 }
             }
@@ -189,20 +189,20 @@ pub async fn specific(mmc: MarketMakerConfig, key: Option<&str>, addresses: Vec<
 /// Get the tokens from the Tycho API
 /// Filters are hardcoded for now.
 pub async fn tokens(mmc: MarketMakerConfig, key: Option<&str>) -> Option<Vec<Token>> {
-    tracing::info!("Getting tokens for network {}", mmc.network.as_str());
-    match HttpRPCClient::new(format!("https://{}", mmc.tycho_endpoint).as_str(), key) {
+    tracing::info!("Getting tokens for network {}", mmc.network_name.as_str());
+    match HttpRPCClient::new(format!("https://{}", mmc.tycho_api).as_str(), key) {
         Ok(client) => {
             let time = std::time::SystemTime::now();
-            let (chain, _, _) = chain(mmc.network.as_str().to_string()).expect("Invalid chain");
+            let (chain, _, _) = chain(mmc.network_name.as_str().to_string()).expect("Invalid chain");
             match client.get_all_tokens(chain, Some(100), Some(1), 1000).await {
                 Ok(result) => {
                     let tokens = sanitize(result);
                     let elasped = time.elapsed().unwrap_or_default().as_millis();
-                    tracing::debug!("Took {:?} ms to get {} tokens on {}", elasped, tokens.len(), mmc.network.as_str());
+                    tracing::debug!("Took {:?} ms to get {} tokens on {}", elasped, tokens.len(), mmc.network_name.as_str());
                     Some(tokens)
                 }
                 Err(e) => {
-                    tracing::error!("Failed to get tokens on network {}: {:?}", mmc.network.as_str(), e.to_string());
+                    tracing::error!("Failed to get tokens on network {}: {:?}", mmc.network_name.as_str(), e.to_string());
                     None
                 }
             }
@@ -217,7 +217,7 @@ pub async fn tokens(mmc: MarketMakerConfig, key: Option<&str>) -> Option<Vec<Tok
 /// Get the default protocol stream builder
 /// But any other configuration of ProtocolStreamBuilder can be used
 pub async fn psb(mmc: MarketMakerConfig, key: String, psbc: PsbConfig, tokens: Vec<Token>) -> ProtocolStreamBuilder {
-    let (_, _, chain) = crate::types::tycho::chain(mmc.network.clone().as_str().to_string()).expect("Invalid chain");
+    let (_, _, chain) = crate::types::tycho::chain(mmc.network_name.clone().as_str().to_string()).expect("Invalid chain");
     let u4 = uniswap_v4_pool_with_hook_filter;
     let balancer = balancer_pool_filter;
     // let curve = curve_pool_filter;
@@ -226,8 +226,8 @@ pub async fn psb(mmc: MarketMakerConfig, key: String, psbc: PsbConfig, tokens: V
     tokens.iter().for_each(|t| {
         hmt.insert(t.address.clone(), t.clone());
     });
-    tracing::debug!("Tycho endpoint: {} and chain: {}", mmc.tycho_endpoint, chain);
-    let mut psb = ProtocolStreamBuilder::new(&mmc.tycho_endpoint, chain)
+    tracing::debug!("Tycho endpoint: {} and chain: {}", mmc.tycho_api, chain);
+    let mut psb = ProtocolStreamBuilder::new(&mmc.tycho_api, chain)
         .exchange::<UniswapV2State>(TychoSupportedProtocol::UniswapV2.to_string().as_str(), filter.clone(), None)
         .exchange::<UniswapV3State>(TychoSupportedProtocol::UniswapV3.to_string().as_str(), filter.clone(), None)
         .exchange::<UniswapV4State>(TychoSupportedProtocol::UniswapV4.to_string().as_str(), filter.clone(), Some(u4))
@@ -235,7 +235,7 @@ pub async fn psb(mmc: MarketMakerConfig, key: String, psbc: PsbConfig, tokens: V
         .skip_state_decode_failures(true)
         .set_tokens(hmt.clone()) // ALL Tokens
         .await;
-    if mmc.network.as_str() == "ethereum" {
+    if mmc.network_name.as_str() == "ethereum" {
         tracing::trace!("Adding mainnet-specific exchanges");
         psb = psb
             .exchange::<UniswapV2State>(TychoSupportedProtocol::Sushiswap.to_string().as_str(), filter.clone(), None)
@@ -254,10 +254,10 @@ pub async fn psb(mmc: MarketMakerConfig, key: String, psbc: PsbConfig, tokens: V
 /// Balance is returned as a u128, with decimals.
 pub async fn get_component_balances(mmc: MarketMakerConfig, cp: ProtocolComponent, key: String) -> Option<HashMap<String, u128>> {
 
-    match HttpRPCClient::new(format!("https://{}", mmc.tycho_endpoint).as_str(), Some(key.as_str())) {
+    match HttpRPCClient::new(format!("https://{}", mmc.tycho_api).as_str(), Some(key.as_str())) {
         Ok(client) => {
      
-    let (chain, _, _) = chain(mmc.network.clone().as_str().to_string()).expect("Invalid chain");
+    let (chain, _, _) = chain(mmc.network_name.clone().as_str().to_string()).expect("Invalid chain");
     let body = ProtocolStateRequestBody {
         protocol_ids: Some(vec![cp.id.to_string().to_lowercase().clone()]),
         protocol_system: cp.protocol_system, // Single, so cannot use protocol_ids vec of different protocols ?

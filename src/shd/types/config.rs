@@ -112,77 +112,104 @@ impl MoniEnvConfig {
     }
 }
 
+// #[derive(Debug, Serialize, Deserialize, Clone)]
+// pub struct MarketMakerConfig {
+//     // Exact match with config (e.g. mmc.toml)
+//     pub token0: String,
+//     pub addr0: String,
+//     pub token1: String,
+//     pub addr1: String,
+//     pub tag: String,
+//     pub network: String,
+//     pub chainid: u64,
+//     pub gas_token: String,
+//     pub gas_token_chainlink: String,
+//     pub rpc: String,
+//     pub explorer: String,
+//     pub spread: u32,
+//     pub min_exec_spread: f64,
+//     // pub max_consistent_spread: u32, // security
+//     // pub min_profit_spread_threshold: u32 // trigger
+//     pub slippage: f64,
+//     pub profitability: bool,
+//     pub max_trade_allocation: f64,
+//     pub broadcast: String,
+//     pub depths: Vec<f64>, // Quoted
+//     pub gas_limit: u64,
+//     pub target_block_offset: u64,
+//     pub tycho_endpoint: String,
+//     pub poll_interval_ms: u64,
+//     pub permit2: String,
+//     pub tycho_router: String,
+//     pub pfc: PriceFeedConfig,
+// }
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MarketMakerConfig {
-    // Exact match with config (e.g. mmc.toml)
-    pub token0: String,
-    pub addr0: String,
-    pub token1: String,
-    pub addr1: String,
-    pub tag: String,
-    pub network: String,
-    pub chainid: u64,
-    pub gas_token: String,
-    pub gas_token_chainlink: String,
-    pub rpc: String,
-    pub explorer: String,
-    pub spread: u32,
-    pub min_exec_spread: f64,
-    // pub max_consistent_spread: u32, // security
-    // pub min_profit_spread_threshold: u32 // trigger
-    pub slippage: f64,
-    pub profitability: bool,
-    pub max_trade_allocation: f64,
-    pub broadcast: String,
-    pub depths: Vec<f64>, // Quoted
-    pub gas_limit: u64,
-    pub target_block_offset: u64,
-    pub tycho_endpoint: String,
+    pub base_token: String,
+    pub base_token_address: String,
+    pub quote_token: String,
+    pub quote_token_address: String,
+    pub pair_tag: String,
+    pub network_name: String,
+    pub chain_id: u64,
+    pub gas_token_symbol: String,
+    pub gas_token_chainlink_price_feed: String,
+    pub rpc_url: String,
+    pub explorer_url: String,
+    pub target_spread_bps: u32,
+    pub min_exec_spread_bps: f64,
+    pub max_slippage_pct: f64,
+    pub profitability_check: bool,
+    pub max_inventory_ratio: f64,
+    pub broadcast_url: String,
+    pub quote_depths: Vec<f64>,
+    pub tx_gas_limit: u64,
+    pub block_offset: u64,
+    pub tycho_api: String,
     pub poll_interval_ms: u64,
-    pub permit2: String,
-    pub tycho_router: String,
-    pub pfc: PriceFeedConfig,
+    pub permit2_address: String,
+    pub tycho_router_address: String,
+    pub price_feed_config: PriceFeedConfig,
 }
 
 impl MarketMakerConfig {
     pub fn print(&self) {
         tracing::debug!("Market Maker Config:");
-        tracing::debug!("  Network:               {} with ID {}", self.network.as_str(), self.chainid);
-        tracing::debug!("  Tag:                   {}", self.tag);
-        tracing::debug!("  Token0:                {} ({})", self.token0, self.addr0);
-        tracing::debug!("  Token1:                {} ({})", self.token1, self.addr1);
-        tracing::debug!("  RPC:                   {}", self.rpc);
-        tracing::debug!("  Explorer:              {}", self.explorer);
-        tracing::debug!("  Gas token:             {}", self.gas_token);
-        tracing::debug!("  Gas token chainlink:   {}", self.gas_token_chainlink);
-        tracing::debug!("  Spread (bps):          {}", self.spread);
-        tracing::debug!("  min_exec_spread (bps): {}", self.min_exec_spread);
-        tracing::debug!("  Slippage:              {} ({} in bps)", self.slippage, self.slippage * 10000.0);
-        tracing::debug!("  Profitability Check:   {}", self.profitability);
-        tracing::debug!("  Max Trade Allocation:  {}", self.max_trade_allocation);
-        tracing::debug!("  Broadcast:             {}", self.broadcast);
-        tracing::debug!("  Depths:                {:?}", self.depths);
-        tracing::debug!("  Gas Limit:             {}", self.gas_limit);
-        tracing::debug!("  Target Block Offset:   {}", self.target_block_offset);
-        tracing::debug!("  Tycho Endpoint:        {}", self.tycho_endpoint);
-        tracing::debug!("  Poll Interval (secs):  {}", self.poll_interval_ms);
-        tracing::debug!("  Permit2:               {}", self.permit2);
-        tracing::debug!("  Tycho Router:          {}", self.tycho_router);
-        tracing::debug!("  Price Feed Config:     {:?}", self.pfc);
+        tracing::debug!("  Network:               {} with ID {}", self.network_name, self.chain_id);
+        tracing::debug!("  Tag:                   {}", self.pair_tag);
+        tracing::debug!("  Base Token:            {} ({})", self.base_token, self.base_token_address);
+        tracing::debug!("  Quote Token:           {} ({})", self.quote_token, self.quote_token_address);
+        tracing::debug!("  RPC:                   {}", self.rpc_url);
+        tracing::debug!("  Explorer:              {}", self.explorer_url);
+        tracing::debug!("  Gas token:             {}", self.gas_token_symbol);
+        tracing::debug!("  Gas Oracle Feed:       {}", self.gas_token_chainlink_price_feed);
+        tracing::debug!("  Spread (bps):          {}", self.target_spread_bps);
+        tracing::debug!("  min_exec_spread (bps): {}", self.min_exec_spread_bps);
+        tracing::debug!("  Max Slippage (%):      {}", self.max_slippage_pct);
+        tracing::debug!("  Profitability Check:   {}", self.profitability_check);
+        tracing::debug!("  Max Inventory Ratio:   {}", self.max_inventory_ratio);
+        tracing::debug!("  Broadcast:             {}", self.broadcast_url);
+        tracing::debug!("  Depths:                {:?}", self.quote_depths);
+        tracing::debug!("  Gas Limit:             {}", self.tx_gas_limit);
+        tracing::debug!("  Block Offset:          {}", self.block_offset);
+        tracing::debug!("  Tycho API:             {}", self.tycho_api);
+        tracing::debug!("  Poll Interval (ms):    {}", self.poll_interval_ms);
+        tracing::debug!("  Permit2:               {}", self.permit2_address);
+        tracing::debug!("  Tycho Router:          {}", self.tycho_router_address);
+        tracing::debug!("  Price Feed Config:     {:?}", self.price_feed_config);
     }
 
     pub fn validate(&self) -> Result<(), String> {
-        if self.spread > 10_000 {
-            return Err("spread must be ≤ 10000 BPS (100%)".into());
+        if self.target_spread_bps > 10_000 {
+            return Err("target_spread_bps must be ≤ 10000 BPS (100%)".into());
         }
-        if self.slippage > 1. {
-            return Err("slippage must be ≤ 1.0 (100%)".into());
+        if self.max_slippage_pct > 1. {
+            return Err("max_slippage_pct must be ≤ 1.0 (100%)".into());
         }
-        if !(0.0..=1.0).contains(&self.max_trade_allocation) {
-            return Err("max_trade_allocation must be between 0.0 and 1.0".into());
+        if !(0.0..=1.0).contains(&self.max_inventory_ratio) {
+            return Err("max_inventory_ratio must be between 0.0 and 1.0".into());
         }
-        // if broadcast mode not available for the network, reject.
-        // ! Add tons of compatibility checks
         Ok(())
     }
 

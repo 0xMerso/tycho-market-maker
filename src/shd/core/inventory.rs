@@ -1,4 +1,3 @@
-
 use alloy::providers::{Provider, ProviderBuilder};
 
 use crate::{
@@ -8,8 +7,8 @@ use crate::{
 
 /// Initialize the wallet by checking the balances of the tokens, nonce, etc.
 pub async fn wallet(config: MarketMakerConfig, env: EnvConfig) {
-    let provider = ProviderBuilder::new().on_http(config.rpc.clone().parse().expect("Failed to parse RPC_URL"));
-    let tokens = vec![config.addr0.clone(), config.addr1.clone()];
+    let provider = ProviderBuilder::new().on_http(config.rpc_url.clone().parse().expect("Failed to parse RPC_URL"));
+    let tokens = vec![config.base_token_address.clone(), config.quote_token_address.clone()];
     match balances(&provider, env.wallet_public_key.clone(), tokens.clone()).await {
         Ok(balances) => {
             tracing::debug!("Balances of sender {}: {:?}", env.wallet_public_key.clone(), balances);

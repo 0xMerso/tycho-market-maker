@@ -27,19 +27,19 @@ async fn main() {
     // let config = shd::types::config::load_market_maker_config("config/mmc.mainnet.toml");
     let config = shd::types::config::load_market_maker_config(env.path.as_str());
     config.print();
-    let latest = shd::utils::evm::latest(config.rpc.clone()).await;
+    let latest = shd::utils::evm::latest(config.rpc_url.clone()).await;
     tracing::info!("--- Launching Tycho Market Maker --- | 🧪 Testing mode: {:?} | Latest block: {}", env.testing, latest);
     // ============================================== Initialisation ==============================================
     // shd::utils::uptime::hearbeats(config.clone(), env.clone()).await;
-    let pft = config.pfc.r#type.as_str();
+    let pft = config.price_feed_config.r#type.as_str();
     let feed: Box<dyn PriceFeed> = match PriceFeedType::from_str(pft) {
         PriceFeedType::Binance => Box::new(BinancePriceFeed),
         PriceFeedType::Chainlink => Box::new(ChainlinkPriceFeed),
         // @dev Add your custom price feed here
     };
     // Monitoring transactions via shared cache via hashmap, no Redis
-    let base = config.addr0.clone().to_lowercase();
-    let quote = config.addr1.clone().to_lowercase();
+    let base = config.base_token_address.clone().to_lowercase();
+    let quote = config.quote_token_address.clone().to_lowercase();
     match shd::helpers::global::tokens(config.clone(), Some(env.tycho_api_key.as_str())).await {
         Some(tokens) => {
             let base = tokens
@@ -57,7 +57,7 @@ async fn main() {
                 .expect("Failed to build Market Maker with the given config");
             shd::core::inventory::wallet(config.clone(), env.clone()).await;
             if let Ok(price) = mk.fetch_market_price().await {
-                tracing::info!("Market Price: {:?} ({})", price, config.pfc.r#type);
+                tracing::info!("Market Price: {:?} ({})", price, config.price_feed_config.r#type);
             }
             let cache = Arc::new(RwLock::new(TychoStreamState {
                 protosims: HashMap::new(),
@@ -65,7 +65,7 @@ async fn main() {
                 atks: tokens.clone(),
             }));
             loop {
-                tracing::debug!("Launching stream for network {}", config.network.as_str());
+                tracing::debug!("Launching stream for network {}", config.network_name.as_str());
                 let state = Arc::clone(&cache);
                 match AssertUnwindSafe(mk.monitor(state.clone(), env.clone())).catch_unwind().await {
                     Ok(_) => {
@@ -76,7 +76,7 @@ async fn main() {
                     }
                 }
                 let delay = if env.testing { RESTART / 10 } else { RESTART };
-                tracing::debug!("Waiting {} seconds before restarting stream for {}", delay, config.network.as_str());
+                tracing::debug!("Waiting {} seconds before restarting stream for {}", delay, config.network_name.as_str());
                 tokio::time::sleep(tokio::time::Duration::from_millis(delay * 1000)).await;
             }
         }

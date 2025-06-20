@@ -1,40 +1,34 @@
 # =========================================== Market Maker FuLL Configuration ===========================================
 
 # === Global ===
-tag = "🔵"
-token0 = "ETH" # Base
-addr0 = "0x4200000000000000000000000000000000000006"
-token1 = "USDC" # Quote
-addr1 = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
-network = "base" # "base", "unichain"
-chainid = 8453 
-gas_token = "0x4200000000000000000000000000000000000006" # Erc20
-gas_token_chainlink = "0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70" # Chainlink price feed for Gas Token (ETH) to USD
-rpc = "https://base-mainnet.blastapi.io/1437c115-f259-4690-a2d7-8c32e658a164" # https://unichain.drpc.org"
-explorer = "https://basescan.org/"
-tycho_endpoint = "tycho-base-beta.propellerheads.xyz"
+pair_tag = "🔵"
+base_token = "ETH"
+base_token_address = "0x4200000000000000000000000000000000000006"
+quote_token = "USDC"
+quote_token_address = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+network_name = "base"
+chain_id = 8453
+gas_token_symbol = "0x4200000000000000000000000000000000000006"
+gas_token_chainlink_price_feed = "0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70"
+rpc_url = "https://base-mainnet.blastapi.io/1437c115-f259-4690-a2d7-8c32e658a164"
+explorer_url = "https://basescan.org/"
+tycho_api = "tycho-base-beta.propellerheads.xyz"
 # === Execution ===
-spread = 15 # Bps
-min_exec_spread = -50.0
-slippage = 0.0005
-profitability = true
-max_trade_allocation = 0.5
-# bribe=0.5
-broadcast = "classic"
-depths = [50.0, 250.0, 500.0, 750.0, 1000.0, 1250.0, 1500.0]
+target_spread_bps = 15
+min_exec_spread_bps = -50.0
+max_slippage_pct = 0.0005
+profitability_check = true
+max_inventory_ratio = 0.5
+broadcast_url = "classic"
+quote_depths = [50.0, 250.0, 500.0, 750.0, 1000.0, 1250.0, 1500.0]
 
-gas_limit = 300000
-target_block_offset = 1
-permit2 = "0x000000000022D473030F116dDEE9F6B43aC78BA3"
-tycho_router = "0xea3207778e39EB02D72C9D3c4Eac7E224ac5d369"
+tx_gas_limit = 300000
+block_offset = 1
+permit2_address = "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+tycho_router_address = "0xea3207778e39EB02D72C9D3c4Eac7E224ac5d369"
 # === Misc ===
 poll_interval_ms = 1000
 
-[pfc] # ======= MM Price Feed Config ======= 
-# Expected price is token0 per token1 => if token0 is ETH and token1 USDC, then price is ~2500, not 0.0004
-# type = "binance"
-# source = "https://api.binance.com/api/v3"         
-type = "chainlink"                   
+[price_feed_config]
+type = "chainlink"
 source = "0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70"
-# type = "custom" 
-# type = "twap" 

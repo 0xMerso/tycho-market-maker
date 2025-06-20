@@ -65,11 +65,11 @@ impl IMarketMaker for MarketMaker {
     }
 
     async fn fetch_eth_usd(&self) -> Result<f64, String> {
-        if self.config.gas_token_chainlink.is_empty() {
-            tracing::warn!("No gas token chainlink found, using Coingecko");
+        if self.config.gas_token_chainlink_price_feed.is_empty() {
+            tracing::warn!("No gas oracle feed found, using Coingecko");
             return Ok(super::pricefeed::coingecko().await.unwrap_or(0.));
         }
-        chainlink(self.config.rpc.clone(), self.config.gas_token_chainlink.clone()).await
+        chainlink(self.config.rpc_url.clone(), self.config.gas_token_chainlink_price_feed.clone()).await
     }
 
     /// Get the prices of the components
@@ -100,7 +100,7 @@ impl IMarketMaker for MarketMaker {
     /// Might take some delay to get the balances which is an problem to deal with later
     /// Should be stored in memory and updated after each readjustment only
     async fn fetch_inventory(&self, env: EnvConfig) -> Result<Inventory, String> {
-        let provider = ProviderBuilder::new().on_http(self.config.rpc.clone().parse().expect("Failed to parse RPC_URL"));
+        let provider = ProviderBuilder::new().on_http(self.config.rpc_url.clone().parse().expect("Failed to parse RPC_URL"));
         let tokens = vec![self.base.clone(), self.quote.clone()];
         let addresses = tokens.iter().map(|t| t.address.to_string()).collect::<Vec<String>>();
         match crate::utils::evm::balances(&provider, env.wallet_public_key.clone(), addresses.clone()).await {
@@ -139,14 +139,14 @@ impl IMarketMaker for MarketMaker {
     /// ! Compute base/USD and quote/USD, based on a arbitrary path ! Just a valid path !
     async fn fetch_market_context(&self, components: Vec<ProtocolComponent>, protosims: &HashMap<std::string::String, Box<dyn ProtocolSim>>, tokens: Vec<Token>) -> Option<MarketContext> {
         let time = std::time::SystemTime::now();
-        match crate::utils::evm::eip1559_fees(self.config.rpc.clone()).await {
+        match crate::utils::evm::eip1559_fees(self.config.rpc_url.clone()).await {
             Ok(eip1559_fees) => {
-                let native_gas_price = crate::utils::evm::gas_price(self.config.rpc.clone()).await;
+                let native_gas_price = crate::utils::evm::gas_price(self.config.rpc_url.clone()).await;
                 let eth_to_usd = self.fetch_eth_usd().await;
-                let provider = ProviderBuilder::new().on_http(self.config.rpc.clone().parse().unwrap());
+                let provider = ProviderBuilder::new().on_http(self.config.rpc_url.clone().parse().unwrap());
                 let block: alloy::rpc::types::Block = provider.get_block_by_number(alloy::eips::BlockNumberOrTag::Latest, false).await.unwrap().unwrap();
-                let base_to_eth_vp = super::routing::find_path(components.clone(), self.base.address.to_string().to_lowercase(), self.config.gas_token.to_lowercase());
-                let quote_to_eth_vp = super::routing::find_path(components.clone(), self.quote.address.to_string().to_lowercase(), self.config.gas_token.to_lowercase());
+                let base_to_eth_vp = super::routing::find_path(components.clone(), self.base.address.to_string().to_lowercase(), self.config.gas_token_symbol.to_lowercase());
+                let quote_to_eth_vp = super::routing::find_path(components.clone(), self.quote.address.to_string().to_lowercase(), self.config.gas_token_symbol.to_lowercase());
                 match (base_to_eth_vp, quote_to_eth_vp, eth_to_usd) {
                     (Ok(base_to_eth_vp), Ok(quote_to_eth_vp), Ok(eth_to_usd)) => {
                         let mut to_eth_ptss = vec![];
@@ -226,7 +226,7 @@ impl IMarketMaker for MarketMaker {
                 spread_bps,
                 symbol
             );
-            if spread_bps.abs() > self.config.spread as f64 {
+            if spread_bps.abs() > self.config.target_spread_bps as f64 {
                 match spread_bps > 0. {
                     true => {
                         // pool's 'quote' token is above the reference price, sell on pool
@@ -311,10 +311,10 @@ impl IMarketMaker for MarketMaker {
                     // Percentage of the pool balance
                     let optimal = pool_selling_balance_divided * SHARE_POOL_BAL_SWAP_BPS / BASIS_POINT_DENO;
                     // Sample depth
-                    let max_alloc = inventory_balance_divided * self.config.max_trade_allocation; // Capping the allocation to a maximum
+                    let max_alloc = inventory_balance_divided * self.config.max_inventory_ratio;
                     // ! ------------- Tmp -------------
                     // let selling_amount = optimal; // For demo in logs
-                    let selling_amount = inventory_balance_divided * self.config.max_trade_allocation; // For testing
+                    let selling_amount = inventory_balance_divided * self.config.max_inventory_ratio; // For testing
                     // -------------
                     let buying_amount = if base_to_quote { selling_amount * adjustment.spot } else { selling_amount / adjustment.spot };
                     // --- Debug ---
@@ -362,7 +362,7 @@ impl IMarketMaker for MarketMaker {
                             let amount_out_powered = result.amount.to_f64().unwrap_or(0.0);
                             let amount_out_divided = amount_out_powered / 10f64.powi(buying.decimals as i32); // [new]
 
-                            let slippage_bps = self.config.slippage * BASIS_POINT_DENO;
+                            let slippage_bps = self.config.max_slippage_pct * BASIS_POINT_DENO;
                             let amount_out_min_divided = amount_out_divided * (BASIS_POINT_DENO - slippage_bps) / BASIS_POINT_DENO;
                             let amount_out_min_powered = amount_out_min_divided * buying_pow;
 
@@ -419,7 +419,7 @@ impl IMarketMaker for MarketMaker {
                             };
                             let potential_profit_delta_spread_bps = potential_profit_delta / adjustment.reference * BASIS_POINT_DENO;
                             let potential_profit_delta_spread_bps_abs = potential_profit_delta_spread_bps; //.abs(); // ! Tmp abs()
-                            let profitable = potential_profit_delta_spread_bps_abs > self.config.min_exec_spread;
+                            let profitable = potential_profit_delta_spread_bps_abs > self.config.min_exec_spread_bps;
                             tracing::debug!(
                                 "   => Profit: {}  with average_sell_price_net_gas: {:.4} vs reference_price: {:.4} | potential_profit_delta: {:.5} | potential_profit_delta_spread_bps: {:.2}",
                                 if potential_profit_delta > 0. { "💵" } else { "🔻" },
@@ -512,8 +512,8 @@ impl IMarketMaker for MarketMaker {
             checked_token: output.clone(),
             // Others fields
             given_amount: amount_in.clone(),
-            slippage: Some(self.config.slippage as f64), // Slippage in decimal < 1, because 1.0 = 100%
-            exact_out: false,                            // It's an exact in solution
+            slippage: Some(self.config.max_slippage_pct as f64), // Slippage in decimal < 1, because 1.0 = 100%
+            exact_out: false,                                    // It's an exact in solution
             expected_amount: Some(amount_out),
             checked_amount: Some(amount_out_min), // The amount out will not be checked in execution
             swaps: vec![swap.clone()],
@@ -529,7 +529,7 @@ impl IMarketMaker for MarketMaker {
 
         // 1. Approvals (Tycho router) with Permit2
         let amount: u128 = solution.given_amount.clone().to_string().parse().expect("Couldn't convert given_amount to u128"); // ?
-        let args = (Address::from_str(&self.config.permit2).expect("Couldn't convert permit2 to address"), amount);
+        let args = (Address::from_str(&self.config.permit2_address).expect("Couldn't convert permit2 to address"), amount);
         let data = tycho_execution::encoding::evm::utils::encode_input(APPROVE_FN_SIGNATURE, args.abi_encode());
         let sender = solution.sender.clone().to_string().parse().expect("Failed to parse sender");
         let approval = TransactionRequest {
@@ -541,7 +541,7 @@ impl IMarketMaker for MarketMaker {
                 data: None,
             },
             gas: Some(DEFAULT_APPROVE_GAS),
-            chain_id: Some(self.config.chainid),
+            chain_id: Some(self.config.chain_id),
             max_fee_per_gas: Some(max_fee_per_gas),
             max_priority_fee_per_gas: Some(max_priority_fee_per_gas),
             nonce: Some(inventory.nonce),
@@ -558,7 +558,7 @@ impl IMarketMaker for MarketMaker {
                 data: None,
             },
             gas: Some(DEFAULT_SWAP_GAS),
-            chain_id: Some(self.config.chainid),
+            chain_id: Some(self.config.chain_id),
             max_fee_per_gas: Some(max_fee_per_gas),
             max_priority_fee_per_gas: Some(max_priority_fee_per_gas),
             nonce: Some(inventory.nonce + 1),
@@ -570,11 +570,11 @@ impl IMarketMaker for MarketMaker {
 
     /// Entrypoint for executing the orders
     async fn prepare(&self, orders: Vec<ExecutionOrder>, context: MarketContext, inventory: Inventory, env: EnvConfig) -> Vec<PreparedTransaction> {
-        tracing::debug!("Executing {} orders. Broadcast config: {}", orders.len(), self.config.broadcast);
+        tracing::debug!("Executing {} orders. Broadcast config: {}", orders.len(), self.config.broadcast_url);
         unsafe {
-            std::env::set_var("RPC_URL", self.config.rpc.clone());
+            std::env::set_var("RPC_URL", self.config.rpc_url.clone());
         }
-        let (_, _, chain) = crate::helpers::global::chain(self.config.network.as_str().to_string()).unwrap();
+        let (_, _, chain) = crate::helpers::global::chain(self.config.network_name.as_str().to_string()).unwrap();
         // --- Prepare the solutions (solutions = trades encoded with Tycho EVM Encoder) ---
         // @dev This await section has to be done outside of the EVMEncoderBuilder for some unknown reaso, compiler error
         let mut solutions = vec![];
@@ -637,8 +637,8 @@ impl IMarketMaker for MarketMaker {
     /// In a recursive or dependent way, we would need to simulate each order one by one, possible with state overwrite
     /// Logic depends on the network, even for simulation
     async fn simulate(&self, transactions: Vec<PreparedTransaction>, env: EnvConfig) -> Vec<PreparedTransaction> {
-        let alloy_chain = get_alloy_chain(self.config.network.as_str().to_string()).expect("Failed to get alloy chain");
-        let rpc = self.config.rpc.parse::<url::Url>().unwrap().clone(); // ! Custom per network
+        let alloy_chain = get_alloy_chain(self.config.network_name.as_str().to_string()).expect("Failed to get alloy chain");
+        let rpc = self.config.rpc_url.parse::<url::Url>().unwrap().clone(); // ! Custom per network
         let pk = env.wallet_private_key.clone();
         let wallet = PrivateKeySigner::from_bytes(&B256::from_str(&pk).expect("Failed to convert swapper pk to B256")).expect("Failed to private key signer");
         let signer = alloy::network::EthereumWallet::from(wallet.clone());
@@ -716,14 +716,14 @@ impl IMarketMaker for MarketMaker {
     /// Logic depends on the network
     async fn broadcast(&self, prepared: Vec<PreparedTransaction>, env: EnvConfig) {
         tracing::debug!("Broadcasting");
-        let alloy_chain = get_alloy_chain(self.config.network.as_str().to_string()).expect("Failed to get alloy chain");
-        let rpc = self.config.rpc.parse::<url::Url>().unwrap().clone(); // ! Custom per network
+        let alloy_chain = get_alloy_chain(self.config.network_name.as_str().to_string()).expect("Failed to get alloy chain");
+        let rpc = self.config.rpc_url.parse::<url::Url>().unwrap().clone(); // ! Custom per network
         let pk = env.wallet_private_key.clone();
         let wallet = PrivateKeySigner::from_bytes(&B256::from_str(&pk).expect("Failed to convert swapper pk to B256")).expect("Failed to private key signer");
         let signer = alloy::network::EthereumWallet::from(wallet.clone());
         let provider = ProviderBuilder::new().with_chain(alloy_chain).wallet(signer.clone()).on_http(rpc.clone());
         let mut exec = ExecutedPayload::default();
-        let netname = NetworkName::from_str(self.config.network.as_str()).unwrap();
+        let netname = NetworkName::from_str(self.config.network_name.as_str()).unwrap();
         match netname {
             NetworkName::Ethereum | NetworkName::Base | NetworkName::Unichain => {
                 // Mainnet
@@ -734,7 +734,12 @@ impl IMarketMaker for MarketMaker {
                         tracing::info!("⏩ Skipping broadcast - already executed a transaction in the program lifetime");
                         return;
                     }
-                    tracing::debug!("Trade: #{} | Broadcasting on {} | Method: {}", x, self.config.network.as_str().to_string(), self.config.broadcast);
+                    tracing::debug!(
+                        "Trade: #{} | Broadcasting on {} | Method: {}",
+                        x,
+                        self.config.network_name.as_str().to_string(),
+                        self.config.broadcast_url
+                    );
                     // --- Sending, without waiting for receipt ---
                     let time = std::time::SystemTime::now();
 
@@ -746,14 +751,14 @@ impl IMarketMaker for MarketMaker {
                     match provider.send_transaction(tx.approval.clone()).await {
                         Ok(approve) => {
                             let approval_time = time.elapsed().unwrap_or_default().as_millis();
-                            tracing::debug!("Explorer: {}tx/{} | Approval shoot took {} ms", self.config.explorer, approve.tx_hash(), approval_time);
+                            tracing::debug!("Explorer: {}tx/{} | Approval shoot took {} ms", self.config.explorer_url, approve.tx_hash(), approval_time);
                             exec.approval.sent = true;
                             exec.approval.hash = approve.tx_hash().to_string();
                             HAS_EXECUTED.store(true, std::sync::atomic::Ordering::Relaxed);
                             match provider.send_transaction(tx.swap.clone()).await {
                                 Ok(swap) => {
                                     let swap_time = time.elapsed().unwrap_or_default().as_millis();
-                                    tracing::debug!("Explorer: {}tx/{} | Swap (+ approval) shoot took {} ms", self.config.explorer, swap.tx_hash(), swap_time);
+                                    tracing::debug!("Explorer: {}tx/{} | Swap (+ approval) shoot took {} ms", self.config.explorer_url, swap.tx_hash(), swap_time);
                                     exec.swap.sent = true;
                                     exec.swap.hash = swap.tx_hash().to_string();
                                     //  --- Wait for receipt ---
@@ -788,7 +793,7 @@ impl IMarketMaker for MarketMaker {
             }
             _ => {
                 // Other networks
-                tracing::error!("Broadcast not implemented for network {}", self.config.network.as_str().to_string());
+                tracing::error!("Broadcast not implemented for network {}", self.config.network_name.as_str().to_string());
             }
         }
     }
@@ -796,7 +801,7 @@ impl IMarketMaker for MarketMaker {
     /// Monitor the ProtocolStreamBuilder for new pairs and updates, evaluate if MM bot has opportunities
     async fn monitor(&mut self, mtx: SharedTychoStreamState, env: EnvConfig) {
         loop {
-            tracing::debug!("Connecting ProtocolStreamBuilder for {}", self.config.network.as_str().to_string());
+            tracing::debug!("Connecting ProtocolStreamBuilder for {}", self.config.network_name.as_str().to_string());
             let psbc = PsbConfig {
                 filter: ComponentFilter::with_tvl_range(ADD_TVL_THRESHOLD, ADD_TVL_THRESHOLD),
             };
@@ -816,12 +821,12 @@ impl IMarketMaker for MarketMaker {
                                 let reference = self.fetch_market_price().await.unwrap_or_default();
                                 tracing::info!(
                                     "{} '{}' stream: block # {} with {:<2} states updates | Market price: {} | Min exec spread: {}", // , + {} pairs, - {} pairs",
-                                    self.config.tag,
-                                    self.config.network.as_str().to_string(),
+                                    self.config.pair_tag,
+                                    self.config.network_name.as_str().to_string(),
                                     msg.block_number,
                                     msg.states.len(),
                                     reference,
-                                    self.config.min_exec_spread,
+                                    self.config.min_exec_spread_bps,
                                 );
                                 if !self.ready {
                                     // --- First stream ---
@@ -943,7 +948,7 @@ impl IMarketMaker for MarketMaker {
                     }
                 },
                 Err(e) => {
-                    tracing::warn!("Failed to build stream on {}: {:?}. Exiting.", self.config.network.as_str().to_string(), e.to_string());
+                    tracing::warn!("Failed to build stream on {}: {:?}. Exiting.", self.config.network_name.as_str().to_string(), e.to_string());
                     return;
                 }
             };
