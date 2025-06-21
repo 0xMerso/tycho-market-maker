@@ -3,17 +3,14 @@
 use sea_orm::{ActiveModelTrait, ConnectionTrait, Database, DatabaseConnection, DbBackend, DbErr, Set, Statement};
 use serde_json::json;
 
-use crate::{entity::bot, types::config::MoniEnvConfig};
+use crate::{entity::instance, types::config::MoniEnvConfig};
 
 // The whole database URL string follows the following format:
 // "protocol://username:password@host:port/database"
 // We put the database name (that last bit) in a separate variable simply for convenience.
 
-pub async fn connect() -> Result<DatabaseConnection, DbErr> {
+pub async fn connect(env: MoniEnvConfig) -> Result<DatabaseConnection, DbErr> {
     tracing::info!("Connecting to Neon");
-    dotenv::from_filename("config/.env.moni.ex").ok(); // Use .env.ex for testing purposes
-    let env = MoniEnvConfig::new();
-    env.print();
     let db = Database::connect(env.database_url.clone()).await?;
     match db.get_database_backend() {
         DbBackend::Postgres => {
@@ -33,10 +30,10 @@ pub async fn connect() -> Result<DatabaseConnection, DbErr> {
 pub mod pull {
     use sea_orm::{DatabaseConnection, EntityTrait};
 
-    use crate::entity::bot;
+    use crate::entity::instance;
 
-    pub async fn bots(db: &DatabaseConnection) -> Result<Vec<bot::Model>, sea_orm::DbErr> {
-        let models = bot::Entity::find().all(db).await?;
+    pub async fn instances(db: &DatabaseConnection) -> Result<Vec<instance::Model>, sea_orm::DbErr> {
+        let models = instance::Entity::find().all(db).await?;
         Ok(models)
     }
 }
@@ -48,19 +45,18 @@ pub mod create {
     use super::*;
 
     /// Insert a new Bot and return its full Model (with id, timestamps, …)
-    pub async fn bot(db: &DatabaseConnection, mmc: MarketMakerConfig) -> Result<bot::Model, sea_orm::DbErr> {
+    pub async fn instance(db: &DatabaseConnection, mmc: MarketMakerConfig) -> Result<instance::Model, sea_orm::DbErr> {
         let now = chrono::Utc::now().naive_utc();
         let config = json!(mmc);
-        let model = bot::ActiveModel {
+        let model = instance::ActiveModel {
             config: Set(config),
             created_at: Set(now),
             updated_at: Set(now),
-            deleted_at: Set(None),
             ..Default::default()
         };
         match model.insert(db).await {
             Ok(inserted) => {
-                tracing::info!("🐘 Inserted 'bot' succeeded: {}", inserted.id);
+                tracing::info!("🐘 Inserted 'instance' succeeded: {}", inserted.id);
                 Ok(inserted)
             }
             Err(err) => {
@@ -77,7 +73,7 @@ pub mod create {
         let model = trade::ActiveModel {
             created_at: Set(now),
             updated_at: Set(now),
-            deleted_at: Set(None),
+            // deleted_at: Set(None),
             ..Default::default()
         };
         match model.insert(db).await {

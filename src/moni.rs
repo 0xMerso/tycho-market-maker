@@ -38,15 +38,14 @@ async fn main() {
     // shd::utils::uptime::hearbeats(config.clone(), env.clone()).await;
     // ============================================== Start ==============================================
     tracing::info!("🐘 Init and test connection to Neon, Prisma, SeaORM, to PgSQL");
-    match shd::data::neon::connect().await {
+    match shd::data::neon::connect(env.clone()).await {
         Ok(db) => {
             tracing::info!("🐘 Neon connected");
-            tracing::info!("🐘 Inserting {} bots into DB", configs.len());
-            match shd::data::neon::pull::bots(&db).await {
-                Ok(bots) => {
-                    tracing::info!("🐘 Found {} bots in DB", bots.len());
-                    for bot in bots.iter() {
-                        let config = bot.config.clone();
+            match shd::data::neon::pull::instances(&db).await {
+                Ok(instances) => {
+                    tracing::info!("🐘 Found {} instances in DB", instances.len());
+                    for instance in instances.iter() {
+                        let config = instance.config.clone();
                         let config: MarketMakerConfig = serde_json::from_str(&config.as_str().unwrap()).unwrap();
                         tracing::info!("Got config: {}", config.shortname());
                     }
