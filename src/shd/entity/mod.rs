@@ -2,7 +2,8 @@
 
 pub mod prelude;
 
-pub mod bot;
+pub mod configuration;
+pub mod instance;
 pub mod log;
 pub mod price;
 pub mod trade;

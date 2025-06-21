@@ -12,27 +12,31 @@ pub struct Model {
     pub created_at: DateTime,
     #[sea_orm(column_name = "updatedAt")]
     pub updated_at: DateTime,
-    #[sea_orm(column_name = "deletedAt")]
-    pub deleted_at: Option<DateTime>,
     #[sea_orm(column_type = "Text")]
     pub category: String,
-    #[sea_orm(column_name = "botId")]
-    pub bot_id: i32,
+    #[sea_orm(column_name = "instanceId")]
+    pub instance_id: i32,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(belongs_to = "super::bot::Entity", from = "Column::BotId", to = "super::bot::Column::Id", on_update = "Cascade", on_delete = "Restrict")]
-    Bot,
+    #[sea_orm(
+        belongs_to = "super::instance::Entity",
+        from = "Column::InstanceId",
+        to = "super::instance::Column::Id",
+        on_update = "Cascade",
+        on_delete = "Restrict"
+    )]
+    Instance,
     #[sea_orm(has_many = "super::price::Entity")]
     Price,
     #[sea_orm(has_many = "super::trade::Entity")]
     Trade,
 }
 
-impl Related<super::bot::Entity> for Entity {
+impl Related<super::instance::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::Bot.def()
+        Relation::Instance.def()
     }
 }
 

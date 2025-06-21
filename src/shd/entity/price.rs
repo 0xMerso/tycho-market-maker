@@ -12,8 +12,6 @@ pub struct Model {
     pub created_at: DateTime,
     #[sea_orm(column_name = "updatedAt")]
     pub updated_at: DateTime,
-    #[sea_orm(column_name = "deletedAt")]
-    pub deleted_at: Option<DateTime>,
     #[sea_orm(column_name = "logId")]
     pub log_id: i32,
     #[sea_orm(column_type = "JsonBinary")]

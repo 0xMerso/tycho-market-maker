@@ -4,7 +4,7 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
-#[sea_orm(table_name = "Trade")]
+#[sea_orm(table_name = "Configuration")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
@@ -12,21 +12,21 @@ pub struct Model {
     pub created_at: DateTime,
     #[sea_orm(column_name = "updatedAt")]
     pub updated_at: DateTime,
-    #[sea_orm(column_name = "logId")]
-    pub log_id: i32,
     #[sea_orm(column_type = "JsonBinary")]
     pub values: Json,
+    #[sea_orm(column_type = "Text")]
+    pub hash: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(belongs_to = "super::log::Entity", from = "Column::LogId", to = "super::log::Column::Id", on_update = "Cascade", on_delete = "Restrict")]
-    Log,
+    #[sea_orm(has_many = "super::instance::Entity")]
+    Instance,
 }
 
-impl Related<super::log::Entity> for Entity {
+impl Related<super::instance::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::Log.def()
+        Relation::Instance.def()
     }
 }
 
