@@ -1,15 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-/// Struct representing a trade event to be sent to monitoring
-#[derive(Default, Serialize, Deserialize, Debug, Clone)]
-pub struct TradeEvent {
-    pub event_type: String,      // e.g. "trade_attempt", "trade_success", "trade_fail"
-    pub meta: String,            // freeform metadata/context
-    pub block_time: u64,         // block timestamp or system time
-    pub tx_hash: Option<String>, // transaction hash if available
-    pub details: Option<String>, // any extra details (JSON, etc)
-}
-
 use serde_json::Value;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,4 +42,47 @@ pub struct Bot {
     pub updated_at: i64,
     pub deleted_at: i64,
     pub config: Value, // JSON blob
+}
+
+/// ======================================================================================= Events PUB/SUB =====================================================================================================
+/// Redis message structure
+
+/// Base message structure for all Redis messages
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RedisMessage {
+    pub message: MessageType,
+    pub timestamp: u64,
+    pub data: Value,
+}
+
+/// New instance deployment message (simplified)
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct NewInstanceMessage {
+    pub instance_id: String,
+    pub network: String,
+}
+
+/// Trade event message (simplified)
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TradeEventMessage {
+    pub instance_id: String,
+    pub tx_hash: String,
+    pub status: String,
+}
+
+/// Parsed message content
+#[derive(Debug, Clone)]
+pub enum ParsedMessage {
+    NewInstance(NewInstanceMessage),
+    TradeEvent(TradeEventMessage),
+    Unknown(Value),
+}
+
+/// Message types for Redis pub/sub communication
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub enum MessageType {
+    #[serde(rename = "new_instance")]
+    NewInstance,
+    #[serde(rename = "trade_event")]
+    TradeEvent,
 }

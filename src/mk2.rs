@@ -6,7 +6,6 @@ use shd::{
     types::{
         config::EnvConfig,
         maker::{IMarketMaker, MarketMakerBuilder},
-        moni::TradeEvent,
         tycho::TychoStreamState,
     },
     utils::r#static::RESTART,
