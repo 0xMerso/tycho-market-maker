@@ -9,7 +9,7 @@ use shd::{
         maker::{IMarketMaker, MarketMakerBuilder},
         tycho::TychoStreamState,
     },
-    utils::r#static::RESTART,
+    utils::r#static::{CHANNEL_REDIS, RESTART},
 };
 use tokio::sync::RwLock;
 use tracing::Level;
@@ -23,6 +23,7 @@ async fn main() {
     dotenv::from_filename("config/.env.moni.ex").ok(); // Use .env.ex for testing purposes
     let env = MoniEnvConfig::new();
     env.print();
+
     // let commit = shd::misc::commit();
     let mut configs = vec![];
     let paths = env.paths.split(",").collect::<Vec<&str>>();
@@ -41,24 +42,35 @@ async fn main() {
     match shd::data::neon::connect(env.clone()).await {
         Ok(db) => {
             tracing::info!("🐘 Neon connected");
-            match shd::data::neon::pull::instances(&db).await {
-                Ok(instances) => {
-                    tracing::info!("🐘 Found {} instances in DB", instances.len());
-                    for instance in instances.iter() {
-                        let config = instance.config.clone();
-                        let config: MarketMakerConfig = serde_json::from_str(&config.as_str().unwrap()).unwrap();
-                        tracing::info!("Got config: {}", config.shortname());
-                    }
+
+            // Pull configurations from DB
+            match shd::data::neon::pull::configurations(&db).await {
+                Ok(configurations) => {
+                    tracing::info!("🐘 Found {} configurations in DB", configurations.len());
                 }
                 Err(err) => {
                     tracing::error!("Error: {}", err);
                 }
             }
-            // for config in configs.iter() {
-            //     let _ = shd::data::neon::create::bot(&db, config.clone()).await;
+
+            // match shd::data::neon::pull::instances(&db).await {
+            //     Ok(instances) => {
+            //         tracing::info!("🐘 Found {} instances in DB", instances.len());
+            //         for instance in instances.iter() {
+            //             let config = instance.config.clone();
+            //             let config: MarketMakerConfig = serde_json::from_str(&config.as_str().unwrap()).unwrap();
+            //             tracing::info!(" - Instance: {} | Got config: {}", instance.id, config.shortname());
+            //         }
+            //         // Is running or not ?
+            //         // ToDo
+            //     }
+            //     Err(err) => {
+            //         tracing::error!("Error: {}", err);
+            //     }
             // }
-            tracing::info!("🐘 Starting infinite listening of the Redis pub-sub channel: {}, for MM events", configs.len());
-            shd::data::receiver::listen();
+
+            tracing::info!("🐘 Starting infinite listening of the Redis pub-sub channel: {}, for MM events", CHANNEL_REDIS);
+            shd::data::sub::listen(env.clone()).await;
         }
         Err(err) => {
             tracing::error!("Error: {}", err);

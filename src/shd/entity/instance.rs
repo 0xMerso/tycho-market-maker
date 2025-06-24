@@ -32,8 +32,10 @@ pub enum Relation {
         on_delete = "SetNull"
     )]
     Configuration,
-    #[sea_orm(has_many = "super::log::Entity")]
-    Log,
+    #[sea_orm(has_many = "super::price::Entity")]
+    Price,
+    #[sea_orm(has_many = "super::trade::Entity")]
+    Trade,
 }
 
 impl Related<super::configuration::Entity> for Entity {
@@ -42,9 +44,15 @@ impl Related<super::configuration::Entity> for Entity {
     }
 }
 
-impl Related<super::log::Entity> for Entity {
+impl Related<super::price::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::Log.def()
+        Relation::Price.def()
+    }
+}
+
+impl Related<super::trade::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Trade.def()
     }
 }
 

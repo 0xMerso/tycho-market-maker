@@ -75,5 +75,5 @@ name = "mk2"
 path = "src/mk2.rs"
 
 [[bin]]
-name = "moni"
-path = "src/moni.rs"
+name = "monitor"
+path = "src/monitor.rs"

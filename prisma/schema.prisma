@@ -9,53 +9,53 @@ generator client {
 
 // common model for timestamps & soft delete would be better handled at app level
 
-
 model Configuration {
-  id        Int        @id @default(autoincrement())
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  values    Json
-  hash      String
-  instances Instance[]
+  id                Int        @id @default(autoincrement())
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  
+  // 💽 Data
+  values            Json
+  // 🔎 Uniqueness filtering
+  hash              String
+  // 🔎 Filtering values
+  chainId           Int
+  baseTokenAddress  String
+  quoteTokenAddress String
+  instances         Instance[]
 }
 
 model Instance {
   id              Int            @id @default(autoincrement())
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
+  // 💽 Data
   config          Json
   Configuration   Configuration? @relation(fields: [configurationId], references: [id])
   configurationId Int?
   startedAt       DateTime       @default(now())
   endedAt         DateTime?
-  logs            Log[]
-}
-
-model Log {
-  id         Int      @id @default(autoincrement())
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  category   String // e.g. 'start', 'trade', 'error', 'end'
-  instanceId Int
-  instance   Instance @relation(fields: [instanceId], references: [id])
-  trades     Trade[]
-  prices     Price[]
+  trades          Trade[]
+  prices          Price[]
 }
 
 model Trade {
-  id        Int      @id @default(autoincrement())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  logId     Int
-  log       Log      @relation(fields: [logId], references: [id])
-  values    Json
+  id         Int      @id @default(autoincrement())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  instanceId Int
+  instance   Instance @relation(fields: [instanceId], references: [id])
+  values     Json
 }
 
+
+// Rename MarketContext with inventory, gas, etc.
+
 model Price {
-  id        Int      @id @default(autoincrement())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  logId     Int
-  log       Log      @relation(fields: [logId], references: [id])
-  value     Json // market snapshot, prices, etc
+  id         Int      @id @default(autoincrement())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  instanceId Int
+  instance   Instance @relation(fields: [instanceId], references: [id])
+  value      Json // market snapshot, prices, etc
 }

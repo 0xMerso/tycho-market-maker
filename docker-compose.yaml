@@ -17,13 +17,14 @@ services:
     ports:
       - "42042:42042"
     depends_on:
-    
+      monitor:
+        condition: service_healthy
       redis:
         condition: service_healthy
     env_file:
       - config/.env.ex # ! Tmp
     environment:
-      - RUST_LOG="off,mk2=trace,shd=trace,moni=trace,test=trace"
+      - RUST_LOG="off,mk2=trace,shd=trace,monitor=trace,test=trace"
       - REDIS_HOST=redis
     restart: always
     networks:
@@ -39,24 +40,25 @@ services:
     ports:
       - "42042:42042"
     depends_on:
-    
+      monitor:
+        condition: service_healthy
       redis:
         condition: service_healthy
     env_file:
       - config/.env.ex # ! Tmp
     environment:
-      - RUST_LOG="off,mk2=trace,shd=trace,moni=trace,test=trace"
+      - RUST_LOG="off,mk2=trace,shd=trace,monitor=trace,test=trace"
       - REDIS_HOST=redis
     restart: always
     networks:
       - tmm
 
-  moni:
+  monitor:
     build: 
       context: .
       dockerfile: ops/Dockerfile
       args:
-        - PROGRAM=moni
+        - PROGRAM=monitor
         - BUILD_TYPE=debug # ! To adapt
     ports:
       - "42043:42043"
@@ -66,7 +68,7 @@ services:
     env_file:
       - config/.env.ex # ! Tmp
     environment:
-      - RUST_LOG="off,mk2=trace,shd=trace,moni=trace,test=trace"
+      - RUST_LOG="off,mk2=trace,shd=trace,monitor=trace,test=trace"
       - REDIS_HOST=redis
     restart: always
     networks:

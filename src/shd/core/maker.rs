@@ -1,6 +1,7 @@
 use std::{collections::HashMap, str::FromStr};
 
 use crate::{
+    data::r#pub,
     helpers::global::{cpname, get_alloy_chain, get_component_balances},
     types::{
         config::{EnvConfig, NetworkName},
@@ -639,6 +640,7 @@ impl IMarketMaker for MarketMaker {
                                 if !scr.status {
                                     let reason = scr.error.clone().unwrap().message;
                                     tracing::error!("Simulation failed on SimCallResult on '{}'. No broadcast. Reason: {}", name, reason);
+                                    // ? Publish failed status for both transactions ?
                                 } else {
                                     succeeded.push(tx.clone());
                                 }
@@ -862,6 +864,13 @@ impl IMarketMaker for MarketMaker {
                                                             // tracing::debug!("No readjustments to execute");
                                                         } else {
                                                             let transactions = self.prepare(orders, context.clone(), inventory.clone(), env.clone()).await;
+
+                                                            // Publish trade event
+                                                            tracing::info!("Publishing trade event for {}", self.config.identifier());
+                                                            for t in transactions.iter() {
+                                                                // publisher::trade(&format!("mk2-{}", self.config.network_name), &t.approval.hash, "approval_sent");
+                                                                // publisher::trade(&format!("mk2-{}", self.config.network_name), &t.swap.hash, "swap_sent");
+                                                            }
                                                             let simulated = self.simulate(transactions, env.clone()).await;
                                                             let broadcast = self.broadcast(simulated, env.clone()).await;
                                                         }

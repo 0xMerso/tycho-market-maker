@@ -146,6 +146,7 @@ impl MoniEnvConfig {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MarketMakerConfig {
+    pub wallet_public_key: String,
     pub base_token: String,
     pub base_token_address: String,
     pub quote_token: String,
@@ -174,12 +175,28 @@ pub struct MarketMakerConfig {
 }
 
 impl MarketMakerConfig {
+    /// mk-instance-<network_name>-<chain_id>-<base_token_symbol>-<quote_token_symbol>-<pub_address>
+    pub fn identifier(&self) -> String {
+        let msg = format!(
+            "market_maker_instance-{}-{}-{}-{}-{}",
+            self.network_name, self.chain_id, self.base_token, self.quote_token, self.wallet_public_key
+        );
+        msg.to_lowercase()
+    }
+
+    pub fn keccak(&self) -> String {
+        let serialized = serde_json::to_string(self).unwrap();
+        let hash = alloy_primitives::keccak256(serialized.as_bytes());
+        hash.to_string()
+    }
+
     pub fn print(&self) {
         tracing::debug!("Market Maker Config:");
         tracing::debug!("  Network:               {} with ID {}", self.network_name, self.chain_id);
         tracing::debug!("  Tag:                   {}", self.pair_tag);
         tracing::debug!("  Base Token:            {} ({})", self.base_token, self.base_token_address);
         tracing::debug!("  Quote Token:           {} ({})", self.quote_token, self.quote_token_address);
+        tracing::debug!("  Wallet Public Key:     {}", self.wallet_public_key);
         tracing::debug!("  RPC:                   {}", self.rpc_url);
         tracing::debug!("  Explorer:              {}", self.explorer_url);
         tracing::debug!("  Gas token:             {}", self.gas_token_symbol);

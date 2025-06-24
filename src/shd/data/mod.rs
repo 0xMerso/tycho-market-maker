@@ -1,4 +1,4 @@
 pub mod helpers;
 pub mod neon;
-pub mod publisher;
-pub mod receiver;
+pub mod r#pub;
+pub mod sub;

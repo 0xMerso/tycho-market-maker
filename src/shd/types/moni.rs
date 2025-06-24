@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 
 use serde_json::Value;
 
+use crate::types::config::MarketMakerConfig;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Trade {
     pub id: i64,
@@ -58,16 +60,13 @@ pub struct RedisMessage {
 /// New instance deployment message (simplified)
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct NewInstanceMessage {
-    pub instance_id: String,
-    pub network: String,
+    pub config: MarketMakerConfig,
 }
 
 /// Trade event message (simplified)
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TradeEventMessage {
-    pub instance_id: String,
-    pub tx_hash: String,
-    pub status: String,
+    pub id: String,
 }
 
 /// Parsed message content

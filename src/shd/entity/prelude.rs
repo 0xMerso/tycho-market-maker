@@ -2,6 +2,5 @@
 
 pub use super::configuration::Entity as Configuration;
 pub use super::instance::Entity as Instance;
-pub use super::log::Entity as Log;
 pub use super::price::Entity as Price;
 pub use super::trade::Entity as Trade;

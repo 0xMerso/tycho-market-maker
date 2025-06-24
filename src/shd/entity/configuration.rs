@@ -16,6 +16,12 @@ pub struct Model {
     pub values: Json,
     #[sea_orm(column_type = "Text")]
     pub hash: String,
+    #[sea_orm(column_name = "chainId")]
+    pub chain_id: i32,
+    #[sea_orm(column_name = "baseTokenAddress", column_type = "Text")]
+    pub base_token_address: String,
+    #[sea_orm(column_name = "quoteTokenAddress", column_type = "Text")]
+    pub quote_token_address: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

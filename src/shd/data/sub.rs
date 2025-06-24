@@ -1,3 +1,4 @@
+use crate::types::config::MoniEnvConfig;
 use crate::types::moni::{MessageType, NewInstanceMessage, ParsedMessage, RedisMessage, TradeEventMessage};
 use crate::utils::r#static::CHANNEL_REDIS;
 use serde_json;
@@ -18,25 +19,8 @@ pub fn parse(value: &str) -> Result<ParsedMessage, String> {
     }
 }
 
-/// Handle different message types
-pub fn handle(msg: &ParsedMessage) {
-    match msg {
-        ParsedMessage::NewInstance(msg) => {
-            tracing::info!("New instance deployed: {} on network {}", msg.instance_id, msg.network);
-            // TODO: Add logic to handle new instance deployment
-        }
-        ParsedMessage::TradeEvent(msg) => {
-            tracing::info!("Trade event: {} - {} - {}", msg.instance_id, msg.tx_hash, msg.status);
-            // TODO: Add logic to handle trade events
-        }
-        ParsedMessage::Unknown(data) => {
-            tracing::warn!("Unknown message type: {:?}", data);
-        }
-    }
-}
-
 /// Listen to the Redis channel and parse different message types
-pub fn listen() {
+pub async fn listen(env: MoniEnvConfig) {
     match crate::data::helpers::copubsub() {
         Ok(client) => match client.get_connection() {
             Ok(mut conn) => {
@@ -47,10 +31,10 @@ pub fn listen() {
                         match pubsub.get_message() {
                             Ok(msg) => match msg.get_payload::<String>() {
                                 Ok(payload) => {
-                                    tracing::debug!("Raw message received: {}", payload);
+                                    tracing::debug!("New message received (of size: {})", payload.len());
                                     match parse(&payload) {
                                         Ok(pm) => {
-                                            handle(&pm);
+                                            crate::data::neon::handle(&pm, env.clone()).await;
                                         }
                                         Err(e) => {
                                             tracing::error!("Failed to parse message: {}", e);

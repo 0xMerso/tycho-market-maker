@@ -8,6 +8,7 @@ quote_token = "WBTC"
 quote_token_address = "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599"
 network_name = "ethereum"
 chain_id = 1
+wallet_public_key = "0x785d7477037A8fa2b1E0FD077Cd40a979EE02007"
 gas_token_symbol = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
 gas_token_chainlink_price_feed = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419"
 rpc_url = "https://eth-mainnet.blastapi.io/1437c115-f259-4690-a2d7-8c32e658a164"

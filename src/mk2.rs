@@ -26,6 +26,7 @@ async fn main() {
     // let config = shd::types::config::load_market_maker_config("config/mmc.mainnet.toml");
     let config = shd::types::config::load_market_maker_config(env.path.as_str());
     config.print();
+    tracing::debug!("🤖 MarketMaker Identifier: '{}'=", config.identifier());
     let latest = shd::utils::evm::latest(config.rpc_url.clone()).await;
     tracing::info!("--- Launching Tycho Market Maker --- | 🧪 Testing mode: {:?} | Latest block: {}", env.testing, latest);
     // ============================================== Initialisation ==============================================
@@ -36,6 +37,11 @@ async fn main() {
         PriceFeedType::Chainlink => Box::new(ChainlinkPriceFeed),
         // @dev Add your custom price feed here
     };
+
+    // ! Tmp
+    shd::data::r#pub::instance(config.clone());
+    return;
+
     // Monitoring transactions via shared cache via hashmap, no Redis
     let base = config.base_token_address.clone().to_lowercase();
     let quote = config.quote_token_address.clone().to_lowercase();
@@ -63,8 +69,12 @@ async fn main() {
                 components: HashMap::new(),
                 atks: tokens.clone(),
             }));
+
             loop {
+                tracing::info!("Pushing message to Redis, new instance deployed");
+                // shd::data::r#pub::instance(config.clone());
                 tracing::debug!("Launching stream for network {}", config.network_name.as_str());
+
                 let state = Arc::clone(&cache);
                 match AssertUnwindSafe(mk.monitor(state.clone(), env.clone())).catch_unwind().await {
                     Ok(_) => {
