@@ -2,48 +2,32 @@ use serde::{Deserialize, Serialize};
 
 use serde_json::Value;
 
-use crate::types::config::MarketMakerConfig;
+use crate::types::{
+    config::MarketMakerConfig,
+    maker::{Inventory, MarketContext},
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Trade {
-    pub id: i64,
-    pub created_at: i64, // epoch seconds
-    pub updated_at: i64,
-    pub deleted_at: i64,
-    pub pre_trade_context: Value,  // JSON blob
-    pub details: Value,            // JSON blob
-    pub post_trade_context: Value, // JSON blob
-    pub log_id: i64,               // FK → Log
-    pub bot_id: i64,               // FK → Bot
+pub struct TradeData {
+    pub hash: i64,
+    pub context: Value,
+}
+
+// In theory, snapshot should be made at a network block time frequency, but it can slightly vary
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MarketMakerSnapshot {
+    pub block: u64,
+    pub timestamp: u64,
+    pub reference_price: f64,
+    pub market_context: MarketContext,
+    pub components: Vec<ComponentPriceData>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Log {
-    pub id: i64,
-    pub created_at: i64,
-    pub updated_at: i64,
-    pub deleted_at: i64,
-    pub description: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Price {
-    pub id: i64,
-    pub created_at: i64,
-    pub updated_at: i64,
-    pub deleted_at: i64,
-    pub reference: Value, // JSON blob
-    pub pools: Value,     // JSON blob
-    pub log_id: i64,      // FK → Log
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Bot {
-    pub id: i64,
-    pub created_at: i64,
-    pub updated_at: i64,
-    pub deleted_at: i64,
-    pub config: Value, // JSON blob
+pub struct ComponentPriceData {
+    pub address: String,
+    pub r#type: String,
+    pub price: f64,
 }
 
 /// ======================================================================================= Events PUB/SUB =====================================================================================================
@@ -60,20 +44,34 @@ pub struct RedisMessage {
 /// New instance deployment message (simplified)
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct NewInstanceMessage {
-    pub config: MarketMakerConfig,
+    pub config: MarketMakerConfig, // Contain the whole data to be stored in DB
+    pub commit: String,
+}
+
+/// New price message (simplified)
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct NewPricesMessage {
+    pub config: MarketMakerConfig, // Add config to link to instance
+    pub instance_hash: String,     // Add instance hash for precise linking
+    pub reference_price: f64,
+    pub components: Vec<ComponentPriceData>,
 }
 
 /// Trade event message (simplified)
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct TradeEventMessage {
-    pub id: String,
+pub struct NewTradeMessage {
+    pub config: MarketMakerConfig,
+    pub instance_hash: String, // Add instance hash for precise linking
+    pub trade: TradeData,
 }
 
 /// Parsed message content
 #[derive(Debug, Clone)]
 pub enum ParsedMessage {
     NewInstance(NewInstanceMessage),
-    TradeEvent(TradeEventMessage),
+    NewPrices(NewPricesMessage),
+    NewIntent(NewTradeMessage),
+    NewTrade(NewTradeMessage),
     Unknown(Value),
 }
 
@@ -82,6 +80,8 @@ pub enum ParsedMessage {
 pub enum MessageType {
     #[serde(rename = "new_instance")]
     NewInstance,
-    #[serde(rename = "trade_event")]
-    TradeEvent,
+    #[serde(rename = "new_trade")]
+    NewTrade,
+    #[serde(rename = "new_prices")]
+    NewPrices,
 }

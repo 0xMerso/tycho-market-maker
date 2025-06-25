@@ -1,5 +1,5 @@
 use crate::types::config::MoniEnvConfig;
-use crate::types::moni::{MessageType, NewInstanceMessage, ParsedMessage, RedisMessage, TradeEventMessage};
+use crate::types::moni::{MessageType, NewInstanceMessage, NewPricesMessage, NewTradeMessage, ParsedMessage, RedisMessage};
 use crate::utils::r#static::CHANNEL_REDIS;
 use serde_json;
 
@@ -12,9 +12,13 @@ pub fn parse(value: &str) -> Result<ParsedMessage, String> {
             let msg: NewInstanceMessage = serde_json::from_value(rdmsg.data).map_err(|e| format!("Failed to parse NewInstance message: {}", e))?;
             Ok(ParsedMessage::NewInstance(msg))
         }
-        MessageType::TradeEvent => {
-            let msg: TradeEventMessage = serde_json::from_value(rdmsg.data).map_err(|e| format!("Failed to parse TradeEvent message: {}", e))?;
-            Ok(ParsedMessage::TradeEvent(msg))
+        MessageType::NewTrade => {
+            let msg: NewTradeMessage = serde_json::from_value(rdmsg.data).map_err(|e| format!("Failed to parse NewTrade message: {}", e))?;
+            Ok(ParsedMessage::NewTrade(msg))
+        }
+        MessageType::NewPrices => {
+            let msg: NewPricesMessage = serde_json::from_value(rdmsg.data).map_err(|e| format!("Failed to parse NewPrices message: {}", e))?;
+            Ok(ParsedMessage::NewPrices(msg))
         }
     }
 }

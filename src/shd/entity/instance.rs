@@ -6,20 +6,24 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
 #[sea_orm(table_name = "Instance")]
 pub struct Model {
-    #[sea_orm(primary_key)]
-    pub id: i32,
+    #[sea_orm(primary_key, auto_increment = false, column_type = "Text")]
+    pub id: String,
     #[sea_orm(column_name = "createdAt")]
     pub created_at: DateTime,
     #[sea_orm(column_name = "updatedAt")]
     pub updated_at: DateTime,
     #[sea_orm(column_type = "JsonBinary")]
     pub config: Json,
-    #[sea_orm(column_name = "configurationId")]
-    pub configuration_id: Option<i32>,
+    #[sea_orm(column_name = "configurationId", column_type = "Text", nullable)]
+    pub configuration_id: Option<String>,
     #[sea_orm(column_name = "startedAt")]
     pub started_at: DateTime,
     #[sea_orm(column_name = "endedAt")]
     pub ended_at: Option<DateTime>,
+    #[sea_orm(column_type = "Text")]
+    pub commit: String,
+    #[sea_orm(column_type = "Text")]
+    pub hash: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

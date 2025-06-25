@@ -10,10 +10,9 @@ generator client {
 // common model for timestamps & soft delete would be better handled at app level
 
 model Configuration {
-  id                Int        @id @default(autoincrement())
+  id                String        @id @default(uuid())
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
-  
   // 💽 Data
   values            Json
   // 🔎 Uniqueness filtering
@@ -26,24 +25,27 @@ model Configuration {
 }
 
 model Instance {
-  id              Int            @id @default(autoincrement())
+  id              String            @id @default(uuid())
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
   // 💽 Data
   config          Json
   Configuration   Configuration? @relation(fields: [configurationId], references: [id])
-  configurationId Int?
+  configurationId String?
   startedAt       DateTime       @default(now())
   endedAt         DateTime?
+  commit          String
+  // 🔎 Uniqueness filtering
+  hash            String
   trades          Trade[]
   prices          Price[]
 }
 
 model Trade {
-  id         Int      @id @default(autoincrement())
+  id         String      @id @default(uuid())
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
-  instanceId Int
+  instanceId String
   instance   Instance @relation(fields: [instanceId], references: [id])
   values     Json
 }
@@ -52,10 +54,10 @@ model Trade {
 // Rename MarketContext with inventory, gas, etc.
 
 model Price {
-  id         Int      @id @default(autoincrement())
+  id         String      @id @default(uuid())
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
-  instanceId Int
+  instanceId String
   instance   Instance @relation(fields: [instanceId], references: [id])
   value      Json // market snapshot, prices, etc
 }

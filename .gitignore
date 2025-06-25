@@ -3,6 +3,5 @@
 .env.prod*
 config/.env.*
 dump.rdb
-/src/generated/prisma
+/src/generated
 node_modules
-src/generated

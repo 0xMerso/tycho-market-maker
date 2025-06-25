@@ -190,6 +190,13 @@ impl MarketMakerConfig {
         hash.to_string()
     }
 
+    pub fn instance_hash(&self) -> String {
+        let timestamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos();
+        let instance_data = format!("{}-{}", self.keccak(), timestamp);
+        let hash = alloy_primitives::keccak256(instance_data.as_bytes());
+        hash.to_string()
+    }
+
     pub fn print(&self) {
         tracing::debug!("Market Maker Config:");
         tracing::debug!("  Network:               {} with ID {}", self.network_name, self.chain_id);

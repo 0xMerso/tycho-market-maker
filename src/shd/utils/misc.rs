@@ -8,7 +8,7 @@ pub fn commit() -> Option<String> {
         Ok(output) => {
             if output.status.success() {
                 let commit = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                tracing::debug!("♻️  Commit: {}", commit);
+                // tracing::debug!("♻️  Commit: {}", commit);
                 Some(commit)
             } else {
                 let error_message = String::from_utf8_lossy(&output.stderr);

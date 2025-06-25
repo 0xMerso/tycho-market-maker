@@ -7,6 +7,9 @@ echo $DATABASE_URL
 # Want to keep data but apply destructive changes? Then use migrations instead:
 npx prisma db push --schema=prisma/schema.prisma --force-reset
 
+# === Clean up the DB ===
+# npx prisma migrate reset --force # ! Very destructive, will drop all data
+
 # Environment variables loaded from .env
 # Prisma schema loaded from prisma/schema.prisma
 # Datasource "db": PostgreSQL database "neondb", schema "public" at "ep-quiet-voice-ab4cr3zu-pooler.eu-west-2.aws.neon.tech"

@@ -1,6 +1,6 @@
 use crate::entity::{instance::Model as Instance, trade::Model as Trade};
 use crate::types::config::MarketMakerConfig;
-use crate::types::moni::{MessageType, NewInstanceMessage, RedisMessage, TradeEventMessage};
+use crate::types::moni::{ComponentPriceData, MessageType, NewInstanceMessage, NewPricesMessage, NewTradeMessage, RedisMessage, TradeData};
 use crate::utils::r#static::CHANNEL_REDIS;
 
 use redis::Commands;
@@ -35,21 +35,31 @@ pub fn publish<T: Serialize>(event: &T) {
 }
 
 /// Publish a new instance launch event (for mk2 instances)
-pub fn instance(config: MarketMakerConfig) {
+pub fn instance(config: MarketMakerConfig, commit: String) {
     let message = RedisMessage {
         message: MessageType::NewInstance,
         timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs(),
-        data: serde_json::to_value(NewInstanceMessage { config }).unwrap(),
+        data: serde_json::to_value(NewInstanceMessage { config, commit }).unwrap(),
     };
     publish(&message);
 }
 
 /// Publish a trade event (flexible version that doesn't require database trade model)
-pub fn trade(id: &str) {
+pub fn prices(msg: NewPricesMessage) {
     let message = RedisMessage {
-        message: MessageType::TradeEvent,
+        message: MessageType::NewPrices,
         timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs(),
-        data: serde_json::to_value(TradeEventMessage { id: id.to_string() }).unwrap(),
+        data: serde_json::to_value(msg).unwrap(),
+    };
+    publish(&message);
+}
+
+/// Publish a trade event (flexible version that doesn't require database trade model)
+pub fn trade(config: MarketMakerConfig, trade: TradeData) {
+    let message = RedisMessage {
+        message: MessageType::NewTrade,
+        timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs(),
+        data: serde_json::to_value(NewTradeMessage { config, trade }).unwrap(),
     };
     publish(&message);
 }

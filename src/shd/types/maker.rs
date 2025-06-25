@@ -9,7 +9,7 @@ use tycho_simulation::{
     protocol::{models::ProtocolComponent, state::ProtocolSim},
 };
 
-use crate::core::pricefeed::PriceFeed;
+use crate::{core::pricefeed::PriceFeed, types::moni::ComponentPriceData};
 
 use super::{
     config::{EnvConfig, MarketMakerConfig},
@@ -23,7 +23,7 @@ pub trait IMarketMaker: Send + Sync {
     // Analyzes the optimal way to readjust the market, compute if it's profitable according to a custom MM algo, and returns the execution orders
     async fn readjust(&self, context: MarketContext, inventory: Inventory, crs: Vec<CompReadjustment>, env: EnvConfig) -> Vec<ExecutionOrder>;
     // Retrieves prices, current inventory and market context. Stores some of it in cache memory, optimally reducing latency.
-    fn spot_prices(&self, psc: &Vec<ProtoSimComp>) -> Vec<f64>;
+    fn prices(&self, psc: &Vec<ProtoSimComp>) -> Vec<ComponentPriceData>;
     async fn fetch_inventory(&self, env: EnvConfig) -> Result<Inventory, String>;
     async fn fetch_market_context(&self, components: Vec<ProtocolComponent>, protosims: &HashMap<std::string::String, Box<dyn ProtocolSim>>, tokens: Vec<Token>) -> Option<MarketContext>;
     async fn fetch_eth_usd(&self) -> Result<f64, String>;
@@ -114,14 +114,14 @@ pub struct CompReadjustment {
     pub spread_bps: f64,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Inventory {
     pub base_balance: u128,
     pub quote_balance: u128,
     pub nonce: u64,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MarketContext {
     pub base_to_eth: f64,
     pub quote_to_eth: f64,
@@ -129,7 +129,8 @@ pub struct MarketContext {
     pub max_fee_per_gas: u128,          // maximum base fee : gwei but why ?
     pub max_priority_fee_per_gas: u128, // base_fee_per_gas : 10^9 : gwei
     pub native_gas_price: u128,         // gwei: to be used for gas cost calculations
-    pub block: alloy::rpc::types::Block,
+    // pub block: alloy::rpc::types::Block,
+    pub block: u64,
 }
 
 #[derive(Debug, Clone)]

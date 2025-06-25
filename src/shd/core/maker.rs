@@ -6,6 +6,7 @@ use crate::{
     types::{
         config::{EnvConfig, NetworkName},
         maker::{CompReadjustment, ExecutedPayload, ExecutionOrder, IMarketMaker, Inventory, MarketContext, MarketMaker, PreparedTransaction, SwapCalculation, TradeDirection},
+        moni::{ComponentPriceData, MarketMakerSnapshot, NewPricesMessage},
         tycho::{ProtoSimComp, PsbConfig, SharedTychoStreamState},
     },
     utils::r#static::{ADD_TVL_THRESHOLD, APPROVE_FN_SIGNATURE, BASIS_POINT_DENO, DEFAULT_APPROVE_GAS, DEFAULT_SWAP_GAS, HAS_EXECUTED, NULL_ADDRESS, SHARE_POOL_BAL_SWAP_BPS},
@@ -52,7 +53,7 @@ impl MarketContext {
             self.max_fee_per_gas,
             self.max_priority_fee_per_gas,
             self.native_gas_price,
-            self.block.header.number
+            self.block
         );
     }
 }
@@ -74,7 +75,7 @@ impl IMarketMaker for MarketMaker {
     }
 
     /// Get the prices of the components
-    fn spot_prices(&self, psc: &Vec<ProtoSimComp>) -> Vec<f64> {
+    fn prices(&self, psc: &Vec<ProtoSimComp>) -> Vec<ComponentPriceData> {
         let mut ss = Vec::new();
         for proto in psc.iter() {
             let token0 = proto.component.tokens[0].address.to_string().to_lowercase();
@@ -87,7 +88,11 @@ impl IMarketMaker for MarketMaker {
             };
             match result {
                 Ok(price) => {
-                    ss.push(price);
+                    ss.push(ComponentPriceData {
+                        address: proto.component.id.to_string().to_lowercase(),
+                        r#type: proto.component.protocol_system.to_string(),
+                        price,
+                    });
                 }
                 Err(_) => {
                     tracing::warn!("Failed to get spot price on component {}", proto.component.id);
@@ -182,7 +187,7 @@ impl IMarketMaker for MarketMaker {
                                 max_fee_per_gas: eip1559_fees.max_fee_per_gas,
                                 max_priority_fee_per_gas: eip1559_fees.max_priority_fee_per_gas,
                                 native_gas_price,
-                                block,
+                                block: block.header.number,
                             }),
                             _ => {
                                 tracing::warn!("Failed to get base/ETH quote");
@@ -207,6 +212,7 @@ impl IMarketMaker for MarketMaker {
     // Targets are the pools to monitor, nothing more
     async fn evaluate(&self, targets: &Vec<ProtoSimComp>, sps: Vec<f64>, reference: f64) -> Vec<CompReadjustment> {
         let mut orders = vec![];
+        // let mut snapshots = vec![];
         if sps.is_empty() || targets.len() != sps.len() {
             tracing::warn!("Components targets and spot prices length mismatch ({} != {})", targets.len(), sps.len());
             return vec![];
@@ -227,6 +233,7 @@ impl IMarketMaker for MarketMaker {
                 spread_bps,
                 symbol
             );
+            // let snapshot = MarketSnapshot {};
             if spread_bps.abs() > self.config.target_spread_bps as f64 {
                 match spread_bps > 0. {
                     true => {
@@ -676,25 +683,26 @@ impl IMarketMaker for MarketMaker {
                 // Mainnet
 
                 for (x, tx) in prepared.iter().enumerate() {
-                    if HAS_EXECUTED.load(std::sync::atomic::Ordering::Relaxed) {
-                        // ! This is a hack to prevent the program from executing transactions in testing phase
-                        tracing::info!("⏩ Skipping broadcast - already executed a transaction in the program lifetime");
-                        return;
-                    }
                     tracing::debug!(
                         "Trade: #{} | Broadcasting on {} | Method: {}",
                         x,
                         self.config.network_name.as_str().to_string(),
                         self.config.broadcast_url
                     );
-                    // --- Sending, without waiting for receipt ---
-                    let time = std::time::SystemTime::now();
 
-                    if env.testing {
-                        tracing::info!("⏩ Skipping broadcast - 🧪 Testing mode enabled");
+                    if HAS_EXECUTED.load(std::sync::atomic::Ordering::Relaxed) {
+                        // ! This is a hack to prevent the program from executing transactions in testing phase
+                        tracing::info!("⏩ Skipping broadcast - already executed a transaction in the program lifetime");
                         return;
                     }
 
+                    if env.testing {
+                        tracing::info!("🧪 Skipping broadcast - Testing mode enabled");
+                        return;
+                    }
+
+                    // --- Sending, without waiting for receipt ---
+                    let time = std::time::SystemTime::now();
                     match provider.send_transaction(tx.approval.clone()).await {
                         Ok(approve) => {
                             let approval_time = time.elapsed().unwrap_or_default().as_millis();
@@ -765,14 +773,14 @@ impl IMarketMaker for MarketMaker {
                         Some(msg) => match msg {
                             Ok(msg) => {
                                 let time = std::time::SystemTime::now();
-                                let reference = self.fetch_market_price().await.unwrap_or_default();
+                                let reference_price = self.fetch_market_price().await.unwrap_or_default();
                                 tracing::info!(
                                     "{} '{}' stream: block # {} with {:<2} states updates | Market price: {} | Min exec spread: {}", // , + {} pairs, - {} pairs",
                                     self.config.pair_tag,
                                     self.config.network_name.as_str().to_string(),
                                     msg.block_number,
                                     msg.states.len(),
-                                    reference,
+                                    reference_price,
                                     self.config.min_exec_spread_bps,
                                 );
                                 if !self.ready {
@@ -845,9 +853,19 @@ impl IMarketMaker for MarketMaker {
                                     }
 
                                     // --- Evaluate ---
-
-                                    let prices = self.spot_prices(&targets);
-                                    let readjusments = self.evaluate(&targets.clone(), prices.clone(), reference).await;
+                                    let cpds = self.prices(&targets);
+                                    let instance_hash = self.config.instance_hash();
+                                    let message = NewPricesMessage {
+                                        config: self.config.clone(),
+                                        instance_hash,
+                                        reference_price,
+                                        components: cpds.clone(),
+                                    };
+                                    tracing::debug!("Publishing price message with instance hash: {}", instance_hash);
+                                    crate::data::r#pub::prices(message);
+                                    continue;
+                                    let spots = cpds.iter().map(|x| x.price).collect::<Vec<f64>>();
+                                    let readjusments = self.evaluate(&targets.clone(), spots.clone(), reference_price).await;
                                     if !readjusments.is_empty() {
                                         // --- Market context --- Need ALL components and thus all the protosims too
                                         match self.fetch_market_context(components.clone(), &protosims, atks.clone()).await {
@@ -857,20 +875,14 @@ impl IMarketMaker for MarketMaker {
                                                 match self.fetch_inventory(env.clone()).await {
                                                     Ok(inventory) => {
                                                         // let context = self.market_context().await;
-                                                        let _elasped = time.elapsed().unwrap_or_default().as_millis();
-                                                        // tracing::info!(" - Evaluation until readjustments took {} ms", elasped);
+                                                        let elapsed = time.elapsed().unwrap_or_default().as_millis();
+                                                        tracing::info!(" - Elapsed from block update to readjustments took {} ms", elapsed);
                                                         let orders = self.readjust(context.clone(), inventory.clone(), readjusments, env.clone()).await;
                                                         if orders.is_empty() {
                                                             // tracing::debug!("No readjustments to execute");
                                                         } else {
                                                             let transactions = self.prepare(orders, context.clone(), inventory.clone(), env.clone()).await;
-
-                                                            // Publish trade event
                                                             tracing::info!("Publishing trade event for {}", self.config.identifier());
-                                                            for t in transactions.iter() {
-                                                                // publisher::trade(&format!("mk2-{}", self.config.network_name), &t.approval.hash, "approval_sent");
-                                                                // publisher::trade(&format!("mk2-{}", self.config.network_name), &t.swap.hash, "swap_sent");
-                                                            }
                                                             let simulated = self.simulate(transactions, env.clone()).await;
                                                             let broadcast = self.broadcast(simulated, env.clone()).await;
                                                         }
