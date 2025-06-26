@@ -9,7 +9,7 @@ use tycho_simulation::{
     protocol::{models::ProtocolComponent, state::ProtocolSim},
 };
 
-use crate::{core::pricefeed::PriceFeed, types::moni::ComponentPriceData};
+use crate::core::pricefeed::PriceFeed;
 
 use super::{
     config::{EnvConfig, MarketMakerConfig},
@@ -47,6 +47,8 @@ pub trait IMarketMaker: Send + Sync {
 pub struct MarketMaker {
     // Ready when the ProtocolStreamBuilder is initialised
     pub ready: bool,
+    // Hash of the instance, used to uniquely identify the instance, for external programs (monitoring, etc.)
+    pub identifier: String,
     // Configuration for the market maker
     pub config: MarketMakerConfig,
     // Price feed to use for market price
@@ -75,9 +77,18 @@ impl MarketMakerBuilder {
         Self { config, feed }
     }
 
+    pub fn identifier(&self) -> String {
+        let timestamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
+        // Merging of config.identifier() and timestamp
+        let identifier = format!("{}-instance-{}", self.config.identifier(), timestamp);
+        identifier.to_string()
+    }
+
     pub fn build(self, base: Token, quote: Token) -> Result<MarketMaker, String> {
+        let identifier = self.identifier();
         Ok(MarketMaker {
             ready: false,
+            identifier,
             config: self.config,
             feed: self.feed,
             initialised: false,
@@ -98,6 +109,13 @@ pub struct PriceFeedConfig {
 pub enum TradeDirection {
     Buy,
     Sell,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComponentPriceData {
+    pub address: String,
+    pub r#type: String,
+    pub price: f64,
 }
 
 #[derive(Debug, Clone)]

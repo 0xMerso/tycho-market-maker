@@ -37,12 +37,13 @@ pub async fn handle(msg: &ParsedMessage, env: MoniEnvConfig) {
     match msg {
         ParsedMessage::NewInstance(msg) => {
             tracing::trace!("NewInstance received with config identifier: {}", msg.config.identifier());
-            tracing::trace!("Config Keccak256: {}", msg.config.keccak());
+            let config_hash = msg.config.hash();
+            tracing::trace!("Config Keccak256: {}", config_hash);
             // Current configuration in DB
             let db = connect(env.clone()).await.unwrap();
             // let config = configuration::Entity::find().filter(configuration::Column::Hash.eq(msg.config.keccak())).one(&db).await.unwrap();
             let cfgs = pull::configurations(&db).await.unwrap();
-            let hash = msg.config.keccak().to_lowercase();
+            let hash = config_hash.to_lowercase();
             match cfgs.iter().find(|cfg| cfg.hash.to_lowercase() == hash) {
                 Some(cfg) => {
                     tracing::info!("Configuration found in DB");
@@ -51,7 +52,6 @@ pub async fn handle(msg: &ParsedMessage, env: MoniEnvConfig) {
                     // Get all instances for this configuration
                     let instances = pull::instances(&db).await.unwrap();
                     tracing::trace!("    - Got {} instances for this configuration", instances.len());
-
                     // Closing the last instance, if any
                     match instances.last() {
                         Some(instance) => {
@@ -74,7 +74,7 @@ pub async fn handle(msg: &ParsedMessage, env: MoniEnvConfig) {
                         }
                     };
 
-                    if let Err(err) = create::instance(&db, msg.config.clone(), msg.commit.clone(), cfg).await {
+                    if let Err(err) = create::instance(&db, &cfg, msg.config.clone(), msg.identifier.clone(), msg.commit.clone()).await {
                         tracing::error!("   - Error attaching instance to configuration: {}", err);
                     }
                 }
@@ -82,7 +82,7 @@ pub async fn handle(msg: &ParsedMessage, env: MoniEnvConfig) {
                     tracing::info!("Configuration hash not found in DB. Creating it, and the instance with it ...");
                     match create::configuration(&db, msg.config.clone()).await {
                         Ok(cfg) => {
-                            if let Err(err) = create::instance(&db, msg.config.clone(), msg.commit.clone(), &cfg).await {
+                            if let Err(err) = create::instance(&db, &cfg, msg.config.clone(), msg.identifier.clone(), msg.commit.clone()).await {
                                 tracing::error!("   - Error attaching instance to configuration: {}", err);
                             }
                         }
@@ -94,33 +94,33 @@ pub async fn handle(msg: &ParsedMessage, env: MoniEnvConfig) {
             }
         }
         ParsedMessage::NewPrices(msg) => {
-            tracing::trace!("NewPrices received, with reference_price: {} and instance_hash: {}", msg.reference_price, msg.instance_hash);
+            tracing::trace!("NewPrices received, with reference_price: {} and instance identifier: {}", msg.reference_price, msg.identifier);
             // Find the instance by hash
             let db = connect(env.clone()).await.unwrap();
-
-            match pull::instance_by_hash(&db, &msg.instance_hash).await {
-                Ok(Some(instance)) => {
-                    tracing::debug!("Found instance {} for hash: {}", instance.id, msg.instance_hash);
-                    if let Err(err) = create::price(&db, msg, &instance).await {
-                        tracing::error!("Error storing price data: {}", err);
+            match pull::instances(&db).await {
+                Ok(instances) => {
+                    // Return the first ? Hmmm
+                    let instance = instances.into_iter().find(|inst| inst.identifier == msg.identifier);
+                    match instance {
+                        Some(instance) => {
+                            // tracing::debug!("Found instance {} for identifier: {}", instance.id, msg.identifier);
+                            if let Err(err) = create::price(&db, &instance, msg).await {
+                                tracing::error!("Error storing price data: {}", err);
+                            }
+                        }
+                        None => {
+                            tracing::warn!("Instance not found for hash: {}", msg.identifier);
+                        }
                     }
                 }
-                Ok(None) => {
-                    tracing::warn!("Instance not found for hash: {}", msg.instance_hash);
-                    // Log available hashes for debugging
-                    let instances = pull::instances(&db).await.unwrap();
-                    tracing::debug!("Available instance hashes: {:?}", instances.iter().map(|i| &i.hash).collect::<Vec<_>>());
-                }
+
                 Err(err) => {
                     tracing::error!("Error finding instance by hash: {}", err);
                 }
             }
         }
-        ParsedMessage::NewIntent(msg) => {
-            tracing::trace!("NewIntent received, with config identifier: {}", msg.config.identifier());
-        }
         ParsedMessage::NewTrade(msg) => {
-            tracing::trace!("NewTrade received, with config identifier: {}", msg.config.identifier());
+            tracing::trace!("NewTrade received, with instance identifier: {}", msg.identifier);
         }
         ParsedMessage::Unknown(data) => {
             tracing::warn!("Unknown message type: {:?}", data);
@@ -130,9 +130,14 @@ pub async fn handle(msg: &ParsedMessage, env: MoniEnvConfig) {
 
 pub mod create {
 
+    use std::process::id;
+
     use crate::{
         entity::{configuration, price, trade},
-        types::config::MarketMakerConfig,
+        types::{
+            config::MarketMakerConfig,
+            moni::{NewPricesMessage, NewTradeMessage},
+        },
     };
 
     use super::*;
@@ -144,7 +149,7 @@ pub mod create {
             created_at: Set(now),
             updated_at: Set(now),
             values: Set(config),
-            hash: Set(mmc.keccak()),
+            hash: Set(mmc.hash()),
             chain_id: Set(mmc.chain_id as i32),
             base_token_address: Set(mmc.base_token_address),
             quote_token_address: Set(mmc.quote_token_address),
@@ -152,21 +157,20 @@ pub mod create {
         };
         match model.insert(db).await {
             Ok(inserted) => {
-                tracing::info!("🐘 Successfully inserted configuration (id: {})", inserted.id);
+                tracing::info!("Successfully inserted configuration: {}", inserted.id);
                 Ok(inserted)
             }
             Err(err) => {
-                tracing::error!("🐘 Error inserting: {}", err);
+                tracing::error!("Error inserting: {}", err);
                 Err(err)
             }
         }
     }
 
     /// Insert a new Bot and return its full Model (with id, timestamps, …)
-    pub async fn instance(db: &DatabaseConnection, mmc: MarketMakerConfig, commit: String, cfg: &configuration::Model) -> Result<instance::Model, sea_orm::DbErr> {
+    pub async fn instance(db: &DatabaseConnection, cfg: &configuration::Model, mmc: MarketMakerConfig, identifier: String, commit: String) -> Result<instance::Model, sea_orm::DbErr> {
         let now = chrono::Utc::now().naive_utc();
         let config = json!(mmc);
-        let instance_hash = mmc.instance_hash();
         let model = instance::ActiveModel {
             config: Set(config),
             created_at: Set(now),
@@ -175,30 +179,52 @@ pub mod create {
             started_at: Set(now),
             commit: Set(commit),
             ended_at: Set(None),
-            hash: Set(instance_hash),
+            identifier: Set(identifier.clone()),
             id: Set(Uuid::new_v4().to_string()),
         };
         match model.insert(db).await {
             Ok(inserted) => {
-                tracing::info!("🐘 Successfully inserted instance (id: {}) with hash: {}", inserted.id, inserted.hash);
+                // tracing::info!("Successfully inserted instance: {}", inserted.id);
                 Ok(inserted)
             }
             Err(err) => {
-                tracing::error!("🐘 Error inserting: {}", err);
+                tracing::error!("Error inserting: {}", err);
+                Err(err)
+            }
+        }
+    }
+
+    /// Insert a new price record and return its full Model
+    pub async fn price(db: &DatabaseConnection, instance: &instance::Model, msg: &NewPricesMessage) -> Result<price::Model, sea_orm::DbErr> {
+        let now = chrono::Utc::now().naive_utc();
+        let model = price::ActiveModel {
+            created_at: Set(now),
+            updated_at: Set(now),
+            instance_id: Set(instance.id.clone()),
+            value: Set(json!(msg)),
+            id: Set(Uuid::new_v4().to_string()),
+        };
+        match model.insert(db).await {
+            Ok(inserted) => {
+                // tracing::info!("🐘 Inserted 'price' succeeded: {} for instance: {}", inserted.id, instance.identifier);
+                Ok(inserted)
+            }
+            Err(err) => {
+                tracing::error!("🐘 Error inserting price: {}", err);
                 Err(err)
             }
         }
     }
 
     /// Insert a new Bot and return its full Model (with id, timestamps, …)
-    pub async fn trade(db: &DatabaseConnection, mmc: MarketMakerConfig, instance: &instance::Model) -> Result<trade::Model, sea_orm::DbErr> {
+    pub async fn trade(db: &DatabaseConnection, instance: &instance::Model, msg: NewTradeMessage) -> Result<trade::Model, sea_orm::DbErr> {
         let now = chrono::Utc::now().naive_utc();
-        let config = json!(mmc);
+        let config = json!(msg);
         let model = trade::ActiveModel {
             created_at: Set(now),
             updated_at: Set(now),
             instance_id: Set(instance.id.clone()),
-            values: Set(json!({})),
+            values: Set(json!(msg)),
             id: Set(Uuid::new_v4().to_string()),
         };
         match model.insert(db).await {
@@ -208,34 +234,6 @@ pub mod create {
             }
             Err(err) => {
                 tracing::error!("🐘 Error inserting: {}", err);
-                Err(err)
-            }
-        }
-    }
-
-    /// Insert a new price record and return its full Model
-    pub async fn price(db: &DatabaseConnection, price_data: &crate::types::moni::NewPricesMessage, instance: &instance::Model) -> Result<price::Model, sea_orm::DbErr> {
-        let now = chrono::Utc::now().naive_utc();
-        let price_value = json!({
-            "instance_hash": price_data.instance_hash,
-            "reference_price": price_data.reference_price,
-            "components": price_data.components,
-            "timestamp": now.timestamp(),
-        });
-        let model = price::ActiveModel {
-            created_at: Set(now),
-            updated_at: Set(now),
-            instance_id: Set(instance.id.clone()),
-            value: Set(price_value),
-            id: Set(Uuid::new_v4().to_string()),
-        };
-        match model.insert(db).await {
-            Ok(inserted) => {
-                tracing::info!("🐘 Inserted 'price' succeeded: {} for instance: {} (hash: {})", inserted.id, instance.id, price_data.instance_hash);
-                Ok(inserted)
-            }
-            Err(err) => {
-                tracing::error!("🐘 Error inserting price: {}", err);
                 Err(err)
             }
         }
@@ -269,10 +267,5 @@ pub mod pull {
         let models = price::Entity::find().all(db).await?;
         // tracing::tracing!("Got {} prices in DB", models.len());
         Ok(models)
-    }
-
-    pub async fn instance_by_hash(db: &DatabaseConnection, hash: &str) -> Result<Option<instance::Model>, sea_orm::DbErr> {
-        let instances = instance::Entity::find().all(db).await?;
-        Ok(instances.into_iter().find(|inst| inst.hash == hash))
     }
 }

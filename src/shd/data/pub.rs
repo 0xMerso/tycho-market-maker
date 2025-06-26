@@ -1,6 +1,6 @@
 use crate::entity::{instance::Model as Instance, trade::Model as Trade};
 use crate::types::config::MarketMakerConfig;
-use crate::types::moni::{ComponentPriceData, MessageType, NewInstanceMessage, NewPricesMessage, NewTradeMessage, RedisMessage, TradeData};
+use crate::types::moni::{MessageType, NewInstanceMessage, NewPricesMessage, NewTradeMessage, RedisMessage};
 use crate::utils::r#static::CHANNEL_REDIS;
 
 use redis::Commands;
@@ -35,11 +35,11 @@ pub fn publish<T: Serialize>(event: &T) {
 }
 
 /// Publish a new instance launch event (for mk2 instances)
-pub fn instance(config: MarketMakerConfig, commit: String) {
+pub fn instance(msg: NewInstanceMessage) {
     let message = RedisMessage {
         message: MessageType::NewInstance,
         timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs(),
-        data: serde_json::to_value(NewInstanceMessage { config, commit }).unwrap(),
+        data: serde_json::to_value(msg).unwrap(),
     };
     publish(&message);
 }
@@ -55,11 +55,11 @@ pub fn prices(msg: NewPricesMessage) {
 }
 
 /// Publish a trade event (flexible version that doesn't require database trade model)
-pub fn trade(config: MarketMakerConfig, trade: TradeData) {
+pub fn trade(msg: NewTradeMessage) {
     let message = RedisMessage {
         message: MessageType::NewTrade,
         timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs(),
-        data: serde_json::to_value(NewTradeMessage { config, trade }).unwrap(),
+        data: serde_json::to_value(msg).unwrap(),
     };
     publish(&message);
 }

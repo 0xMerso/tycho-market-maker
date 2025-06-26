@@ -5,8 +5,8 @@ use crate::{
     helpers::global::{cpname, get_alloy_chain, get_component_balances},
     types::{
         config::{EnvConfig, NetworkName},
-        maker::{CompReadjustment, ExecutedPayload, ExecutionOrder, IMarketMaker, Inventory, MarketContext, MarketMaker, PreparedTransaction, SwapCalculation, TradeDirection},
-        moni::{ComponentPriceData, MarketMakerSnapshot, NewPricesMessage},
+        maker::{CompReadjustment, ComponentPriceData, ExecutedPayload, ExecutionOrder, IMarketMaker, Inventory, MarketContext, MarketMaker, PreparedTransaction, SwapCalculation, TradeDirection},
+        moni::NewPricesMessage,
         tycho::{ProtoSimComp, PsbConfig, SharedTychoStreamState},
     },
     utils::r#static::{ADD_TVL_THRESHOLD, APPROVE_FN_SIGNATURE, BASIS_POINT_DENO, DEFAULT_APPROVE_GAS, DEFAULT_SWAP_GAS, HAS_EXECUTED, NULL_ADDRESS, SHARE_POOL_BAL_SWAP_BPS},
@@ -324,7 +324,7 @@ impl IMarketMaker for MarketMaker {
             let selling_amount = max_alloc; // For testing
             let buying_amount = if base_to_quote { selling_amount * adjustment.spot } else { selling_amount / adjustment.spot };
             let pool_msg = format!(
-                "   - Pool {} | Tycho Spot: {:>12.5} vs ref {:>12.5} | Spread: {:>7.2} {} = {:>5.0} bps",
+                " - Pool {} | Tycho Spot: {:>12.5} vs ref {:>12.5} | Spread: {:>7.2} {} = {:>5.0} bps",
                 cpname(adjustment.psc.component.clone()),
                 adjustment.spot,
                 adjustment.reference,
@@ -333,7 +333,7 @@ impl IMarketMaker for MarketMaker {
                 adjustment.spread_bps,
             );
             let inventory_msg = format!(
-                " Inventory: {:.2} {} | Optimal: {:.} | Max: {:.5} | Selling {:.5} {} for {:.5} {}",
+                " - Inventory: {:.2} {} | Optimal: {:.} | Max: {:.5} | Selling {:.5} {} for {:.5} {}",
                 inventory_balance_normalized, selling.symbol, optimal, max_alloc, selling_amount, selling.symbol, buying_amount, buying.symbol
             );
             tracing::debug!("{} | {}", pool_msg, inventory_msg);
@@ -358,7 +358,7 @@ impl IMarketMaker for MarketMaker {
                     let gas_cost_usd = gas_cost_eth * context.eth_to_usd;
                     let gas_cost_in_output = if base_to_quote { gas_cost_eth / context.quote_to_eth } else { gas_cost_eth / context.base_to_eth };
                     tracing::debug!(
-                        "   - Swap: {:.5} {} for {:.5} {} | Gas cost : {:.5} $ | Gas cost in output: {:.2} %",
+                        " - Swap: {:.5} {} for {:.5} {} | Gas cost : {:.5} $ | Gas cost in output: {:.2} %",
                         selling_amount,
                         selling.symbol,
                         amount_out_normalized,
@@ -388,7 +388,7 @@ impl IMarketMaker for MarketMaker {
                     let potential_profit_delta_spread_bps = potential_profit_delta / adjustment.reference * BASIS_POINT_DENO;
                     let profitable = potential_profit_delta_spread_bps > self.config.min_exec_spread_bps;
                     tracing::debug!(
-                        "   => Profit: {}  with average_sell_price_net_gas: {:.4} vs reference_price: {:.4} | potential_profit_delta: {:.5} | potential_profit_delta_spread_bps: {:.2}",
+                        " - Profit: {}  with average_sell_price_net_gas: {:.4} vs reference_price: {:.4} | potential_profit_delta: {:.5} | potential_profit_delta_spread_bps: {:.2}",
                         if potential_profit_delta > 0. { "💵" } else { "🔻" },
                         average_sell_price_net_gas,
                         adjustment.reference,
@@ -640,7 +640,7 @@ impl IMarketMaker for MarketMaker {
                 match provider.simulate(&payload).await {
                     Ok(output) => {
                         for block in output.iter() {
-                            tracing::trace!(" 🧪 Simulated Block {}:", block.inner.header.number);
+                            tracing::trace!(" 🔮 Simulated Block {}:", block.inner.header.number);
                             for (x, scr) in block.calls.iter().enumerate() {
                                 let name = names.get(x).unwrap();
                                 tracing::trace!("  SimCallResult for '{}': Gas: {} | Simulation status: {}", name, scr.gas_used, scr.status);
@@ -669,7 +669,6 @@ impl IMarketMaker for MarketMaker {
     /// Swap are sensitive to MEV so we need to be careful
     /// Logic depends on the network
     async fn broadcast(&self, prepared: Vec<PreparedTransaction>, env: EnvConfig) {
-        tracing::debug!("Broadcasting");
         let alloy_chain = get_alloy_chain(self.config.network_name.as_str().to_string()).expect("Failed to get alloy chain");
         let rpc = self.config.rpc_url.parse::<url::Url>().unwrap().clone(); // ! Custom per network
         let pk = env.wallet_private_key.clone();
@@ -764,6 +763,7 @@ impl IMarketMaker for MarketMaker {
             let atks = state.atks.clone();
             drop(state);
             let mut components = vec![];
+            let mut previous_reference_price = 0.0;
             let mut protosims: HashMap<String, Box<dyn ProtocolSim>> = HashMap::new();
             let psb = crate::helpers::global::psb(self.config.clone(), env.tycho_api_key.to_string(), psbc.clone(), atks.clone()).await;
             let _stream = match psb.build().await {
@@ -774,6 +774,7 @@ impl IMarketMaker for MarketMaker {
                             Ok(msg) => {
                                 let time = std::time::SystemTime::now();
                                 let reference_price = self.fetch_market_price().await.unwrap_or_default();
+
                                 tracing::info!(
                                     "{} '{}' stream: block # {} with {:<2} states updates | Market price: {} | Min exec spread: {}", // , + {} pairs, - {} pairs",
                                     self.config.pair_tag,
@@ -854,18 +855,21 @@ impl IMarketMaker for MarketMaker {
 
                                     // --- Evaluate ---
                                     let cpds = self.prices(&targets);
-                                    let instance_hash = self.config.instance_hash();
-                                    let message = NewPricesMessage {
-                                        config: self.config.clone(),
-                                        instance_hash,
-                                        reference_price,
-                                        components: cpds.clone(),
-                                    };
-                                    tracing::debug!("Publishing price message with instance hash: {}", instance_hash);
-                                    crate::data::r#pub::prices(message);
+                                    let identifier = self.identifier.clone();
+
+                                    tracing::debug!("Price: from {} to {}", previous_reference_price, reference_price);
+                                    if reference_price != previous_reference_price {
+                                        crate::data::r#pub::prices(NewPricesMessage {
+                                            identifier: identifier.clone(),
+                                            reference_price,
+                                            components: cpds.clone(),
+                                            block: msg.block_number,
+                                        });
+                                        previous_reference_price = reference_price;
+                                    }
                                     continue;
-                                    let spots = cpds.iter().map(|x| x.price).collect::<Vec<f64>>();
-                                    let readjusments = self.evaluate(&targets.clone(), spots.clone(), reference_price).await;
+                                    let spot_prices = cpds.iter().map(|x| x.price).collect::<Vec<f64>>();
+                                    let readjusments = self.evaluate(&targets.clone(), spot_prices.clone(), reference_price).await;
                                     if !readjusments.is_empty() {
                                         // --- Market context --- Need ALL components and thus all the protosims too
                                         match self.fetch_market_context(components.clone(), &protosims, atks.clone()).await {
@@ -876,14 +880,15 @@ impl IMarketMaker for MarketMaker {
                                                     Ok(inventory) => {
                                                         // let context = self.market_context().await;
                                                         let elapsed = time.elapsed().unwrap_or_default().as_millis();
-                                                        tracing::info!(" - Elapsed from block update to readjustments took {} ms", elapsed);
                                                         let orders = self.readjust(context.clone(), inventory.clone(), readjusments, env.clone()).await;
+                                                        tracing::info!("Elapsed from block_update to readjustments: {} ms", elapsed);
                                                         if orders.is_empty() {
                                                             // tracing::debug!("No readjustments to execute");
                                                         } else {
                                                             let transactions = self.prepare(orders, context.clone(), inventory.clone(), env.clone()).await;
-                                                            tracing::info!("Publishing trade event for {}", self.config.identifier());
+                                                            // tracing::info!("Publishing trade event for {}", self.config.identifier());
                                                             let simulated = self.simulate(transactions, env.clone()).await;
+                                                            tracing::info!("Elapsed from block update to broadcast: {} ms", elapsed);
                                                             let broadcast = self.broadcast(simulated, env.clone()).await;
                                                         }
                                                     }

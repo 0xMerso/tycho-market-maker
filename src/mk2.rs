@@ -6,6 +6,7 @@ use shd::{
     types::{
         config::EnvConfig,
         maker::{IMarketMaker, MarketMakerBuilder},
+        moni::NewInstanceMessage,
         tycho::TychoStreamState,
     },
     utils::r#static::RESTART,
@@ -26,9 +27,9 @@ async fn main() {
     // let config = shd::types::config::load_market_maker_config("config/mmc.mainnet.toml");
     let config = shd::types::config::load_market_maker_config(env.path.as_str());
     config.print();
-    tracing::debug!("🤖 MarketMaker Identifier: '{}'", config.identifier());
+    tracing::debug!("🤖 MarketMaker Config Identifier: '{}'", config.identifier());
     let latest = shd::utils::evm::latest(config.rpc_url.clone()).await;
-    tracing::info!("--- Launching Tycho Market Maker --- | 🧪 Testing mode: {:?} | Latest block: {}", env.testing, latest);
+    tracing::info!("Launching Tycho Market Maker | 🧪 Testing mode: {:?} | Latest block: {}", env.testing, latest);
     // ============================================== Initialisation ==============================================
     // shd::utils::uptime::hearbeats(config.clone(), env.clone()).await;
     let pft = config.price_feed_config.r#type.as_str();
@@ -40,13 +41,16 @@ async fn main() {
 
     let commit = shd::utils::misc::commit().unwrap_or_default();
     tracing::info!("♻️  MarketMaker program commit: {:?}", commit);
-    shd::data::r#pub::instance(config.clone(), commit.clone());
 
     // Monitoring transactions via shared cache via hashmap, no Redis
     let base = config.base_token_address.clone().to_lowercase();
     let quote = config.quote_token_address.clone().to_lowercase();
     match shd::helpers::global::tokens(config.clone(), Some(env.tycho_api_key.as_str())).await {
         Some(tokens) => {
+            // Save tokens to local file JSON
+            // let path = format!("src/shd/data/tokens/{}.json", config.network_name);
+            // shd::utils::misc::save(tokens.clone(), path.as_str());
+
             let base = tokens
                 .iter()
                 .find(|t| t.address.to_string() == base)
@@ -57,10 +61,15 @@ async fn main() {
                 .unwrap_or_else(|| panic!("Quote token not found in the list of tokens: {}", quote));
 
             tracing::info!("Base  token: {} | Quote token: {}", base.symbol, quote.symbol);
-            let mut mk = MarketMakerBuilder::new(config.clone(), feed)
-                .build(base.clone(), quote.clone())
-                .expect("Failed to build Market Maker with the given config");
-            shd::core::inventory::wallet(config.clone(), env.clone()).await;
+            let builder = MarketMakerBuilder::new(config.clone(), feed);
+            let mut mk = builder.build(base.clone(), quote.clone()).expect("Failed to build Market Maker with the given config");
+            shd::data::r#pub::instance(NewInstanceMessage {
+                config: config.clone(),
+                identifier: mk.identifier.clone(),
+                commit: commit.clone(),
+            });
+
+            // shd::core::inventory::wallet(config.clone(), env.clone()).await;
             if let Ok(price) = mk.fetch_market_price().await {
                 tracing::info!("Market Price: {:?} ({})", price, config.price_feed_config.r#type);
             }

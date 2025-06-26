@@ -18,4 +18,4 @@ pub static DEFAULT_SWAP_GAS: u64 = 500_000;
 pub static HAS_EXECUTED: AtomicBool = AtomicBool::new(false);
 
 /// Monitoring
-pub static CHANNEL_REDIS: &str = "PubSub_Chan_Rd_MM"; // Channel Redis MM
+pub static CHANNEL_REDIS: &str = "PubSub_Channel_Redis_MarketMaker"; // Channel Redis MM

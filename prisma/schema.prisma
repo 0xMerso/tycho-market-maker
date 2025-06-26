@@ -36,7 +36,7 @@ model Instance {
   endedAt         DateTime?
   commit          String
   // 🔎 Uniqueness filtering
-  hash            String
+  identifier            String
   trades          Trade[]
   prices          Price[]
 }

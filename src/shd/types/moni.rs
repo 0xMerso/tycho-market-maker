@@ -4,31 +4,8 @@ use serde_json::Value;
 
 use crate::types::{
     config::MarketMakerConfig,
-    maker::{Inventory, MarketContext},
+    maker::{ComponentPriceData, Inventory, MarketContext},
 };
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TradeData {
-    pub hash: i64,
-    pub context: Value,
-}
-
-// In theory, snapshot should be made at a network block time frequency, but it can slightly vary
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MarketMakerSnapshot {
-    pub block: u64,
-    pub timestamp: u64,
-    pub reference_price: f64,
-    pub market_context: MarketContext,
-    pub components: Vec<ComponentPriceData>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ComponentPriceData {
-    pub address: String,
-    pub r#type: String,
-    pub price: f64,
-}
 
 /// ======================================================================================= Events PUB/SUB =====================================================================================================
 /// Redis message structure
@@ -45,24 +22,25 @@ pub struct RedisMessage {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct NewInstanceMessage {
     pub config: MarketMakerConfig, // Contain the whole data to be stored in DB
+    pub identifier: String,
     pub commit: String,
 }
 
 /// New price message (simplified)
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct NewPricesMessage {
-    pub config: MarketMakerConfig, // Add config to link to instance
-    pub instance_hash: String,     // Add instance hash for precise linking
+    pub identifier: String,
     pub reference_price: f64,
     pub components: Vec<ComponentPriceData>,
+    pub block: u64,
 }
 
 /// Trade event message (simplified)
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct NewTradeMessage {
-    pub config: MarketMakerConfig,
-    pub instance_hash: String, // Add instance hash for precise linking
-    pub trade: TradeData,
+    pub identifier: String,
+    pub block: u64,
+    pub hash: Option<String>,
 }
 
 /// Parsed message content
@@ -70,7 +48,6 @@ pub struct NewTradeMessage {
 pub enum ParsedMessage {
     NewInstance(NewInstanceMessage),
     NewPrices(NewPricesMessage),
-    NewIntent(NewTradeMessage),
     NewTrade(NewTradeMessage),
     Unknown(Value),
 }

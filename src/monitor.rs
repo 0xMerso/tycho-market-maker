@@ -43,7 +43,6 @@ async fn main() {
     match shd::data::neon::connect(env.clone()).await {
         Ok(db) => {
             tracing::info!("🐘 Neon connected");
-
             // Pull configurations from DB
             match shd::data::neon::pull::configurations(&db).await {
                 Ok(configurations) => {
@@ -55,7 +54,6 @@ async fn main() {
                     return;
                 }
             }
-
             tracing::info!("🐘 Starting infinite listening of the Redis pub-sub channel: {}, for MM events", CHANNEL_REDIS);
             shd::data::sub::listen(env.clone()).await;
         }

@@ -177,23 +177,14 @@ pub struct MarketMakerConfig {
 impl MarketMakerConfig {
     /// mk-instance-<network_name>-<chain_id>-<base_token_symbol>-<quote_token_symbol>-<pub_address>
     pub fn identifier(&self) -> String {
-        let msg = format!(
-            "market_maker_instance-{}-{}-{}-{}-{}",
-            self.network_name, self.chain_id, self.base_token, self.quote_token, self.wallet_public_key
-        );
+        let f7 = self.wallet_public_key[..9].to_string(); // 0x + 7 chars
+        let msg = format!("mmc-{}-{}-{}-{}", self.network_name, self.base_token, self.quote_token, f7);
         msg.to_lowercase()
     }
 
-    pub fn keccak(&self) -> String {
+    pub fn hash(&self) -> String {
         let serialized = serde_json::to_string(self).unwrap();
         let hash = alloy_primitives::keccak256(serialized.as_bytes());
-        hash.to_string()
-    }
-
-    pub fn instance_hash(&self) -> String {
-        let timestamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos();
-        let instance_data = format!("{}-{}", self.keccak(), timestamp);
-        let hash = alloy_primitives::keccak256(instance_data.as_bytes());
         hash.to_string()
     }
 

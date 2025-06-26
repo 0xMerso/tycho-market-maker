@@ -23,7 +23,7 @@ pub struct Model {
     #[sea_orm(column_type = "Text")]
     pub commit: String,
     #[sea_orm(column_type = "Text")]
-    pub hash: String,
+    pub identifier: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
