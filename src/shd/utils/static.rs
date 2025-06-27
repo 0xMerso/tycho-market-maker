@@ -19,3 +19,6 @@ pub static HAS_EXECUTED: AtomicBool = AtomicBool::new(false);
 
 /// Monitoring
 pub static CHANNEL_REDIS: &str = "PubSub_Channel_Redis_MarketMaker"; // Channel Redis MM
+
+pub static PRICE_MOVE_THRESHOLD: f64 = 1.0; // 1/100 of 1 bps
+pub static PRICE_MOVE_DENO: f64 = 1_000_000.0; // 1/100 of 1 bps denominator

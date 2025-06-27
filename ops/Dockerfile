@@ -1,42 +1,54 @@
-FROM rust:slim
-# Install required dependencies in one command
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    libssl-dev pkg-config curl git build-essential && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
-# Set a workspace directory
+# Builder stage: use the official Rust+Alpine image for a minimal toolchain
+FROM rust:1.87.0-alpine3.18 AS builder
+
+# install native build-deps plus Node.js/npm for Prisma
+RUN apk add --no-cache \
+  build-base \
+  openssl-dev \
+  pkgconfig \
+  curl \
+  git \
+  nodejs \
+  npm
+
 WORKDIR /workspace
-RUN echo $(ls -la /tmp/x)
 
-# Copy local projects into container maintaining the relative structure
-COPY back ./back
-COPY sdk ./sdk
+# copy only manifests to cache Rust & JS dependencies
+COPY Cargo.toml Cargo.lock ./
+COPY package*.json ./
+COPY prisma ./prisma
 
-# Optional: Print directory and file details for debugging
-# RUN ls -la /workspace && \
-#     ls -la /workspace/sdk && \
-#     cat /workspace/back/Cargo.toml && \
-#     cat /workspace/sdk/Cargo.toml
+# install JS deps and generate Prisma client
+RUN npm install && npx prisma generate
 
-# Change working directory to 'back' so that Cargo.toml’s relative path works as expected (../sdk)
-WORKDIR /workspace/back
-RUN echo $(ls -1 /tmp/dir)
-# Remove any local patch override file if present
+# now copy full source
+COPY . .
+
+# remove any local override
 RUN rm -f .cargo/config.toml
-# Accept build arguments for build type and program name
-ARG BUILD_TYPE=release
-ARG PROGRAM=stream #! To CHANGE
-ENV BUILD_TYPE=${BUILD_TYPE}
-ENV PROGRAM=${PROGRAM}
-RUN echo "Binary: $PROGRAM, Build type: $BUILD_TYPE"
-# Build the program based on BUILD_TYPE
-RUN if [ "$BUILD_TYPE" = "release" ]; then \
-    cargo build --release --bin $PROGRAM; \
-    else \
-    cargo build --bin $PROGRAM; \
-    fi
-# Set entrypoint to run the built binary
-CMD [ "bash", "-c", "if [ \"$BUILD_TYPE\" = \"release\" ]; then exec ./target/release/$PROGRAM; else exec ./target/debug/$PROGRAM; fi" ]
 
+# accept build args
+ARG BUILD_TYPE=debug
+ARG PROGRAM
 
+# build the program
+RUN cargo build --bin "$PROGRAM"
+
+# Runtime stage: tiny Alpine with only needed libraries
+FROM alpine:3.18
+
+# install runtime SSL
+RUN apk add --no-cache openssl
+
+WORKDIR /workspace
+
+# re-declare args so we can use them here
+ARG BUILD_TYPE=debug
+ARG PROGRAM
+
+# copy the compiled binary from builder
+COPY --from=builder /workspace/target/${BUILD_TYPE}/$PROGRAM /usr/local/bin/$PROGRAM
+
+# entrypoint just runs your program
+ENTRYPOINT ["/usr/local/bin/"]
+CMD ["${PROGRAM}"]

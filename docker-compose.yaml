@@ -13,7 +13,7 @@ services:
       dockerfile: ops/Dockerfile
       args:
         - PROGRAM=mk2
-        - BUILD_TYPE=debug # ! To adapt
+        - BUILD_TYPE=debug #!
     ports:
       - "42042:42042"
     depends_on:
@@ -22,30 +22,7 @@ services:
       redis:
         condition: service_healthy
     env_file:
-      - config/.env.ex # ! Tmp
-    environment:
-      - RUST_LOG="off,mk2=trace,shd=trace,monitor=trace,test=trace"
-      - REDIS_HOST=redis
-    restart: always
-    networks:
-      - tmm
-
-  mk2-base-alpha:
-    build: 
-      context: .
-      dockerfile: ops/Dockerfile
-      args:
-        - PROGRAM=mk2
-        - BUILD_TYPE=debug # ! To adapt
-    ports:
-      - "42042:42042"
-    depends_on:
-      monitor:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    env_file:
-      - config/.env.ex # ! Tmp
+      - config/.env.mk2.ex #!
     environment:
       - RUST_LOG="off,mk2=trace,shd=trace,monitor=trace,test=trace"
       - REDIS_HOST=redis
@@ -59,14 +36,14 @@ services:
       dockerfile: ops/Dockerfile
       args:
         - PROGRAM=monitor
-        - BUILD_TYPE=debug # ! To adapt
-    ports:
-      - "42043:42043"
+        - BUILD_TYPE=debug #!
+    # ports:
+    #   - "42043:42043"
     depends_on:
       redis:
         condition: service_healthy
     env_file:
-      - config/.env.ex # ! Tmp
+      - config/.env.moni.ex #!
     environment:
       - RUST_LOG="off,mk2=trace,shd=trace,monitor=trace,test=trace"
       - REDIS_HOST=redis

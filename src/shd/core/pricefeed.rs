@@ -79,7 +79,7 @@ pub async fn binance(endpoint: String) -> Result<f64, String> {
                     return Err(format!("Error deserializing response: {:?}", e));
                 }
                 let data = result.unwrap();
-                // tracing::debug!("Price data fetched from Binance: {:?}", data);
+                tracing::debug!("Price data fetched from Binance: {:?}", data);
                 match data.price.parse::<f64>() {
                     Ok(price) => Ok(price),
                     Err(e) => {

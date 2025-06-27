@@ -9,7 +9,9 @@ use crate::{
         moni::NewPricesMessage,
         tycho::{ProtoSimComp, PsbConfig, SharedTychoStreamState},
     },
-    utils::r#static::{ADD_TVL_THRESHOLD, APPROVE_FN_SIGNATURE, BASIS_POINT_DENO, DEFAULT_APPROVE_GAS, DEFAULT_SWAP_GAS, HAS_EXECUTED, NULL_ADDRESS, SHARE_POOL_BAL_SWAP_BPS},
+    utils::r#static::{
+        ADD_TVL_THRESHOLD, APPROVE_FN_SIGNATURE, BASIS_POINT_DENO, DEFAULT_APPROVE_GAS, DEFAULT_SWAP_GAS, HAS_EXECUTED, NULL_ADDRESS, PRICE_MOVE_DENO, PRICE_MOVE_THRESHOLD, SHARE_POOL_BAL_SWAP_BPS,
+    },
 };
 use alloy::{
     consensus::transaction,
@@ -853,12 +855,16 @@ impl IMarketMaker for MarketMaker {
                                         }
                                     }
 
-                                    // --- Evaluate ---
                                     let cpds = self.prices(&targets);
                                     let identifier = self.identifier.clone();
-
-                                    tracing::debug!("Price: from {} to {}", previous_reference_price, reference_price);
-                                    if reference_price != previous_reference_price {
+                                    // --- Price move evaluation ---
+                                    let price_move_bps = if previous_reference_price != 0.0 {
+                                        ((reference_price - previous_reference_price).abs() / previous_reference_price) * PRICE_MOVE_DENO
+                                    } else {
+                                        // First run - always push to DB since we have no previous price
+                                        PRICE_MOVE_THRESHOLD + 1.0
+                                    };
+                                    if price_move_bps > PRICE_MOVE_THRESHOLD {
                                         crate::data::r#pub::prices(NewPricesMessage {
                                             identifier: identifier.clone(),
                                             reference_price,
@@ -866,8 +872,11 @@ impl IMarketMaker for MarketMaker {
                                             block: msg.block_number,
                                         });
                                         previous_reference_price = reference_price;
+                                    } else {
+                                        tracing::info!("Price movement under threshold (threshold: {})", PRICE_MOVE_THRESHOLD);
+                                        continue;
                                     }
-                                    continue;
+                                    // --- Evaluate ---
                                     let spot_prices = cpds.iter().map(|x| x.price).collect::<Vec<f64>>();
                                     let readjusments = self.evaluate(&targets.clone(), spot_prices.clone(), reference_price).await;
                                     if !readjusments.is_empty() {

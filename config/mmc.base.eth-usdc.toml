@@ -31,5 +31,7 @@ tycho_router_address = "0xea3207778e39EB02D72C9D3c4Eac7E224ac5d369"
 poll_interval_ms = 1000
 
 [price_feed_config]
-type = "chainlink"
-source = "0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70"
+# type = "chainlink"
+# source = "0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70"
+type = "binance"
+source = "https://api.binance.com/api/v3"
