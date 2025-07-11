@@ -110,7 +110,17 @@ impl PriceFeed for ChainlinkPriceFeed {
     /// @endpoint: RPC
     async fn get(&self, mmc: MarketMakerConfig) -> Result<f64, String> {
         // tracing::debug!("Fetching price from Chainlink at {:?}", mmc.pfc.source);
-        chainlink(mmc.rpc_url.clone(), mmc.price_feed_config.source.clone()).await
+        let price = chainlink(mmc.rpc_url.clone(), mmc.price_feed_config.source.clone()).await;
+        match price {
+            Ok(price) => {
+                if mmc.price_feed_config.reverse {
+                    Ok(1. / price)
+                } else {
+                    Ok(price)
+                }
+            }
+            Err(e) => Err(e),
+        }
     }
 }
 
@@ -125,7 +135,6 @@ pub async fn chainlink(rpc: String, pfeed: String) -> Result<f64, String> {
     match (price, precision) {
         (Ok(price), Ok(precision)) => {
             let power = 10f64.powi(precision._0 as i32);
-            // tracing::debug!("Price fetched: {}", price._0.as_u64() as f64 / power);
             let price = price._0.to_string().parse::<f64>().unwrap();
             Ok(price / power)
         }

@@ -30,3 +30,4 @@ tycho_router_address = ""
 # Expected price is base_token per quote_token => if base_token is ETH and quote_token is USDC, then price is ~2500, not 0.0004
 type = ""
 source = ""
+reverse = false

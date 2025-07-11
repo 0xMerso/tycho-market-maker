@@ -105,6 +105,7 @@ impl MarketMakerBuilder {
 pub struct PriceFeedConfig {
     pub r#type: String, // "binance" or "chainlink"
     pub source: String, // https if type is "binance", of 0xAddress if type is "chainlink"
+    pub reverse: bool,  // true if the price is to be reversed (e.g. 1 / price), only used for chainlink
 }
 
 #[derive(Debug, Clone)]
