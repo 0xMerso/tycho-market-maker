@@ -86,7 +86,7 @@ async fn main() {
                 tracing::debug!("Launching stream for network {}", config.network_name.as_str());
 
                 let state = Arc::clone(&cache);
-                match AssertUnwindSafe(mk.monitor(state.clone(), env.clone())).catch_unwind().await {
+                match AssertUnwindSafe(mk.run(state.clone(), env.clone())).catch_unwind().await {
                     Ok(_) => {
                         tracing::debug!("Monitoring task ended. Restarting...");
                     }

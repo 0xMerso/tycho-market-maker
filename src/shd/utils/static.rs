@@ -10,11 +10,17 @@ pub static BASIS_POINT_DENO: f64 = 10000.;
 pub static SHARE_POOL_BAL_SWAP_BPS: f64 = 10.; // 10 bps 
 pub static COINGECKO_ETH_USD: &str = "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd";
 
+/// --- Optimum amount swap ---
+
+pub static OPTI_LOW_FACTOR: f64 = 1e-6; // 10**-6 = 1 millionth
+pub static OPTI_HIGH_FACTOR: f64 = 1e5; // 10**5 = 100,000 = 10% of 1m 
+pub static OPTI_TOLERANCE: f64 = 1e-3;
+pub static OPTI_MAX_ITERATIONS: usize = 10;
+
 /// --- Exec ---
 pub static APPROVE_FN_SIGNATURE: &str = "approve(address,uint256)";
 pub static DEFAULT_APPROVE_GAS: u64 = 100_000;
 pub static DEFAULT_SWAP_GAS: u64 = 500_000;
-
 pub static HAS_EXECUTED: AtomicBool = AtomicBool::new(false);
 
 /// Monitoring

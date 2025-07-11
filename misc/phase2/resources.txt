@@ -1,0 +1,3 @@
+https://buildernet.org/docs/send-orderflow
+https://docs.uniswap.org/contracts/permit2/overview
+https://docs.propellerheads.xyz/tycho/for-solvers/execution/contract-addresses

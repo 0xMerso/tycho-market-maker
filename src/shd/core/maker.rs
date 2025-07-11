@@ -1,6 +1,7 @@
 use std::{collections::HashMap, str::FromStr};
 
 use crate::{
+    core::optimize::OptimizationResult,
     data::r#pub,
     helpers::global::{cpname, get_alloy_chain, get_component_balances},
     types::{
@@ -9,8 +10,12 @@ use crate::{
         moni::NewPricesMessage,
         tycho::{ProtoSimComp, PsbConfig, SharedTychoStreamState},
     },
-    utils::r#static::{
-        ADD_TVL_THRESHOLD, APPROVE_FN_SIGNATURE, BASIS_POINT_DENO, DEFAULT_APPROVE_GAS, DEFAULT_SWAP_GAS, HAS_EXECUTED, NULL_ADDRESS, PRICE_MOVE_DENO, PRICE_MOVE_THRESHOLD, SHARE_POOL_BAL_SWAP_BPS,
+    utils::{
+        self,
+        r#static::{
+            ADD_TVL_THRESHOLD, APPROVE_FN_SIGNATURE, BASIS_POINT_DENO, DEFAULT_APPROVE_GAS, DEFAULT_SWAP_GAS, HAS_EXECUTED, NULL_ADDRESS, OPTI_LOW_FACTOR, OPTI_MAX_ITERATIONS, PRICE_MOVE_DENO,
+            PRICE_MOVE_THRESHOLD, SHARE_POOL_BAL_SWAP_BPS,
+        },
     },
 };
 use alloy::{
@@ -212,7 +217,7 @@ impl IMarketMaker for MarketMaker {
 
     // Evaluate if given pools are out of range (= require intervention)
     // Targets are the pools to monitor, nothing more
-    async fn evaluate(&self, targets: &Vec<ProtoSimComp>, sps: Vec<f64>, reference: f64) -> Vec<CompReadjustment> {
+    fn evaluate(&self, targets: &Vec<ProtoSimComp>, sps: Vec<f64>, reference: f64) -> Vec<CompReadjustment> {
         let mut orders = vec![];
         // let mut snapshots = vec![];
         if sps.is_empty() || targets.len() != sps.len() {
@@ -273,7 +278,8 @@ impl IMarketMaker for MarketMaker {
 
     /// Process readjustment orders
     /// Questions, given that there might be multiple readjustments to do:
-    /// - How to allocate the size of each readjustment, they are dependent on each other
+    /// - How to allocate the size of each readjustment, they are dependent on ea
+    /// ch other
     /// "Optimal swap is to swap until marginal price + fee = market price"
     async fn readjust(&self, context: MarketContext, inventory: Inventory, mut adjustments: Vec<CompReadjustment>, env: EnvConfig) -> Vec<ExecutionOrder> {
         // --- Ordering ---
@@ -318,6 +324,9 @@ impl IMarketMaker for MarketMaker {
                 tracing::warn!("Cannot readjust, skipping due to pool_selling_balance_normalized < 0 !");
                 continue;
             }
+
+            // Optimum:
+
             let base_to_quote = *selling == self.base;
             let inventory_balance = if base_to_quote { inventory.base_balance } else { inventory.quote_balance };
             let inventory_balance_normalized = (inventory_balance as f64) / selling_pow;
@@ -755,7 +764,7 @@ impl IMarketMaker for MarketMaker {
     }
 
     /// Monitor the ProtocolStreamBuilder for new pairs and updates, evaluate if MM bot has opportunities
-    async fn monitor(&mut self, mtx: SharedTychoStreamState, env: EnvConfig) {
+    async fn run(&mut self, mtx: SharedTychoStreamState, env: EnvConfig) {
         loop {
             tracing::debug!("Connecting ProtocolStreamBuilder for {}", self.config.network_name.as_str().to_string());
             let psbc = PsbConfig {
@@ -874,11 +883,11 @@ impl IMarketMaker for MarketMaker {
                                         previous_reference_price = reference_price;
                                     } else {
                                         tracing::info!("Price movement under threshold (threshold: {})", PRICE_MOVE_THRESHOLD);
-                                        continue;
+                                        // continue;
                                     }
                                     // --- Evaluate ---
                                     let spot_prices = cpds.iter().map(|x| x.price).collect::<Vec<f64>>();
-                                    let readjusments = self.evaluate(&targets.clone(), spot_prices.clone(), reference_price).await;
+                                    let readjusments = self.evaluate(&targets.clone(), spot_prices.clone(), reference_price);
                                     if !readjusments.is_empty() {
                                         // --- Market context --- Need ALL components and thus all the protosims too
                                         match self.fetch_market_context(components.clone(), &protosims, atks.clone()).await {

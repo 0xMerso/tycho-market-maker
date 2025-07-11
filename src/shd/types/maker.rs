@@ -9,7 +9,7 @@ use tycho_simulation::{
     protocol::{models::ProtocolComponent, state::ProtocolSim},
 };
 
-use crate::core::pricefeed::PriceFeed;
+use crate::core::{optimize::OptimizationResult, pricefeed::PriceFeed};
 
 use super::{
     config::{EnvConfig, MarketMakerConfig},
@@ -19,7 +19,7 @@ use super::{
 #[async_trait]
 pub trait IMarketMaker: Send + Sync {
     // Looks for pools having a spread higher than the configured threshold
-    async fn evaluate(&self, psc: &Vec<ProtoSimComp>, sps: Vec<f64>, reference: f64) -> Vec<CompReadjustment>;
+    fn evaluate(&self, psc: &Vec<ProtoSimComp>, sps: Vec<f64>, reference: f64) -> Vec<CompReadjustment>;
     // Analyzes the optimal way to readjust the market, compute if it's profitable according to a custom MM algo, and returns the execution orders
     async fn readjust(&self, context: MarketContext, inventory: Inventory, crs: Vec<CompReadjustment>, env: EnvConfig) -> Vec<ExecutionOrder>;
     // Retrieves prices, current inventory and market context. Stores some of it in cache memory, optimally reducing latency.
@@ -28,6 +28,8 @@ pub trait IMarketMaker: Send + Sync {
     async fn fetch_market_context(&self, components: Vec<ProtocolComponent>, protosims: &HashMap<std::string::String, Box<dyn ProtocolSim>>, tokens: Vec<Token>) -> Option<MarketContext>;
     async fn fetch_eth_usd(&self) -> Result<f64, String>;
     async fn fetch_market_price(&self) -> Result<f64, String>;
+
+    // fn optimum(&self, context: MarketContext, inventory: Inventory, adjustment: CompReadjustment) -> OptimizationResult;
 
     // Functions to build Tycho solution, encode, prepare, sign transactions
     async fn solution(&self, order: ExecutionOrder, env: EnvConfig) -> Solution;
@@ -40,7 +42,7 @@ pub trait IMarketMaker: Send + Sync {
     // Broadcasts the swaps to the network via bundles + bids
     async fn broadcast(&self, transactions: Vec<PreparedTransaction>, env: EnvConfig);
     // Infinite loop that monitors the Tycho stream state, looking for opportunities
-    async fn monitor(&mut self, mtx: SharedTychoStreamState, env: EnvConfig);
+    async fn run(&mut self, mtx: SharedTychoStreamState, env: EnvConfig);
 }
 
 /// ================== Market Maker ==================
@@ -134,8 +136,8 @@ pub struct CompReadjustment {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Inventory {
-    pub base_balance: u128,
-    pub quote_balance: u128,
+    pub base_balance: u128,  // Divided
+    pub quote_balance: u128, // Divided
     pub nonce: u64,
 }
 
