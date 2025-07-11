@@ -9,27 +9,30 @@ use serde_json;
 
 /// Generic function to publish any serializable message to Redis pubsub
 pub fn publish<T: Serialize>(event: &T) {
-    let time = std::time::SystemTime::now();
-    match crate::data::helpers::copubsub() {
-        Ok(client) => match client.get_connection() {
-            Ok(mut conn) => {
-                let msg = serde_json::to_string(event).unwrap();
-                match conn.publish::<&str, &str, ()>(CHANNEL_REDIS, &msg) {
-                    Ok(_) => {
-                        let elasped = time.elapsed().unwrap_or_default().as_millis();
-                        tracing::debug!("Message has been sent (of size: {}) | Took {} ms", msg.len(), elasped);
-                    }
-                    Err(e) => {
-                        tracing::debug!("Publish message error {:?}", e.to_string())
-                    }
-                }
-            }
-            Err(e) => {
-                tracing::error!("Error while getting connection: {}", e.to_string());
-            }
-        },
+    let start_time = std::time::SystemTime::now();
+
+    let Ok(client) = crate::data::helpers::copubsub() else {
+        tracing::error!("Error while getting connection");
+        return;
+    };
+
+    let Ok(mut conn) = client.get_connection() else {
+        tracing::error!("Error while getting connection");
+        return;
+    };
+
+    let Ok(msg) = serde_json::to_string(event) else {
+        tracing::error!("Failed to serialize message");
+        return;
+    };
+
+    match conn.publish::<&str, &str, ()>(CHANNEL_REDIS, &msg) {
+        Ok(_) => {
+            let elapsed = start_time.elapsed().unwrap_or_default().as_millis();
+            tracing::debug!("Message has been sent (of size: {}) | Took {} ms", msg.len(), elapsed);
+        }
         Err(e) => {
-            tracing::error!("Error while getting connection: {}", e.to_string());
+            tracing::debug!("Publish message error {:?}", e.to_string())
         }
     }
 }

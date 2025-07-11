@@ -25,46 +25,44 @@ pub fn parse(value: &str) -> Result<ParsedMessage, String> {
 
 /// Listen to the Redis channel and parse different message types
 pub async fn listen(env: MoniEnvConfig) {
-    match crate::data::helpers::copubsub() {
-        Ok(client) => match client.get_connection() {
-            Ok(mut conn) => {
-                let mut pubsub = conn.as_pubsub();
-                tracing::info!("Redis pub-sub channel: '{}'", CHANNEL_REDIS);
-                match pubsub.subscribe(CHANNEL_REDIS) {
-                    Ok(_) => loop {
-                        match pubsub.get_message() {
-                            Ok(msg) => match msg.get_payload::<String>() {
-                                Ok(payload) => {
-                                    tracing::debug!("New message received (of size: {})", payload.len());
-                                    match parse(&payload) {
-                                        Ok(pm) => {
-                                            crate::data::neon::handle(&pm, env.clone()).await;
-                                        }
-                                        Err(e) => {
-                                            tracing::error!("Failed to parse message: {}", e);
-                                        }
-                                    }
-                                }
-                                Err(e) => {
-                                    tracing::error!("Error while getting payload: {}", e.to_string());
-                                }
-                            },
-                            Err(e) => {
-                                tracing::error!("Error: {}", e.to_string());
-                            }
-                        }
-                    },
-                    Err(e) => {
-                        tracing::error!("{}", e.to_string());
-                    }
-                }
+    let Ok(client) = crate::data::helpers::copubsub() else {
+        tracing::error!("Error while getting connection");
+        return;
+    };
+
+    let Ok(mut conn) = client.get_connection() else {
+        tracing::error!("Error while getting connection");
+        return;
+    };
+
+    let mut pubsub = conn.as_pubsub();
+    tracing::info!("Redis pub-sub channel: '{}'", CHANNEL_REDIS);
+
+    let Ok(_) = pubsub.subscribe(CHANNEL_REDIS) else {
+        tracing::error!("Failed to subscribe to channel");
+        return;
+    };
+
+    loop {
+        let Ok(msg) = pubsub.get_message() else {
+            tracing::error!("Error getting message");
+            continue;
+        };
+
+        let Ok(payload) = msg.get_payload::<String>() else {
+            tracing::error!("Error while getting payload");
+            continue;
+        };
+
+        tracing::debug!("New message received (of size: {})", payload.len());
+
+        match parse(&payload) {
+            Ok(parsed_message) => {
+                crate::data::neon::handle(&parsed_message, env.clone()).await;
             }
             Err(e) => {
-                tracing::error!("Error while getting connection: {}", e.to_string());
+                tracing::error!("Failed to parse message: {}", e);
             }
-        },
-        Err(e) => {
-            tracing::error!("Error while getting connection: {}", e.to_string());
         }
     }
 }

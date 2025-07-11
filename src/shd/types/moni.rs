@@ -7,9 +7,6 @@ use crate::types::{
     maker::{ComponentPriceData, Inventory, MarketContext},
 };
 
-/// ======================================================================================= Events PUB/SUB =====================================================================================================
-/// Redis message structure
-
 /// Base message structure for all Redis messages
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RedisMessage {
