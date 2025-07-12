@@ -11,7 +11,7 @@ use serde_json;
 pub fn publish<T: Serialize>(event: &T) {
     let start_time = std::time::SystemTime::now();
 
-    let Ok(client) = crate::data::helpers::copubsub() else {
+    let Ok(client) = crate::data::helpers::pubsub() else {
         tracing::error!("Error while getting connection");
         return;
     };

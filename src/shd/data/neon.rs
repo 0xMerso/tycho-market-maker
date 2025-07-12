@@ -112,6 +112,11 @@ pub async fn handle(msg: &ParsedMessage, env: MoniEnvConfig) {
                 return;
             };
 
+            if env.testing {
+                tracing::info!("Skipping 'NewPrices' database insertion in testing mode");
+                return;
+            }
+
             if let Some(instance) = instances.into_iter().find(|inst| inst.identifier == msg.identifier) {
                 if let Err(err) = create::price(&db, &instance, msg).await {
                     tracing::error!("Error storing price data: {}", err);
@@ -153,7 +158,6 @@ pub mod create {
             quote_token_address: Set(mmc.quote_token_address),
             id: Set(Uuid::new_v4().to_string()),
         };
-
         match model.insert(db).await {
             Ok(inserted) => {
                 tracing::info!("Successfully inserted configuration: {}", inserted.id);
@@ -181,7 +185,6 @@ pub mod create {
             identifier: Set(identifier.clone()),
             id: Set(Uuid::new_v4().to_string()),
         };
-
         match model.insert(db).await {
             Ok(inserted) => Ok(inserted),
             Err(err) => {
@@ -201,7 +204,6 @@ pub mod create {
             value: Set(json!(msg)),
             id: Set(Uuid::new_v4().to_string()),
         };
-
         match model.insert(db).await {
             Ok(inserted) => Ok(inserted),
             Err(err) => {
@@ -221,7 +223,6 @@ pub mod create {
             values: Set(json!(msg)),
             id: Set(Uuid::new_v4().to_string()),
         };
-
         match model.insert(db).await {
             Ok(inserted) => Ok(inserted),
             Err(err) => {

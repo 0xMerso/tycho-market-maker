@@ -871,8 +871,16 @@ impl IMarketMaker for MarketMaker {
                                         ((reference_price - previous_reference_price).abs() / previous_reference_price) * PRICE_MOVE_DENO
                                     } else {
                                         // First run - always push to DB since we have no previous price
+                                        tracing::info!("First run - always push to DB since we have no previous price");
                                         PRICE_MOVE_THRESHOLD + 1.0
                                     };
+                                    tracing::info!(
+                                        "Price movement (threshold: {}) | Price move: {} bps, from {} to {}",
+                                        PRICE_MOVE_THRESHOLD,
+                                        price_move_bps,
+                                        previous_reference_price,
+                                        reference_price
+                                    );
                                     if price_move_bps > PRICE_MOVE_THRESHOLD {
                                         crate::data::r#pub::prices(NewPricesMessage {
                                             identifier: identifier.clone(),
@@ -882,8 +890,7 @@ impl IMarketMaker for MarketMaker {
                                         });
                                         previous_reference_price = reference_price;
                                     } else {
-                                        tracing::info!("Price movement under threshold (threshold: {})", PRICE_MOVE_THRESHOLD);
-                                        // continue;
+                                        continue;
                                     }
                                     // --- Evaluate ---
                                     let spot_prices = cpds.iter().map(|x| x.price).collect::<Vec<f64>>();

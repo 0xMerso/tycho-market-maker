@@ -25,7 +25,7 @@ pub fn parse(value: &str) -> Result<ParsedMessage, String> {
 
 /// Listen to the Redis channel and parse different message types
 pub async fn listen(env: MoniEnvConfig) {
-    let Ok(client) = crate::data::helpers::copubsub() else {
+    let Ok(client) = crate::data::helpers::pubsub() else {
         tracing::error!("Error while getting connection");
         return;
     };

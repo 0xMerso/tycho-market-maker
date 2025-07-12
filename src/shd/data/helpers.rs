@@ -53,7 +53,7 @@ pub async fn connect() -> Result<MultiplexedConnection, RedisError> {
 }
 
 /// Connect to Redis
-pub fn copubsub() -> Result<redis::Client, RedisError> {
+pub fn pubsub() -> Result<redis::Client, RedisError> {
     let endpoint = std::env::var("REDIS_HOST"); // Contain port too
     let endpoint = match endpoint {
         Ok(endpoint) => endpoint,
