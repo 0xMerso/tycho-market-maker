@@ -7,7 +7,7 @@ networks:
 
 services:
 
-  mk2-uni-alpha:
+  maker-base-alpha:
     build: 
       context: .
       dockerfile: ops/Dockerfile
@@ -26,6 +26,7 @@ services:
     environment:
       - RUST_LOG="off,mk2=trace,shd=trace,monitor=trace,test=trace"
       - REDIS_HOST=redis
+      - CONFIG_PATH=config/mmc.base.eth-usdc.toml
     restart: always
     networks:
       - tmm
@@ -37,8 +38,6 @@ services:
       args:
         - PROGRAM=monitor
         - BUILD_TYPE=debug #!
-    # ports:
-    #   - "42043:42043"
     depends_on:
       redis:
         condition: service_healthy
