@@ -16,4 +16,6 @@
 #   158  sudo systemctl enable docker\nsudo systemctl start docker\nsudo systemctl status docker\ndocker compose version
 #   160  docker ps
 
-# --- --- ---
+# --- --- --- Ubuntu VM --- --- ---
+sudo apt-get update
+sudo apt-get install pkg-config libssl-dev

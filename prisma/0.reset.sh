@@ -1,3 +1,5 @@
+#!/bin/bash
+
 source config/.env.monitor.ex
 export DATABASE_URL=$DATABASE_URL
 echo $DATABASE_URL
