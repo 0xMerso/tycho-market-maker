@@ -16,7 +16,7 @@ function start() {
     # ------------- Redis -------------
     rm -f dump.rdb
     pkill -f "redis-server.*42044" 2>/dev/null || true
-    redis-server --port 42044 --bind 127.0.0.1 >/dev/null 2>&1 &
+    redis-server --port 42044 --bind 127.0.0.1 >/dev/null # 2>&1 &
     echo "Redis ready #$!"
     sleep 1
 
