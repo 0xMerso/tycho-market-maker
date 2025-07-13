@@ -54,7 +54,7 @@ pub async fn listen(env: MoniEnvConfig) {
             continue;
         };
 
-        tracing::debug!("New message received (of size: {})", payload.len());
+        // tracing::trace!("New message received (size: {})", payload.len());
 
         match parse(&payload) {
             Ok(parsed_message) => {
