@@ -1,5 +1,0 @@
-Mk2 = Instance = push to Monitor at launch
-Monitor = Listen ALL new instances
-- Received a new_instance event by instance: 
-    - If new (identifier), create configuration
-    - Else, push the instance into the array of instances of the existing Configuration object

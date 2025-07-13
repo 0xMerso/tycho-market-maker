@@ -1,10 +1,7 @@
 source config/.env.monitor.ex
 export DATABASE_URL=$DATABASE_URL
 echo $DATABASE_URL
-# npx prisma db push --schema=prisma/schema.prisma
 # You need to add the --force-reset flag if the schema changes are incompatible (e.g. you removed a field, changed a type, or dropped a model).
-# If your changes are non-destructive (adding fields or models), a regular prisma db push is enough.
-# Want to keep data but apply destructive changes? Then use migrations instead:
 npx prisma db push --schema=prisma/schema.prisma --force-reset
 
 # === Clean up the DB ===

@@ -19,7 +19,7 @@ COPY package*.json ./
 COPY prisma ./prisma
 
 # install JS deps and generate Prisma client
-RUN npm install && npx prisma generate
+RUN npm ci --only=production && npx prisma generate
 
 # now copy full source
 COPY . .
