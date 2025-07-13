@@ -1,8 +1,5 @@
 #!/bin/bash
 
-RED='\033[0;31m'
-NC='\033[0m'
-
 # --- Usage ---
 # Requires Rust and Cargo to be installed.
 # You need to provide the TOML Market Maker configuration file.
@@ -11,38 +8,36 @@ NC='\033[0m'
 # It also launch the redis server
 # It expects the market maker instance to be running in another terminal.
 
+RED='\033[0;31m'
+NC='\033[0m'
+
 function start() {
     trap '' SIGINT
     # ------------- Redis -------------
-    rm -rf dump.rdb
-    ps -ef | grep redis-server | grep -v grep | awk '{print $2}' | xargs kill 2>/dev/null
-    redis-server --port 42044 --bind 127.0.0.1 2>&1 >/dev/null &
-    # redis-server src/shared/config/redis.conf --bind 127.0.0.1 2>&1 >/dev/null &
-    echo "Redis ready #$(ps -ef | grep redis-server | grep -v grep | awk '{print $2}')"
+    rm -f dump.rdb
+    pkill -f "redis-server.*42044" 2>/dev/null || true
+    redis-server --port 42044 --bind 127.0.0.1 >/dev/null 2>&1 &
+    echo "Redis ready #$!"
     sleep 1
-    # ------------- Execute -------------
-    echo "Building monitor program (might take a few minutes the first time) ..."
+
+    # ------------- Build -------------
+    echo "Building monitor (first run may be slow)…"
     cargo build --bin monitor -q 2>/dev/null
-    echo "Build successful. Executing..."
+    echo "Build successful. Launching monitor…"
+
+    # ------------- Execute once with all configs -------------
     (
         trap - SIGINT
         export RUST_LOG="off,maker=trace,shd=trace,monitor=trace"
-        cargo run --bin monitor -q # 2>/dev/null
+        cargo run --bin monitor -q
     )
-    echo "Program has finished or was interrupted. Continuing with the rest of the shell script ..."
-    status+=($?)
-    if [ $status -ne 0 ]; then
-        echo "Error: $status on program ${RED}${program}${NC}"
-        exit 1
-    fi
-    ps -ef | grep redis-server | grep -v grep | awk '{print $2}' | xargs kill 2>/dev/null
-    rm -rf dump.rdb
+
+    echo "Monitor finished. Cleaning up…"
+    pkill -f "redis-server.*42044"
+    rm -f dump.rdb
 }
 
-# export CONFIG_PATH="config/mmc.mainnet.eth-usdc.toml"
-# export CONFIG_PATH="config/mmc.mainnet.eth-wbtc.toml"
-# export CONFIG_PATH="config/mmc.mainnet.usdc-dai.toml"
-# export CONFIG_PATH="config/mmc.unichain.eth-usdc.toml"
-# export CONFIG_PATH="config/mmc.base.eth-usdc.toml"
+# Comma-separated list of config files (your program reads this env var as an array)
 export CONFIGS_PATHS="config/mmc.mainnet.eth-usdc.toml,config/mmc.mainnet.eth-wbtc.toml,config/mmc.mainnet.usdc-dai.toml,config/mmc.unichain.eth-usdc.toml,config/mmc.base.eth-usdc.toml"
-start $1
+
+start
