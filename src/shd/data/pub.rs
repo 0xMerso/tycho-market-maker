@@ -11,12 +11,12 @@ pub fn publish<T: Serialize>(event: &T) {
     let start_time = std::time::SystemTime::now();
 
     let Ok(client) = crate::data::helpers::pubsub() else {
-        tracing::error!("Error while getting connection");
+        tracing::error!("Error while getting connection 1");
         return;
     };
 
     let Ok(mut conn) = client.get_connection() else {
-        tracing::error!("Error while getting connection");
+        tracing::error!("Error while getting connection 2");
         return;
     };
 
