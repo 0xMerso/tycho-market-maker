@@ -31,6 +31,7 @@ async fn main() {
 
     tracing::info!("🐘 Init and test connection to Neon, Prisma, SeaORM, to PgSQL");
 
+    // Need error handling
     let Ok(db) = shd::data::neon::connect(env.clone()).await else {
         tracing::error!("Failed to connect to Neon database");
         return;

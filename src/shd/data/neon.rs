@@ -16,50 +16,62 @@ use sea_orm::prelude::Uuid;
 // "protocol://username:password@host:port/database"
 // We put the database name (that last bit) in a separate variable simply for convenience.
 pub async fn connect(env: MoniEnvConfig) -> Result<DatabaseConnection, DbErr> {
-    let db = Database::connect(env.database_url.clone()).await?;
-
-    match db.get_database_backend() {
-        DbBackend::Postgres => {
-            db.execute(Statement::from_string(db.get_database_backend(), format!("DROP DATABASE IF EXISTS \"{}\";", env.database_url.clone())))
-                .await?;
-            db.execute(Statement::from_string(db.get_database_backend(), format!("CREATE DATABASE \"{}\";", env.database_url.clone())))
-                .await?;
-            Database::connect(&env.database_url).await
+    match Database::connect(env.database_url.clone()).await {
+        Ok(db) => {
+            tracing::info!("Successfully connected to database");
+            Ok(db)
         }
-        _ => {
-            panic!("Neon: Unsupported database backend");
+        Err(err) => {
+            tracing::error!("Failed to connect to database: {}", err);
+            Err(err)
         }
     }
 }
 
 /// Handle different message types (from Redis pub-sub, to then push to DB)
 pub async fn handle(msg: &ParsedMessage, env: MoniEnvConfig) {
+    // Connect to database once for this message
+    let db = match connect(env.clone()).await {
+        Ok(db) => db,
+        Err(err) => {
+            tracing::error!("Failed to connect to database for message handling: {}", err.to_string());
+            return;
+        }
+    };
+
     match msg {
         ParsedMessage::NewInstance(msg) => {
             tracing::trace!("NewInstance received with config identifier: {}", msg.config.identifier());
             let config_hash = msg.config.hash();
             tracing::trace!("Config Keccak256: {}", config_hash);
 
-            let Ok(db) = connect(env.clone()).await else {
-                tracing::error!("Failed to connect to database");
-                return;
-            };
-
-            let Ok(cfgs) = pull::configurations(&db).await else {
-                tracing::error!("Failed to pull configurations");
-                return;
+            let cfgs = match pull::configurations(&db).await {
+                Ok(cfgs) => cfgs,
+                Err(err) => {
+                    tracing::error!("Failed to pull configurations: {}", err);
+                    return;
+                }
             };
 
             let hash = config_hash.to_lowercase();
 
             if let Some(cfg) = cfgs.iter().find(|cfg| cfg.hash.to_lowercase() == hash) {
                 tracing::info!("Configuration found in DB");
-                let mmc: MarketMakerConfig = serde_json::from_value(cfg.values.clone()).unwrap();
+                let mmc: MarketMakerConfig = match serde_json::from_value(cfg.values.clone()) {
+                    Ok(mmc) => mmc,
+                    Err(err) => {
+                        tracing::error!("Failed to deserialize configuration: {}", err);
+                        return;
+                    }
+                };
                 tracing::trace!("    - Configuration: {}: Keccak256: {}", mmc.identifier(), cfg.hash);
 
-                let Ok(instances) = pull::instances(&db).await else {
-                    tracing::error!("Failed to pull instances");
-                    return;
+                let instances = match pull::instances(&db).await {
+                    Ok(instances) => instances,
+                    Err(err) => {
+                        tracing::error!("Failed to pull instances: {}", err);
+                        return;
+                    }
                 };
 
                 tracing::trace!("    - Got {} instances for this configuration", instances.len());
@@ -102,20 +114,13 @@ pub async fn handle(msg: &ParsedMessage, env: MoniEnvConfig) {
         ParsedMessage::NewPrices(msg) => {
             tracing::trace!("NewPrices received, with reference_price: {} and instance identifier: {}", msg.reference_price, msg.identifier);
 
-            let Ok(db) = connect(env.clone()).await else {
-                tracing::error!("Failed to connect to database");
-                return;
+            let instances = match pull::instances(&db).await {
+                Ok(instances) => instances,
+                Err(err) => {
+                    tracing::error!("Error finding instance by hash: {}", err);
+                    return;
+                }
             };
-
-            let Ok(instances) = pull::instances(&db).await else {
-                tracing::error!("Error finding instance by hash");
-                return;
-            };
-
-            // if env.testing {
-            //     tracing::info!("Skipping 'NewPrices' database insertion in testing mode");
-            //     return;
-            // }
 
             if let Some(instance) = instances.into_iter().find(|inst| inst.identifier == msg.identifier) {
                 if let Err(err) = create::price(&db, &instance, msg).await {
