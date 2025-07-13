@@ -1,7 +1,5 @@
 #!/bin/bash
-source config/.env.monitor.ex
-export DATABASE_URL=$DATABASE_URL
-echo $DATABASE_URL
+bash -c "source config/.env.monitor.ex && echo \$DATABASE_URL"
 sea-orm-cli generate entity \
     -u "$DATABASE_URL" \
     -o src/shd/entity \

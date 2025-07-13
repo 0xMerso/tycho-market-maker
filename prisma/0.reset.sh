@@ -1,8 +1,6 @@
 #!/bin/bash
 
-source config/.env.monitor.ex
-export DATABASE_URL=$DATABASE_URL
-echo $DATABASE_URL
+bash -c "source config/.env.monitor.ex && echo \$DATABASE_URL"
 npx prisma migrate reset --force # ! Very destructive, will drop all data
 # npx prisma migrate reset is a destructive command that completely resets your database. Here's what it does:
 # Drops the entire database (deletes all data)
