@@ -1,9 +1,6 @@
-# cargo install sea-orm-cli
-
 source config/.env.monitor.ex
 export DATABASE_URL=$DATABASE_URL
 echo $DATABASE_URL
-
 sea-orm-cli generate entity \
     -u "$DATABASE_URL" \
     -o src/shd/entity \
@@ -15,3 +12,5 @@ sea-orm-cli generate entity \
 # • -o src/entity is your output directory
 # • --with-serde=both derives Serialize and Deserialize for every model  ￼
 # • --lib makes it emit a lib.rs instead of mod.rs, which may suit a standalone crate
+
+# cargo install sea-orm-cli

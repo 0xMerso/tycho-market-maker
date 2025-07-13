@@ -12,16 +12,16 @@ NC='\033[0m'
 function start() {
     trap '' SIGINT
     if [ "$1" = "test" ]; then
-        export RUST_LOG="off,market_maker=trace,shd=trace,test=trace"
+        export RUST_LOG="off,maker=trace,shd=trace,test=trace"
         cargo test -- --nocapture
     else
         echo "Building MarketMaker program (might take a few minutes the first time) ..."
-        cargo build --bin market_maker -q 2>/dev/null
+        cargo build --bin maker -q 2>/dev/null
         echo "Build successful. Executing..."
         (
             trap - SIGINT
-            export RUST_LOG="off,market_maker=trace,shd=trace"
-            cargo run --bin market_maker -q # 2>/dev/null
+            export RUST_LOG="off,maker=trace,shd=trace"
+            cargo run --bin maker -q # 2>/dev/null
         )
         echo "Program has finished or was interrupted. Continuing with the rest of the shell script ..."
         status+=($?)

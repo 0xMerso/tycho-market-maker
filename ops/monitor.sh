@@ -7,7 +7,7 @@ NC='\033[0m'
 # Requires Rust and Cargo to be installed.
 # You need to provide the TOML Market Maker configuration file.
 # This script launch the monitortoring program for multiple instance of the Market Maker program
-# It takes as argument an array of configuration files path, same format as the individual market_maker config file
+# It takes as argument an array of configuration files path, same format as the individual maker config file
 # It also launch the redis server
 # It expects the market maker instance to be running in another terminal.
 
@@ -26,7 +26,7 @@ function start() {
     echo "Build successful. Executing..."
     (
         trap - SIGINT
-        export RUST_LOG="off,market_maker=trace,shd=trace,monitor=trace"
+        export RUST_LOG="off,maker=trace,shd=trace,monitor=trace"
         cargo run --bin monitor -q # 2>/dev/null
     )
     echo "Program has finished or was interrupted. Continuing with the rest of the shell script ..."

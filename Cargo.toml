@@ -71,8 +71,8 @@ name = "shd"
 path = "src/shd/lib.rs"
 
 [[bin]]
-name = "market_maker"
-path = "src/market_maker.rs"
+name = "maker"
+path = "src/maker.rs"
 
 [[bin]]
 name = "monitor"

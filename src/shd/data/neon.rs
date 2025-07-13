@@ -4,7 +4,7 @@ use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, Database, Database
 use serde_json::json;
 
 use crate::{
-    entity::{configuration, instance, price, trade},
+    entity::instance,
     types::{
         config::{MarketMakerConfig, MoniEnvConfig},
         moni::ParsedMessage,
@@ -135,13 +135,12 @@ pub async fn handle(msg: &ParsedMessage, env: MoniEnvConfig) {
 }
 
 pub mod create {
-    use crate::{
-        entity::{configuration, price, trade},
-        types::{
-            config::MarketMakerConfig,
-            moni::{NewPricesMessage, NewTradeMessage},
-        },
+    use crate::types::{
+        config::MarketMakerConfig,
+        moni::{NewPricesMessage, NewTradeMessage},
     };
+
+    use crate::entity::{configuration, instance, price, trade};
 
     use super::*;
 
@@ -234,6 +233,9 @@ pub mod create {
 }
 
 pub mod pull {
+
+    use crate::entity::{configuration, instance, price, trade};
+
     use super::*;
 
     pub async fn instances(db: &DatabaseConnection) -> Result<Vec<instance::Model>, sea_orm::DbErr> {
@@ -241,7 +243,7 @@ pub mod pull {
     }
 
     pub async fn configurations(db: &DatabaseConnection) -> Result<Vec<configuration::Model>, sea_orm::DbErr> {
-        configuration::Entity::find().all(db).await
+        crate::entity::configuration::Entity::find().all(db).await
     }
 
     pub async fn trades(db: &DatabaseConnection) -> Result<Vec<trade::Model>, sea_orm::DbErr> {
