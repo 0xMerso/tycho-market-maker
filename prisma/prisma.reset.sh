@@ -1,4 +1,4 @@
-source config/.env.moni.ex
+source config/.env.monitor.ex
 export DATABASE_URL=$DATABASE_URL
 echo $DATABASE_URL
 npx prisma migrate reset --force # ! Very destructive, will drop all data

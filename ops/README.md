@@ -8,8 +8,8 @@
    ```
 
 2. **Environment Files**: Create the required environment files:
-   - `config/.env.market_maker.ex` - for the market maker service
-   - `config/.env.moni.ex` - for the monitor service
+   - `config/.env.maker.ex` - for the market maker service
+   - `config/.env.monitor.ex` - for the monitor service
 
 ## Environment Variables
 
@@ -85,6 +85,6 @@ All services include health checks:
 ## Troubleshooting
 
 1. **Network issues**: Ensure the `tmm` network exists
-2. **Environment files**: Check that `.env.market_maker.ex` and `.env.moni.ex` exist and are properly configured
+2. **Environment files**: Check that `.env.maker.ex` and `.env.monitor.ex` exist and are properly configured
 3. **Database connection**: Verify DATABASE_URL is correct and accessible
 4. **Redis connection**: Ensure Redis is running and accessible on port 6379 

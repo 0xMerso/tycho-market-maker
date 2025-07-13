@@ -22,7 +22,7 @@ services:
       redis:
         condition: service_healthy
     env_file:
-      - config/.env.market_maker.ex #!
+      - config/.env.maker.ex #!
     environment:
       - RUST_LOG="off,market_maker=trace,shd=trace,monitor=trace,test=trace"
       - REDIS_HOST=redis
@@ -42,7 +42,7 @@ services:
       redis:
         condition: service_healthy
     env_file:
-      - config/.env.moni.ex #!
+      - config/.env.monitor.ex #!
     environment:
       - RUST_LOG="off,market_maker=trace,shd=trace,monitor=trace,test=trace"
       - REDIS_HOST=redis
