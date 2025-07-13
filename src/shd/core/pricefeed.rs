@@ -152,15 +152,15 @@ mod tests {
 
         if config.price_feed_config.r#type == "binance" {
             let feed = BinancePriceFeed;
-            let mk2 = MarketMakerBuilder::new(config, Box::new(feed)).build(base, quote).expect("Failed to build Market Maker");
-            let price = mk2.fetch_market_price().await.expect("Failed to fetch market price");
+            let market_maker = MarketMakerBuilder::new(config, Box::new(feed)).build(base, quote).expect("Failed to build Market Maker");
+            let price = market_maker.fetch_market_price().await.expect("Failed to fetch market price");
             tracing::info!("Market Price: {:.3}", price);
             assert!(price > 1500. && price < 3000., "Unexpected price value");
         } else if config.price_feed_config.r#type == "chainlink" {
             let config = load_market_maker_config("config/mmc.toml");
             let feed = ChainlinkPriceFeed;
-            let mk2 = MarketMakerBuilder::new(config, Box::new(feed)).build(base, quote).expect("Failed to build Market Maker");
-            let price = mk2.fetch_market_price().await.expect("Failed to fetch market price");
+            let market_maker = MarketMakerBuilder::new(config, Box::new(feed)).build(base, quote).expect("Failed to build Market Maker");
+            let price = market_maker.fetch_market_price().await.expect("Failed to fetch market price");
             tracing::info!("Market Price Chainlink: {:?}", price);
             assert!(price > 1500. && price < 3000., "Unexpected price value");
         }

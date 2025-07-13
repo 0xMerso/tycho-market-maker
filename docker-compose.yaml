@@ -12,7 +12,7 @@ services:
       context: .
       dockerfile: ops/Dockerfile
       args:
-        - PROGRAM=mk2
+        - PROGRAM=market_maker
         - BUILD_TYPE=debug #!
     ports:
       - "42042:42042"
@@ -22,9 +22,9 @@ services:
       redis:
         condition: service_healthy
     env_file:
-      - config/.env.mk2.ex #!
+      - config/.env.market_maker.ex #!
     environment:
-      - RUST_LOG="off,mk2=trace,shd=trace,monitor=trace,test=trace"
+      - RUST_LOG="off,market_maker=trace,shd=trace,monitor=trace,test=trace"
       - REDIS_HOST=redis
       - CONFIG_PATH=config/mmc.base.eth-usdc.toml
     restart: always
@@ -44,7 +44,7 @@ services:
     env_file:
       - config/.env.moni.ex #!
     environment:
-      - RUST_LOG="off,mk2=trace,shd=trace,monitor=trace,test=trace"
+      - RUST_LOG="off,market_maker=trace,shd=trace,monitor=trace,test=trace"
       - REDIS_HOST=redis
     restart: always
     networks:

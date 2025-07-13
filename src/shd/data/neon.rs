@@ -112,10 +112,10 @@ pub async fn handle(msg: &ParsedMessage, env: MoniEnvConfig) {
                 return;
             };
 
-            if env.testing {
-                tracing::info!("Skipping 'NewPrices' database insertion in testing mode");
-                return;
-            }
+            // if env.testing {
+            //     tracing::info!("Skipping 'NewPrices' database insertion in testing mode");
+            //     return;
+            // }
 
             if let Some(instance) = instances.into_iter().find(|inst| inst.identifier == msg.identifier) {
                 if let Err(err) = create::price(&db, &instance, msg).await {

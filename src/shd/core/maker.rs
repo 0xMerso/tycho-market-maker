@@ -874,14 +874,16 @@ impl IMarketMaker for MarketMaker {
                                         tracing::info!("First run - always push to DB since we have no previous price");
                                         PRICE_MOVE_THRESHOLD + 1.0
                                     };
+                                    let threshold = price_move_bps > PRICE_MOVE_THRESHOLD;
                                     tracing::info!(
-                                        "Price movement (threshold: {}) | Price move: {} bps, from {} to {}",
+                                        "Price movement {} threshold ({} bps), of {} bps, from {} to {}",
+                                        if threshold { "above" } else { "below" },
                                         PRICE_MOVE_THRESHOLD,
                                         price_move_bps,
                                         previous_reference_price,
                                         reference_price
                                     );
-                                    if price_move_bps > PRICE_MOVE_THRESHOLD {
+                                    if threshold {
                                         crate::data::r#pub::prices(NewPricesMessage {
                                             identifier: identifier.clone(),
                                             reference_price,

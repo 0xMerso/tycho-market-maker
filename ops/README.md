@@ -8,7 +8,7 @@
    ```
 
 2. **Environment Files**: Create the required environment files:
-   - `config/.env.mk2.ex` - for the market maker service
+   - `config/.env.market_maker.ex` - for the market maker service
    - `config/.env.moni.ex` - for the monitor service
 
 ## Environment Variables
@@ -31,7 +31,7 @@ REDIS_HOST=redis
 REDIS_PORT=6379
 ```
 
-### Additional for mk2 service:
+### Additional for market_maker service:
 ```bash
 # Wallet
 WALLET_PUBLIC_KEY=your_wallet_public_key
@@ -79,12 +79,12 @@ CONFIGS_PATHS=config/
 
 All services include health checks:
 - Redis: Pings the server
-- Market maker: Checks if mk2 process is running
+- Market maker: Checks if market_maker process is running
 - Monitor: Checks if monitor process is running
 
 ## Troubleshooting
 
 1. **Network issues**: Ensure the `tmm` network exists
-2. **Environment files**: Check that `.env.mk2.ex` and `.env.moni.ex` exist and are properly configured
+2. **Environment files**: Check that `.env.market_maker.ex` and `.env.moni.ex` exist and are properly configured
 3. **Database connection**: Verify DATABASE_URL is correct and accessible
 4. **Redis connection**: Ensure Redis is running and accessible on port 6379 

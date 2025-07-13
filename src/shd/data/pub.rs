@@ -37,7 +37,7 @@ pub fn publish<T: Serialize>(event: &T) {
     }
 }
 
-/// Publish a new instance launch event (for mk2 instances)
+/// Publish a new instance launch event (for market_maker instances)
 pub fn instance(msg: NewInstanceMessage) {
     let message = RedisMessage {
         message: MessageType::NewInstance,
