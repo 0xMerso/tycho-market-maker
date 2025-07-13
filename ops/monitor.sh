@@ -21,7 +21,7 @@ function start() {
     sleep 1
 
     # ------------- Build -------------
-    echo "Building monitor (first run may be slow)…"
+    echo "Building monitor (first run may be slow) …"
     cargo build --bin monitor -q 2>/dev/null
     echo "Build successful. Launching monitor…"
 

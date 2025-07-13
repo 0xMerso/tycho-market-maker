@@ -17,6 +17,8 @@ use sea_orm::prelude::Uuid;
 // We put the database name (that last bit) in a separate variable simply for convenience.
 pub async fn connect(env: MoniEnvConfig) -> Result<DatabaseConnection, DbErr> {
     tracing::info!("Connecting to database: {}", env.database_url);
+    println!("{:?}", env.database_url); // shows escapes for \r etc
+    println!("{:x?}", env.database_url.as_bytes().len()); // hex-dump each byte
     match Database::connect(env.database_url.clone()).await {
         Ok(db) => {
             tracing::info!("Successfully connected to database");
