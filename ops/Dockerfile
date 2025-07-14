@@ -7,6 +7,7 @@ RUN apk add --no-cache \
     build-base \
     openssl-dev \
     pkgconfig \
+    linux-headers \
     curl \
     git
 
@@ -47,6 +48,10 @@ WORKDIR /workspace
 # Declare build args again to know which binary to copy
 ARG BUILD_TYPE=debug
 ARG PROGRAM
+
+# Log
+RUN echo "🐳 BUILD_TYPE: $BUILD_TYPE"
+RUN echo "🐳 PROGRAM: $PROGRAM"
 
 # Copy compiled binary from builder stage
 COPY --from=builder /workspace/target/${BUILD_TYPE}/$PROGRAM /usr/local/bin/$PROGRAM
