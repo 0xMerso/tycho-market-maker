@@ -24,6 +24,7 @@ async fn main() {
     let env = EnvConfig::new();
     env.print();
 
+    tracing::info!("MarketMaker Config Path: '{}'", env.path);
     let config = shd::types::config::load_market_maker_config(env.path.as_str());
     config.print();
     tracing::debug!("🤖 MarketMaker Config Identifier: '{}'", config.identifier());
