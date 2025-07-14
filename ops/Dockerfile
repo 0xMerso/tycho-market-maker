@@ -10,7 +10,8 @@ RUN apk add --no-cache \
     pkgconfig \
     linux-headers \
     curl \
-    git
+    git \
+    openssl
 
 WORKDIR /workspace
 
