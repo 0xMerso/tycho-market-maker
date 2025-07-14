@@ -7,7 +7,7 @@ networks:
 
 services:
 
-  maker-base-alpha:
+  maker-base-eth-usdc:
     build: 
       context: .
       dockerfile: ops/Dockerfile
@@ -31,6 +31,8 @@ services:
     networks:
       - tmm
 
+
+  # One monitor for all market maker instances
   monitor:
     build: 
       context: .
@@ -50,6 +52,7 @@ services:
     networks:
       - tmm
 
+  # One Redis server for all market maker instances and the monitor
   redis:
     image: redis:latest
     restart: always
