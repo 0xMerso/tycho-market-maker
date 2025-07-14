@@ -21,7 +21,7 @@ pub struct EnvConfig {
 /// Environment configuration expected
 #[derive(Debug, Clone)]
 pub struct MoniEnvConfig {
-    pub paths: String,
+    // pub paths: String,
     pub testing: bool,
     // APIs
     pub heartbeat: String,
@@ -94,7 +94,7 @@ impl Default for MoniEnvConfig {
 impl MoniEnvConfig {
     pub fn new() -> Self {
         MoniEnvConfig {
-            paths: utils::misc::get("CONFIGS_PATHS"),
+            // paths: utils::misc::get("CONFIGS_PATHS"),
             testing: utils::misc::get("TESTING") == "true",
             heartbeat: utils::misc::get("HEARTBEAT"),
             database_url: utils::misc::get("DATABASE_URL"),
@@ -104,7 +104,7 @@ impl MoniEnvConfig {
 
     pub fn print(&self) {
         tracing::debug!("MoniEnvConfig:");
-        tracing::debug!("  Paths:                 {}", self.paths);
+        // tracing::debug!("  Paths:                 {}", self.paths);
         tracing::debug!("  Testing:               {}", self.testing);
         tracing::debug!("  Heartbeat:             {}", self.heartbeat);
         tracing::debug!("  Database URL:          {}", self.database_url);

@@ -37,7 +37,6 @@ function start() {
     rm -f dump.rdb
 }
 
-# Comma-separated list of config files (your program reads this env var as an array)
-export CONFIGS_PATHS="config/mmc.mainnet.eth-usdc.toml,config/mmc.mainnet.eth-wbtc.toml,config/mmc.mainnet.usdc-dai.toml,config/mmc.unichain.eth-usdc.toml,config/mmc.base.eth-usdc.toml"
-
+# Comma-separated list of config files (your program reads this env var as an array) --- No longer needed
+# export CONFIGS_PATHS="config/mmc.mainnet.eth-usdc.toml,config/mmc.mainnet.eth-wbtc.toml,config/mmc.mainnet.usdc-dai.toml,config/mmc.unichain.eth-usdc.toml,config/mmc.base.eth-usdc.toml"
 start
