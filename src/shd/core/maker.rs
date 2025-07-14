@@ -116,8 +116,8 @@ impl IMarketMaker for MarketMaker {
         let provider = ProviderBuilder::new().on_http(self.config.rpc_url.clone().parse().expect("Failed to parse RPC_URL"));
         let tokens = vec![self.base.clone(), self.quote.clone()];
         let addresses = tokens.iter().map(|t| t.address.to_string()).collect::<Vec<String>>();
-        match crate::utils::evm::balances(&provider, env.wallet_public_key.clone(), addresses.clone()).await {
-            Ok(balances) => match provider.get_transaction_count(env.wallet_public_key.to_string().parse().unwrap()).await {
+        match crate::utils::evm::balances(&provider, self.config.wallet_public_key.clone(), addresses.clone()).await {
+            Ok(balances) => match provider.get_transaction_count(self.config.wallet_public_key.to_string().parse().unwrap()).await {
                 Ok(nonce) => {
                     let mut msgs = vec![];
                     for (x, tk) in tokens.iter().enumerate() {
@@ -126,7 +126,7 @@ impl IMarketMaker for MarketMaker {
                         // tracing::debug!(" - Inventory: Got {} of {}", divided, tk.symbol);
                         msgs.push(format!("{:.3} of {}", divided, tk.symbol));
                     }
-                    tracing::debug!("Inventory evaluation: Nonce {} | Wallet {} | 💵 Holding {}", nonce, env.wallet_public_key, msgs.join(" and "));
+                    tracing::debug!("Inventory evaluation: Nonce {} | Wallet {} | 💵 Holding {}", nonce, self.config.wallet_public_key, msgs.join(" and "));
                     Ok(Inventory {
                         base_balance: balances[0],
                         quote_balance: balances[1],
@@ -470,8 +470,8 @@ impl IMarketMaker for MarketMaker {
         // Swap { component: ProtocolComponent { id: "88e6a0c2ddd26feeb64f039a2c41296fcb3f5640", protocol_system: "uniswap_v3", protocol_type_name: "uniswap_v3_pool", chain: Ethereum, tokens: [Bytes(0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48), Byte (0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2)], contract_addresses: [], static_attributes: {"tick_spacing": Bytes(0x0a), "fee": Bytes(0x01f4), "pool_address": Bytes(0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640)}, change: Update, creation_tx: Bytes(0x125e0b641d4a4b08806bf52c0c6757648c9963bcda8681e4f996f09e00d4c2cc), created_at: 2021-05-05T21:42:11 }, token_in: Bytes(0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2), token_out: Bytes(0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48), split: 0.0
         Solution {
             // Addresses
-            sender: tycho_simulation::tycho_core::Bytes::from_str(env.wallet_public_key.to_lowercase().as_str()).unwrap(),
-            receiver: tycho_simulation::tycho_core::Bytes::from_str(env.wallet_public_key.to_lowercase().as_str()).unwrap(),
+            sender: tycho_simulation::tycho_core::Bytes::from_str(self.config.wallet_public_key.to_lowercase().as_str()).unwrap(),
+            receiver: tycho_simulation::tycho_core::Bytes::from_str(self.config.wallet_public_key.to_lowercase().as_str()).unwrap(),
             given_token: input.clone(),
             checked_token: output.clone(),
             // Others fields
@@ -515,7 +515,7 @@ impl IMarketMaker for MarketMaker {
         // 2. Swap --- No bribe for now ---
         let swap = TransactionRequest {
             to: Some(alloy_primitives::TxKind::Call(Address::from_slice(&tx.to))),
-            from: Some(env.wallet_public_key.parse().expect("Failed to parse wallet public key")),
+            from: Some(self.config.wallet_public_key.parse().expect("Failed to parse wallet public key")),
             value: Some(U256::from(0)),
             input: TransactionInput {
                 input: Some(AlloyBytes::from(tx.data)),

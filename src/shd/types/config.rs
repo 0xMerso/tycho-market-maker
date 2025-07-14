@@ -14,7 +14,6 @@ pub struct EnvConfig {
     pub heartbeat: String,
     pub tycho_api_key: String,
     // Wallet
-    pub wallet_public_key: String,
     pub wallet_private_key: String,
 }
 
@@ -69,7 +68,6 @@ impl EnvConfig {
             path: utils::misc::get("CONFIG_PATH"),
             testing: utils::misc::get("TESTING") == "true",
             heartbeat: utils::misc::get("HEARTBEAT"),
-            wallet_public_key: utils::misc::get("WALLET_PUBLIC_KEY"),
             wallet_private_key: utils::misc::get("WALLET_PRIVATE_KEY"),
             tycho_api_key: utils::misc::get("TYCHO_API_KEY"),
         }
@@ -79,7 +77,6 @@ impl EnvConfig {
         tracing::debug!("Env Config:");
         tracing::debug!("  Testing:               {}", self.testing);
         tracing::debug!("  Heartbeat:             {}", self.heartbeat);
-        tracing::debug!("  Public key:            {}", self.wallet_public_key);
         // tracing::debug!("  Private Key:           🤐");
         tracing::debug!("  Tycho API Key:         {}...", &self.tycho_api_key[..5]);
     }

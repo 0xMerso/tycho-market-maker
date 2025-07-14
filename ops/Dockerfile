@@ -32,8 +32,8 @@ RUN echo "🐳  BUILD_TYPE: $BUILD_TYPE"
 RUN echo "🐳  PROGRAM: $PROGRAM"
 RUN if [ "$PROGRAM" = "maker" ]; then echo "🐳  [MAKER] CONFIG_PATH: $CONFIG_PATH"; fi
 
-RUN echo "🐳  Current directory contents:"
-RUN ls -la
+# RUN echo "🐳  Current directory contents:"
+# RUN ls -la
 
 # Build the Rust binary
 RUN if [ "$BUILD_TYPE" = "release" ]; then \
