@@ -11,8 +11,8 @@ RUN apt-get update && \
       git && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Set workspace
-WORKDIR /workspace
+# Set app
+WORKDIR /app
 
 # Copy entire project
 COPY . .
@@ -32,6 +32,9 @@ RUN echo "🐳  BUILD_TYPE: $BUILD_TYPE"
 RUN echo "🐳  PROGRAM: $PROGRAM"
 RUN if [ "$PROGRAM" = "maker" ]; then echo "🐳  [MAKER] CONFIG_PATH: $CONFIG_PATH"; fi
 
+RUN echo "🐳  Current directory contents:"
+RUN ls -la
+
 # Build the Rust binary
 RUN if [ "$BUILD_TYPE" = "release" ]; then \
       cargo build --release --bin ${PROGRAM}; \
@@ -40,7 +43,7 @@ RUN if [ "$BUILD_TYPE" = "release" ]; then \
     fi
 
 # Set working directory to project root for config access
-WORKDIR /workspace
+WORKDIR /app
 
 # Default command: run built binary based on BUILD_TYPE
 CMD [ "bash", "-c", "if [ \"$BUILD_TYPE\" = \"release\" ]; then exec ./target/release/$PROGRAM; else exec ./target/debug/$PROGRAM; fi" ]
