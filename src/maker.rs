@@ -85,7 +85,7 @@ async fn main() {
 
         let state = Arc::clone(&cache);
         match AssertUnwindSafe(mk.run(state.clone(), env.clone())).catch_unwind().await {
-            Ok(_) => tracing::debug!("Monitoring task ended. Restarting..."),
+            Ok(_) => tracing::debug!("Maker main task ended. Restarting..."),
             Err(e) => tracing::error!("Monitoring task panicked: {:?}. Restarting...", e),
         }
 
