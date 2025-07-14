@@ -5,6 +5,7 @@ FROM rust:1.85-alpine AS builder
 # Install native build dependencies
 RUN apk add --no-cache \
     build-base \
+    libusb-dev \
     openssl-dev \
     pkgconfig \
     linux-headers \
