@@ -1,4 +1,3 @@
-use crate::types::config::MarketMakerConfig;
 use crate::types::moni::{MessageType, NewInstanceMessage, NewPricesMessage, NewTradeMessage, RedisMessage};
 use crate::utils::r#static::CHANNEL_REDIS;
 

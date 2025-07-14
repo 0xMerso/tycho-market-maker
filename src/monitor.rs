@@ -1,17 +1,4 @@
-use std::{collections::HashMap, panic::AssertUnwindSafe, sync::Arc};
-
-use futures::FutureExt;
-use serde_json;
-use shd::{
-    core::pricefeed::{BinancePriceFeed, ChainlinkPriceFeed, PriceFeed, PriceFeedType},
-    types::{
-        config::{MarketMakerConfig, MoniEnvConfig},
-        maker::{IMarketMaker, MarketMakerBuilder},
-        tycho::TychoStreamState,
-    },
-    utils::r#static::{CHANNEL_REDIS, RESTART},
-};
-use tokio::sync::RwLock;
+use shd::{types::config::MoniEnvConfig, utils::r#static::CHANNEL_REDIS};
 use tracing::Level;
 use tracing_subscriber::EnvFilter;
 

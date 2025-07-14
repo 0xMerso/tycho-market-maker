@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::str::FromStr;
-use tycho_client::rpc::RPCClient;
 use tycho_client::HttpRPCClient;
-use tycho_common::dto::{PaginationParams, ProtocolStateRequestBody, ResponseToken, TokensRequestBody, VersionParam};
+use tycho_client::rpc::RPCClient;
 use tycho_common::Bytes;
+use tycho_common::dto::{PaginationParams, ProtocolStateRequestBody, ResponseToken, TokensRequestBody, VersionParam};
 use tycho_simulation::evm::protocol::ekubo::state::EkuboState;
 use tycho_simulation::evm::protocol::filters::{balancer_pool_filter, uniswap_v4_pool_with_hook_filter};
 use tycho_simulation::models::Token;
@@ -70,10 +70,10 @@ pub fn amm_fee_to_bps(cp: ProtocolComponent) -> u128 {
         .find(|(k, _)| *k == "key_lp_fee" || *k == "fee")
         .map(|(_, v)| v.to_string())
         .unwrap_or_default();
-    
+
     let fee = value.trim_start_matches("0x");
     let fee = u128::from_str_radix(fee, 16).unwrap_or(0);
-    
+
     match AmmType::from(cp.protocol_type_name.as_str()) {
         AmmType::PancakeswapV2 | AmmType::Sushiswap | AmmType::UniswapV2 => fee, // Already in bps
         AmmType::PancakeswapV3 | AmmType::UniswapV3 | AmmType::UniswapV4 => fee * (BASIS_POINT_DENO as u128) / 1_000_000,
@@ -107,15 +107,15 @@ fn sanitize(input: Vec<ResponseToken>) -> Vec<Token> {
             });
         }
     }
-    tokens.into_iter()
-    .filter(|s| {
-        // Ensure the symbol has no control characters and meets any other symbol criteria
-        s.symbol.chars().all(|c| c.is_ascii_graphic()) && 
-        !s.symbol.chars().any(|c| c.is_control()) &&
+    tokens
+        .into_iter()
+        .filter(|s| {
+            // Ensure the symbol has no control characters and meets any other symbol criteria
+            s.symbol.chars().all(|c| c.is_ascii_graphic()) && !s.symbol.chars().any(|c| c.is_control()) &&
         // Check that the address looks valid (e.g., starts with "0x" and is the correct length)
         s.address.to_string().starts_with("0x")
-    })
-    .collect()
+        })
+        .collect()
 }
 
 /// Get the tokens only for the configured strategy
@@ -124,29 +124,28 @@ pub async fn scope(config: MarketMakerConfig, key: Option<&str>) -> Vec<Token> {
         tracing::error!("Failed to get tokens");
         return vec![];
     };
-    
+
     let targets = [config.base_token_address.clone().to_lowercase(), config.quote_token_address.clone().to_lowercase()];
-    let tokens = atks
-        .iter()
+
+    atks.iter()
         .filter(|t| {
             let addr = t.address.to_string().to_lowercase();
             targets.iter().any(|target| target == &addr)
         })
         .cloned()
-        .collect::<Vec<Token>>();
-    tokens
+        .collect::<Vec<Token>>()
 }
 
 /// Get the tokens from the Tycho API
 /// Filters are hardcoded for now.
 pub async fn specific(mmc: MarketMakerConfig, key: Option<&str>, addresses: Vec<String>) -> Option<Vec<Token>> {
     tracing::info!("Getting tokens for network {}", mmc.network_name.as_str().to_string());
-    
+
     let Ok(client) = HttpRPCClient::new(format!("https://{}", mmc.tycho_api).as_str(), key) else {
         tracing::error!("Failed to create client");
         return None;
     };
-    
+
     let addresses = addresses.iter().map(|a| Bytes::from_str(a.to_lowercase().as_str()).unwrap()).collect::<Vec<Bytes>>();
     let (chain, _, _) = chain(mmc.network_name.as_str().to_string()).expect("Invalid chain");
     let req = TokensRequestBody {
@@ -156,7 +155,7 @@ pub async fn specific(mmc: MarketMakerConfig, key: Option<&str>, addresses: Vec<
         chain,
         pagination: PaginationParams { page: 0, page_size: 500_i64 },
     };
-    
+
     match client.get_tokens(&req.clone()).await {
         Ok(result) => {
             let tokens = sanitize(result.tokens);
@@ -173,15 +172,15 @@ pub async fn specific(mmc: MarketMakerConfig, key: Option<&str>, addresses: Vec<
 /// Filters are hardcoded for now.
 pub async fn tokens(mmc: MarketMakerConfig, key: Option<&str>) -> Option<Vec<Token>> {
     tracing::info!("Getting tokens for network {}", mmc.network_name.as_str());
-    
+
     let Ok(client) = HttpRPCClient::new(format!("https://{}", mmc.tycho_api).as_str(), key) else {
         tracing::error!("Failed to create client");
         return None;
     };
-    
+
     let start_time = std::time::SystemTime::now();
     let (chain, _, _) = chain(mmc.network_name.as_str().to_string()).expect("Invalid chain");
-    
+
     match client.get_all_tokens(chain, Some(100), Some(1), 3000).await {
         Ok(result) => {
             let tokens = sanitize(result);
@@ -225,62 +224,59 @@ pub async fn psb(mmc: MarketMakerConfig, key: String, psbc: PsbConfig, tokens: V
             .exchange::<UniswapV3State>(TychoSupportedProtocol::PancakeswapV3.to_string().as_str(), filter.clone(), None)
             .exchange::<EkuboState>(TychoSupportedProtocol::EkuboV2.to_string().as_str(), filter.clone(), None)
             .exchange::<EVMPoolState<PreCachedDB>>(TychoSupportedProtocol::BalancerV2.to_string().as_str(), filter.clone(), Some(balancer))
-            // .exchange::<EVMPoolState<PreCachedDB>>(TychoSupportedProtocol::Curve.to_string().as_str(), filter.clone(), Some(curve));
+        // .exchange::<EVMPoolState<PreCachedDB>>(TychoSupportedProtocol::Curve.to_string().as_str(), filter.clone(), Some(curve));
     }
     psb
 }
-
 
 /// Get the balances of the component in the specified protocol system.
 /// Returns a HashMap of component addresses and their balances.
 /// Balance is returned as a u128, with decimals.
 pub async fn get_component_balances(mmc: MarketMakerConfig, cp: ProtocolComponent, key: String) -> Option<HashMap<String, u128>> {
-
     match HttpRPCClient::new(format!("https://{}", mmc.tycho_api).as_str(), Some(key.as_str())) {
         Ok(client) => {
-     
-    let (chain, _, _) = chain(mmc.network_name.clone().as_str().to_string()).expect("Invalid chain");
-    let body = ProtocolStateRequestBody {
-        protocol_ids: Some(vec![cp.id.to_string().to_lowercase().clone()]),
-        protocol_system: cp.protocol_system, // Single, so cannot use protocol_ids vec of different protocols ?
-        chain,
-        include_balances: true,           // We want to include account balances.
-        version: VersionParam::default(), // { timestamp: None, block: None },
-        pagination: PaginationParams {
-            page: 0,        // Start at the first page.
-            page_size: 100, // Maximum page size supported is 100.
-        },
-    };
-    
-    match client.get_protocol_states(&body).await {
-        Ok(response) => {
-            let attributes = response.states.clone().into_iter().map(|state| state.attributes.clone()).collect::<Vec<_>>();
-            // for attribute in attributes.iter() {
-            //     for a in attribute.iter() {
-            //         tracing::debug!(" - Attribute key: {:?}", a.0);
-            //     }
-            // }
-            let component_balances = response.states.into_iter().map(|state| state.balances.clone()).collect::<Vec<_>>();
-            let mut result = HashMap::new();
-            for cb in component_balances.iter() {
-                for c in cb.iter() {
-                    let b = u128::from_str_radix(c.1.to_string().trim_start_matches("0x"), 16);
-                    if let Ok(b) = b {
-                        result.insert(c.0.clone().to_string().to_lowercase(), b);
+            let (chain, _, _) = chain(mmc.network_name.clone().as_str().to_string()).expect("Invalid chain");
+            let body = ProtocolStateRequestBody {
+                protocol_ids: Some(vec![cp.id.to_string().to_lowercase().clone()]),
+                protocol_system: cp.protocol_system, // Single, so cannot use protocol_ids vec of different protocols ?
+                chain,
+                include_balances: true,           // We want to include account balances.
+                version: VersionParam::default(), // { timestamp: None, block: None },
+                pagination: PaginationParams {
+                    page: 0,        // Start at the first page.
+                    page_size: 100, // Maximum page size supported is 100.
+                },
+            };
+
+            match client.get_protocol_states(&body).await {
+                Ok(response) => {
+                    let attributes = response.states.clone().into_iter().map(|state| state.attributes.clone()).collect::<Vec<_>>();
+                    // for attribute in attributes.iter() {
+                    //     for a in attribute.iter() {
+                    //         tracing::debug!(" - Attribute key: {:?}", a.0);
+                    //     }
+                    // }
+                    let component_balances = response.states.into_iter().map(|state| state.balances.clone()).collect::<Vec<_>>();
+                    let mut result = HashMap::new();
+                    for cb in component_balances.iter() {
+                        for c in cb.iter() {
+                            let b = u128::from_str_radix(c.1.to_string().trim_start_matches("0x"), 16);
+                            if let Ok(b) = b {
+                                result.insert(c.0.clone().to_string().to_lowercase(), b);
+                            }
+                        }
                     }
+                    Some(result)
+                }
+                Err(e) => {
+                    tracing::error!("Failed to get protocol states: {}: {:?}", cp.id.to_string().clone(), e.to_string());
+                    None
                 }
             }
-            Some(result)
         }
         Err(e) => {
-            tracing::error!("Failed to get protocol states: {}: {:?}", cp.id.to_string().clone(), e.to_string());
+            tracing::error!("Failed to create client: {:?}", e.to_string());
             None
         }
     }
-}
-Err(e) => {
-    tracing::error!("Failed to create client: {:?}", e.to_string());
-    None
-}
-}
 }

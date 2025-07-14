@@ -1,8 +1,6 @@
 use std::{collections::HashMap, str::FromStr};
 
 use crate::{
-    core::optimize::OptimizationResult,
-    data::r#pub,
     helpers::global::{cpname, get_alloy_chain, get_component_balances},
     types::{
         config::{EnvConfig, NetworkName},
@@ -10,16 +8,11 @@ use crate::{
         moni::NewPricesMessage,
         tycho::{ProtoSimComp, PsbConfig, SharedTychoStreamState},
     },
-    utils::{
-        self,
-        r#static::{
-            ADD_TVL_THRESHOLD, APPROVE_FN_SIGNATURE, BASIS_POINT_DENO, DEFAULT_APPROVE_GAS, DEFAULT_SWAP_GAS, HAS_EXECUTED, NULL_ADDRESS, OPTI_LOW_FACTOR, OPTI_MAX_ITERATIONS, PRICE_MOVE_DENO,
-            PRICE_MOVE_THRESHOLD, SHARE_POOL_BAL_SWAP_BPS,
-        },
+    utils::r#static::{
+        ADD_TVL_THRESHOLD, APPROVE_FN_SIGNATURE, BASIS_POINT_DENO, DEFAULT_APPROVE_GAS, DEFAULT_SWAP_GAS, HAS_EXECUTED, NULL_ADDRESS, PRICE_MOVE_DENO, PRICE_MOVE_THRESHOLD, SHARE_POOL_BAL_SWAP_BPS,
     },
 };
 use alloy::{
-    consensus::transaction,
     providers::{Provider, ProviderBuilder},
     rpc::types::{
         TransactionInput, TransactionRequest,
@@ -114,7 +107,7 @@ impl IMarketMaker for MarketMaker {
     /// Should be stored in memory and updated after each readjustment only
     async fn fetch_inventory(&self, env: EnvConfig) -> Result<Inventory, String> {
         let provider = ProviderBuilder::new().on_http(self.config.rpc_url.clone().parse().expect("Failed to parse RPC_URL"));
-        let tokens = vec![self.base.clone(), self.quote.clone()];
+        let tokens = [self.base.clone(), self.quote.clone()];
         let addresses = tokens.iter().map(|t| t.address.to_string()).collect::<Vec<String>>();
         match crate::utils::evm::balances(&provider, self.config.wallet_public_key.clone(), addresses.clone()).await {
             Ok(balances) => match provider.get_transaction_count(self.config.wallet_public_key.to_string().parse().unwrap()).await {
@@ -230,7 +223,7 @@ impl IMarketMaker for MarketMaker {
             let spread = spot - reference;
             let spread_bps = spread / reference * BASIS_POINT_DENO;
             // Check if the spread is above the threshold
-            let symbol = if spread_bps < 0. as f64 { "buy 📈" } else { "sell 📉" };
+            let symbol = if spread_bps < 0_f64 { "buy 📈" } else { "sell 📉" };
             tracing::debug!(
                 "   - Evaluating pool {}: Spot: {:.5} | Reference: {:.5} | Spread: {:.5} | Spread BPS: {:<3.2} | Should {}",
                 cpname(psc.component.clone()),
@@ -476,8 +469,8 @@ impl IMarketMaker for MarketMaker {
             checked_token: output.clone(),
             // Others fields
             given_amount: amount_in.clone(),
-            slippage: Some(self.config.max_slippage_pct as f64), // Slippage in decimal < 1, because 1.0 = 100%
-            exact_out: false,                                    // It's an exact in solution
+            slippage: Some(self.config.max_slippage_pct), // Slippage in decimal < 1, because 1.0 = 100%
+            exact_out: false,                             // It's an exact in solution
             expected_amount: Some(amount_out),
             checked_amount: Some(amount_out_min), // The amount out will not be checked in execution
             swaps: vec![swap.clone()],
@@ -609,8 +602,8 @@ impl IMarketMaker for MarketMaker {
         let mut transactions = transactions.clone();
         transactions.retain(|t| {
             let sender = t.approval.from.unwrap_or_default().to_string().to_lowercase();
-            let matching = wallet.address().to_string().eq_ignore_ascii_case(sender.clone().as_str());
-            matching
+
+            wallet.address().to_string().eq_ignore_ascii_case(sender.clone().as_str())
         });
         // Pure EVM simulation
         // Later, on mainnet, with flashbot bundle simu, it won't need it
@@ -629,7 +622,7 @@ impl IMarketMaker for MarketMaker {
 
             for (x, tx) in transactions.iter().enumerate() {
                 let calls = vec![tx.approval.clone(), tx.swap.clone()];
-                let names = vec!["approval".to_string(), "swap".to_string()];
+                let names = ["approval".to_string(), "swap".to_string()];
                 let payload = SimulatePayload {
                     block_state_calls: vec![SimBlock {
                         block_overrides: None,

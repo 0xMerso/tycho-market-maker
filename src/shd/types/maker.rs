@@ -9,7 +9,7 @@ use tycho_simulation::{
     protocol::{models::ProtocolComponent, state::ProtocolSim},
 };
 
-use crate::core::{optimize::OptimizationResult, pricefeed::PriceFeed};
+use crate::core::pricefeed::PriceFeed;
 
 use super::{
     config::{EnvConfig, MarketMakerConfig},

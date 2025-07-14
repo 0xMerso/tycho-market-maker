@@ -1,6 +1,6 @@
 // main.rs
 
-use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, Database, DatabaseConnection, DbBackend, DbErr, EntityTrait, QueryFilter, Set, Statement};
+use sea_orm::{ActiveModelTrait, Database, DatabaseConnection, DbErr, EntityTrait, Set};
 use serde_json::json;
 
 use crate::{
@@ -94,7 +94,7 @@ pub async fn handle(msg: &ParsedMessage, env: MoniEnvConfig) {
                     tracing::trace!("    - No instances found for this configuration");
                 }
 
-                if let Err(err) = create::instance(&db, &cfg, msg.config.clone(), msg.identifier.clone(), msg.commit.clone()).await {
+                if let Err(err) = create::instance(&db, cfg, msg.config.clone(), msg.identifier.clone(), msg.commit.clone()).await {
                     tracing::error!("   - Error attaching instance to configuration: {}", err);
                 }
             } else {
