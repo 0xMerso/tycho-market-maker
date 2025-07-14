@@ -1,54 +1,57 @@
-# Builder stage: use the official Rust+Alpine image for a minimal toolchain
+# ---------- Builder stage ----------
+# Use official Rust + Alpine image for minimal footprint
 FROM rust:1.85-alpine AS builder
 
-# install native build-deps plus Node.js/npm for Prisma
+# Install native build dependencies
 RUN apk add --no-cache \
-  build-base \
-  openssl-dev \
-  pkgconfig \
-  curl \
-  git \
-  nodejs \
-  npm
+    build-base \
+    openssl-dev \
+    pkgconfig \
+    curl \
+    git
 
 WORKDIR /workspace
 
-# copy only manifests to cache Rust & JS dependencies
+# Copy Rust manifests for dependency caching
 COPY Cargo.toml Cargo.lock ./
-COPY package*.json ./
-COPY prisma ./prisma
 
-# install JS deps and generate Prisma client
-# RUN npm ci --only=production && npx prisma generate
-
-# now copy full source
+# Now copy the full project source
 COPY . .
 
-# remove any local override
+# Remove any local Cargo override (if present)
 RUN rm -f .cargo/config.toml
 
-# accept build args
-ARG BUILD_TYPE=debug
-ARG PROGRAM
+# Build arguments: allow debug or release builds
+ARG BUILD_TYPE=debug  # use 'release' for optimized binary
+ARG PROGRAM           # name of the binary to compile
 
-# build the program
-RUN cargo build --bin "$PROGRAM"
+# Compile the Rust program
+RUN if [ "$BUILD_TYPE" = "release" ]; then \
+      cargo build --release --bin "$PROGRAM" -q; \
+    else \
+      cargo build --bin "$PROGRAM" -q; \
+    fi
 
-# Runtime stage: tiny Alpine with only needed libraries
+
+# ---------- Runtime stage ----------
+# Start from minimal Alpine image with only runtime libs
 FROM alpine:3.18
 
-# install runtime SSL and git
-RUN apk add --no-cache openssl git
+# Install SSL and git (if needed at runtime by your app)
+RUN apk add --no-cache \
+    openssl \
+    git
 
 WORKDIR /workspace
 
-# re-declare args so we can use them here
+# Declare build args again to know which binary to copy
 ARG BUILD_TYPE=debug
 ARG PROGRAM
 
-# copy the compiled binary from builder
+# Copy compiled binary from builder stage
 COPY --from=builder /workspace/target/${BUILD_TYPE}/$PROGRAM /usr/local/bin/$PROGRAM
 
-# entrypoint just runs your program
-ENTRYPOINT ["/usr/local/bin/"]
-CMD ["${PROGRAM}"]
+# Set entrypoint to your program
+ENTRYPOINT ["/usr/local/bin/$PROGRAM"]
+# Optionally allow additional args
+CMD ["$PROGRAM"]
