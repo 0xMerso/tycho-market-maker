@@ -17,10 +17,10 @@ services:
     ports:
       - "42042:42042"
     depends_on:
-      monitor:
-        condition: service_healthy
       redis:
         condition: service_healthy
+      monitor:
+        condition: service_started
     env_file:
       - config/.env.maker.ex #!
     environment:
