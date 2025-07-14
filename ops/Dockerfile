@@ -1,5 +1,5 @@
 # Builder stage: use the official Rust+Alpine image for a minimal toolchain
-FROM rust:1.87.0-alpine3.18 AS builder
+FROM rust:1.85-alpine AS builder
 
 # install native build-deps plus Node.js/npm for Prisma
 RUN apk add --no-cache \
@@ -37,8 +37,8 @@ RUN cargo build --bin "$PROGRAM"
 # Runtime stage: tiny Alpine with only needed libraries
 FROM alpine:3.18
 
-# install runtime SSL
-RUN apk add --no-cache openssl
+# install runtime SSL and git
+RUN apk add --no-cache openssl git
 
 WORKDIR /workspace
 
