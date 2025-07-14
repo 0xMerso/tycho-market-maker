@@ -1,6 +1,6 @@
-pub mod core;
 pub mod data;
 pub mod entity;
-pub mod helpers;
+pub mod maker;
+pub mod opti;
 pub mod types;
 pub mod utils;

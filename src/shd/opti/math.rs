@@ -7,3 +7,5 @@ pub struct OptimizationResult {
     pub profit_bps: f64,
     pub profitable: bool,
 }
+
+// https://github.com/hugoschnoering2/TychoTAPs/blob/main/optim.ipynb

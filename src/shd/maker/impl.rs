@@ -1,7 +1,8 @@
 use std::{collections::HashMap, str::FromStr};
 
 use crate::{
-    helpers::global::{cpname, get_alloy_chain, get_component_balances},
+    maker::tycho::{cpname, get_component_balances},
+    opti::routing,
     types::{
         config::{EnvConfig, NetworkName},
         maker::{CompReadjustment, ComponentPriceData, ExecutedPayload, ExecutionOrder, IMarketMaker, Inventory, MarketContext, MarketMaker, PreparedTransaction, SwapCalculation, TradeDirection},
@@ -38,8 +39,10 @@ use tycho_simulation::{
     protocol::{models::ProtocolComponent, state::ProtocolSim},
 };
 
-use super::pricefeed::chainlink;
 use alloy_primitives::Bytes as AlloyBytes;
+
+use crate::maker::exec::ExecStrategy;
+use crate::maker::feed::PriceFeed;
 
 // Impl print for MarketContext
 // Implemented here for tracing/log purposes, prefix path has to be maker.rs file
@@ -59,7 +62,7 @@ impl MarketContext {
 }
 
 #[async_trait]
-impl IMarketMaker for MarketMaker {
+impl<E: ExecStrategy, F: PriceFeed> IMarketMaker for MarketMaker<E, F> {
     /// Market Maker main functions
 
     async fn fetch_market_price(&self) -> Result<f64, String> {
@@ -69,9 +72,9 @@ impl IMarketMaker for MarketMaker {
     async fn fetch_eth_usd(&self) -> Result<f64, String> {
         if self.config.gas_token_chainlink_price_feed.is_empty() {
             tracing::warn!("No gas oracle feed found, using Coingecko");
-            return Ok(super::pricefeed::coingecko().await.unwrap_or(0.));
+            return Ok(super::feed::coingecko().await.unwrap_or(0.));
         }
-        chainlink(self.config.rpc_url.clone(), self.config.gas_token_chainlink_price_feed.clone()).await
+        super::feed::chainlink(self.config.rpc_url.clone(), self.config.gas_token_chainlink_price_feed.clone()).await
     }
 
     /// Get the prices of the components
@@ -151,8 +154,8 @@ impl IMarketMaker for MarketMaker {
                 let eth_to_usd = self.fetch_eth_usd().await;
                 let provider = ProviderBuilder::new().on_http(self.config.rpc_url.clone().parse().unwrap());
                 let block: alloy::rpc::types::Block = provider.get_block_by_number(alloy::eips::BlockNumberOrTag::Latest, false).await.unwrap().unwrap();
-                let base_to_eth_vp = super::routing::find_path(components.clone(), self.base.address.to_string().to_lowercase(), self.config.gas_token_symbol.to_lowercase());
-                let quote_to_eth_vp = super::routing::find_path(components.clone(), self.quote.address.to_string().to_lowercase(), self.config.gas_token_symbol.to_lowercase());
+                let base_to_eth_vp = routing::find_path(components.clone(), self.base.address.to_string().to_lowercase(), self.config.gas_token_symbol.to_lowercase());
+                let quote_to_eth_vp = routing::find_path(components.clone(), self.quote.address.to_string().to_lowercase(), self.config.gas_token_symbol.to_lowercase());
                 match (base_to_eth_vp, quote_to_eth_vp, eth_to_usd) {
                     (Ok(base_to_eth_vp), Ok(quote_to_eth_vp), Ok(eth_to_usd)) => {
                         let mut to_eth_ptss = vec![];
@@ -174,8 +177,8 @@ impl IMarketMaker for MarketMaker {
                                 }
                             }
                         }
-                        let base_to_eth = super::routing::quote(to_eth_ptss.clone(), tokens.clone(), base_to_eth_vp.token_path.clone());
-                        let quote_to_eth = super::routing::quote(to_eth_ptss.clone(), tokens.clone(), quote_to_eth_vp.token_path.clone());
+                        let base_to_eth = routing::quote(to_eth_ptss.clone(), tokens.clone(), base_to_eth_vp.token_path.clone());
+                        let quote_to_eth = routing::quote(to_eth_ptss.clone(), tokens.clone(), quote_to_eth_vp.token_path.clone());
                         // tracing::debug!("Gas: {:?} | Native: {}", eip1559_fees, native_gas_price);
                         let elasped = time.elapsed().unwrap_or_default().as_millis();
                         tracing::debug!("Market context fetched in {} ms", elasped);
@@ -531,7 +534,7 @@ impl IMarketMaker for MarketMaker {
         unsafe {
             std::env::set_var("RPC_URL", self.config.rpc_url.clone());
         }
-        let (_, _, chain) = crate::helpers::global::chain(self.config.network_name.as_str().to_string()).unwrap();
+        let (_, _, chain) = crate::maker::tycho::chain(self.config.network_name.as_str().to_string()).unwrap();
         // --- Prepare the solutions (solutions = trades encoded with Tycho EVM Encoder) ---
         // @dev This await section has to be done outside of the EVMEncoderBuilder for some unknown reaso, compiler error
         let mut solutions = vec![];
@@ -594,7 +597,7 @@ impl IMarketMaker for MarketMaker {
     /// In a recursive or dependent way, we would need to simulate each order one by one, possible with state overwrite
     /// Logic depends on the network, even for simulation
     async fn simulate(&self, transactions: Vec<PreparedTransaction>, env: EnvConfig) -> Vec<PreparedTransaction> {
-        let alloy_chain = get_alloy_chain(self.config.network_name.as_str().to_string()).expect("Failed to get alloy chain");
+        let alloy_chain = crate::maker::tycho::get_alloy_chain(self.config.network_name.as_str().to_string()).expect("Failed to get alloy chain");
         let rpc = self.config.rpc_url.parse::<url::Url>().unwrap().clone(); // ! Custom per network
         let pk = env.wallet_private_key.clone();
         let wallet = PrivateKeySigner::from_bytes(&B256::from_str(&pk).expect("Failed to convert swapper pk to B256")).expect("Failed to private key signer");
@@ -672,88 +675,10 @@ impl IMarketMaker for MarketMaker {
     /// Broadcast the transaction to the network
     /// Swap are sensitive to MEV so we need to be careful
     /// Logic depends on the network
-    async fn broadcast(&self, prepared: Vec<PreparedTransaction>, env: EnvConfig) {
-        let alloy_chain = get_alloy_chain(self.config.network_name.as_str().to_string()).expect("Failed to get alloy chain");
-        let rpc = self.config.rpc_url.parse::<url::Url>().unwrap().clone(); // ! Custom per network
-        let pk = env.wallet_private_key.clone();
-        let wallet = PrivateKeySigner::from_bytes(&B256::from_str(&pk).expect("Failed to convert swapper pk to B256")).expect("Failed to private key signer");
-        let signer = alloy::network::EthereumWallet::from(wallet.clone());
-        let provider = ProviderBuilder::new().with_chain(alloy_chain).wallet(signer.clone()).on_http(rpc.clone());
-        let mut exec = ExecutedPayload::default();
-        let netname = NetworkName::from_str(self.config.network_name.as_str()).unwrap();
-        match netname {
-            NetworkName::Ethereum | NetworkName::Base | NetworkName::Unichain => {
-                // Mainnet
-
-                for (x, tx) in prepared.iter().enumerate() {
-                    tracing::debug!(
-                        "Trade: #{} | Broadcasting on {} | Method: {}",
-                        x,
-                        self.config.network_name.as_str().to_string(),
-                        self.config.broadcast_url
-                    );
-
-                    if HAS_EXECUTED.load(std::sync::atomic::Ordering::Relaxed) {
-                        // ! This is a hack to prevent the program from executing transactions in testing phase
-                        tracing::info!("⏩ Skipping broadcast - already executed a transaction in the program lifetime");
-                        return;
-                    }
-
-                    if env.testing {
-                        tracing::info!("🧪 Skipping broadcast - Testing mode enabled");
-                        return;
-                    }
-
-                    // --- Sending, without waiting for receipt ---
-                    let time = std::time::SystemTime::now();
-                    match provider.send_transaction(tx.approval.clone()).await {
-                        Ok(approve) => {
-                            let approval_time = time.elapsed().unwrap_or_default().as_millis();
-                            tracing::debug!("Explorer: {}tx/{} | Approval shoot took {} ms", self.config.explorer_url, approve.tx_hash(), approval_time);
-                            exec.approval.sent = true;
-                            exec.approval.hash = approve.tx_hash().to_string();
-                            HAS_EXECUTED.store(true, std::sync::atomic::Ordering::Relaxed);
-                            match provider.send_transaction(tx.swap.clone()).await {
-                                Ok(swap) => {
-                                    let swap_time = time.elapsed().unwrap_or_default().as_millis();
-                                    tracing::debug!("Explorer: {}tx/{} | Swap (+ approval) shoot took {} ms", self.config.explorer_url, swap.tx_hash(), swap_time);
-                                    exec.swap.sent = true;
-                                    exec.swap.hash = swap.tx_hash().to_string();
-                                    //  --- Wait for receipt ---
-                                    let time = std::time::SystemTime::now();
-                                    let approve_receipt = approve.get_receipt().await;
-                                    let swap_receipt = swap.get_receipt().await;
-                                    let total_time = time.elapsed().unwrap_or_default().as_millis();
-                                    tracing::debug!("Approval get_receipt + Swap get_receipt took {} ms", total_time);
-                                    match (approve_receipt, swap_receipt) {
-                                        (Ok(approval_receipt), Ok(swap_receipt)) => {
-                                            tracing::debug!("Approval receipt: status: {:?}", approval_receipt.status());
-                                            exec.approval.status = approval_receipt.status();
-                                            exec.swap.status = swap_receipt.status();
-                                        }
-                                        _ => {
-                                            tracing::error!("Failed to get receipt");
-                                        }
-                                    }
-                                }
-                                Err(e) => {
-                                    tracing::error!("Failed to send swap transaction: {:?}", e);
-                                    exec.swap.error = Some(e.to_string());
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            tracing::error!("Failed to send approval transaction: {:?}", e);
-                            exec.approval.error = Some(e.to_string());
-                        }
-                    }
-                }
-            }
-            _ => {
-                // Other networks
-                tracing::error!("Broadcast not implemented for network {}", self.config.network_name.as_str().to_string());
-            }
-        }
+    async fn execute(&self, prepared: Vec<PreparedTransaction>, env: EnvConfig) {
+        // Use the execution strategy to process transactions
+        tracing::info!("Using execution strategy: {}", self.execution.name());
+        let processed = self.execution.execute(self.config.clone(), prepared.clone(), env.clone()).await;
     }
 
     /// Monitor the ProtocolStreamBuilder for new pairs and updates, evaluate if MM bot has opportunities
@@ -769,7 +694,7 @@ impl IMarketMaker for MarketMaker {
             let mut components = vec![];
             let mut previous_reference_price = 0.0;
             let mut protosims: HashMap<String, Box<dyn ProtocolSim>> = HashMap::new();
-            let psb = crate::helpers::global::psb(self.config.clone(), env.tycho_api_key.to_string(), psbc.clone(), atks.clone()).await;
+            let psb = crate::maker::tycho::psb(self.config.clone(), env.tycho_api_key.to_string(), psbc.clone(), atks.clone()).await;
             let _stream = match psb.build().await {
                 Ok(mut stream) => loop {
                     // Looping
@@ -909,7 +834,7 @@ impl IMarketMaker for MarketMaker {
                                                             // tracing::info!("Publishing trade event for {}", self.config.identifier());
                                                             let simulated = self.simulate(transactions, env.clone()).await;
                                                             tracing::info!("Elapsed from block update to broadcast: {} ms", elapsed);
-                                                            let broadcast = self.broadcast(simulated, env.clone()).await;
+                                                            let broadcast = self.execute(simulated, env.clone()).await;
                                                         }
                                                     }
                                                     Err(e) => {

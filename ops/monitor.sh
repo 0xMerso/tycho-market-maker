@@ -12,6 +12,7 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 function start() {
+    echo "Starting Redis …"
     trap '' SIGINT
     # ------------- Redis -------------
     rm -f dump.rdb
@@ -22,14 +23,14 @@ function start() {
 
     # ------------- Build -------------
     echo "Building monitor (first run may be slow) …"
-    cargo build --bin monitor -q 2>/dev/null
+    cargo build --bin monitor # -q 2>/dev/null
     echo "Build successful. Launching monitor…"
 
     # ------------- Execute once with all configs -------------
     (
         trap - SIGINT
         export RUST_LOG="off,maker=trace,shd=trace,monitor=trace"
-        cargo run --bin monitor -q
+        # cargo run --bin monitor -q
     )
 
     echo "Monitor finished. Cleaning up…"
@@ -37,6 +38,4 @@ function start() {
     rm -f dump.rdb
 }
 
-# Comma-separated list of config files (your program reads this env var as an array) --- No longer needed
-# export CONFIGS_PATHS="config/mmc.mainnet.eth-usdc.toml,config/mmc.mainnet.eth-wbtc.toml,config/mmc.mainnet.usdc-dai.toml,config/mmc.unichain.eth-usdc.toml,config/mmc.base.eth-usdc.toml"
 start

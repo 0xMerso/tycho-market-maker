@@ -55,3 +55,21 @@ pub async fn balances(provider: &RootProvider<Http<Client>>, owner: String, toke
 
     Ok(balances)
 }
+
+use crate::types::config::{EnvConfig, MarketMakerConfig};
+
+/// Initialize the wallet by checking the balances of the tokens, nonce, etc.
+pub async fn wallet(config: MarketMakerConfig, env: EnvConfig) {
+    let provider = ProviderBuilder::new().on_http(config.rpc_url.clone().parse().expect("Failed to parse RPC_URL"));
+
+    let tokens = vec![config.base_token_address.clone(), config.quote_token_address.clone()];
+
+    if let Ok(balances) = balances(&provider, config.wallet_public_key.clone(), tokens.clone()).await {
+        tracing::debug!("Balances of sender {}: {:?}", config.wallet_public_key.clone(), balances);
+    } else {
+        tracing::error!("Failed to get balances of sender");
+    }
+
+    let nonce = provider.get_transaction_count(config.wallet_public_key.to_string().parse().unwrap()).await.unwrap();
+    tracing::debug!("Nonce of sender {}: {}", config.wallet_public_key.clone(), nonce);
+}
