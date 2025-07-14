@@ -7,29 +7,29 @@ networks:
 
 services:
 
-  # maker-base-eth-usdc:
-  #   build: 
-  #     context: .
-  #     dockerfile: ops/Dockerfile
-  #     args:
-  #       - PROGRAM=maker
-  #       - BUILD_TYPE=debug #!
-  #   ports:
-  #     - "42042:42042"
-  #   depends_on:
-  #     redis:
-  #       condition: service_healthy
-  #     monitor:
-  #       condition: service_started
-  #   env_file:
-  #     - config/.env.maker.ex #!
-  #   environment:
-  #     - RUST_LOG="off,maker=trace,shd=trace,monitor=trace,test=trace"
-  #     - REDIS_HOST=redis
-  #     - CONFIG_PATH=config/mmc.base.eth-usdc.toml
-  #   restart: always
-  #   networks:
-  #     - tmm
+  maker-base-eth-usdc:
+    build: 
+      context: .
+      dockerfile: ops/Dockerfile
+      args:
+        - PROGRAM=maker
+        - BUILD_TYPE=debug #!
+    ports:
+      - "42042:42042"
+    depends_on:
+      redis:
+        condition: service_healthy
+      monitor:
+        condition: service_started
+    env_file:
+      - config/.env.maker.ex #!
+    environment:
+      - RUST_LOG="off,maker=trace,shd=trace,monitor=trace,test=trace"
+      - REDIS_HOST=redis
+      - CONFIG_PATH=config/mmc.base.eth-usdc.toml
+    restart: always
+    networks:
+      - tmm
 
 
   # One monitor for all market maker instances
