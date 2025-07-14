@@ -4,7 +4,7 @@ use std::{
     process::Command,
 };
 
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Serialize};
 
 /// Get the current Git commit hash
 /// Make sure, if running within Docker, git is installed in the Dockerfile

@@ -1,8 +1,9 @@
 use std::time::Duration;
 
-use crate::types::config::{EnvConfig, MarketMakerConfig};
-
-use super::r#static::HEARTBEAT_DELAY;
+use crate::{
+    types::config::{EnvConfig, MarketMakerConfig},
+    utils::constants::HEARTBEAT_DELAY,
+};
 
 /// Send a heartbeat 200 Get
 pub async fn alive(endpoint: String) -> bool {

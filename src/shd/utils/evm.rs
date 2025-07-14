@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use alloy::{
-    providers::{Provider, ProviderBuilder, RootProvider, utils::Eip1559Estimation},
+    providers::{utils::Eip1559Estimation, Provider, ProviderBuilder, RootProvider},
     transports::http::Http,
 };
 use reqwest::Client;

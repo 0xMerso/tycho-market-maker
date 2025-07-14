@@ -1,6 +1,6 @@
 use crate::types::config::MoniEnvConfig;
 use crate::types::moni::{MessageType, NewInstanceMessage, NewPricesMessage, NewTradeMessage, ParsedMessage, RedisMessage};
-use crate::utils::r#static::CHANNEL_REDIS;
+use crate::utils::constants::CHANNEL_REDIS;
 use serde_json;
 
 /// Parse a JSON string into a ParsedMessage

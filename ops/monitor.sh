@@ -11,31 +11,43 @@
 RED='\033[0;31m'
 NC='\033[0m'
 
+# Function to cleanup on exit
+cleanup() {
+    echo -e "\n${RED}Shutting down...${NC}"
+    pkill -f "redis-server.*42044" 2>/dev/null || true
+    rm -f dump.rdb
+    exit 0
+}
+
 function start() {
     echo "Starting Redis …"
-    trap '' SIGINT
+
+    # Set up signal handlers
+    trap cleanup SIGINT SIGTERM
+
     # ------------- Redis -------------
     rm -f dump.rdb
     pkill -f "redis-server.*42044" 2>/dev/null || true
-    redis-server --port 42044 --bind 127.0.0.1 >/dev/null # 2>&1 &
-    echo "Redis ready #$!"
+    redis-server --port 42044 --bind 127.0.0.1 >/dev/null 2>&1 &
+    REDIS_PID=$!
+    echo "Redis ready (PID: $REDIS_PID)"
     sleep 1
 
     # ------------- Build -------------
     echo "Building monitor (first run may be slow) …"
-    cargo build --bin monitor # -q 2>/dev/null
+    cargo build --bin monitor
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}Build failed${NC}"
+        cleanup
+    fi
     echo "Build successful. Launching monitor…"
 
-    # ------------- Execute once with all configs -------------
-    (
-        trap - SIGINT
-        export RUST_LOG="off,maker=trace,shd=trace,monitor=trace"
-        # cargo run --bin monitor -q
-    )
+    # ------------- Execute monitor -------------
+    export RUST_LOG="off,maker=trace,shd=trace,monitor=trace"
+    cargo run --bin monitor
 
     echo "Monitor finished. Cleaning up…"
-    pkill -f "redis-server.*42044"
-    rm -f dump.rdb
+    cleanup
 }
 
 start

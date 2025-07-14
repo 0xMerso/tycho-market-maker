@@ -1,4 +1,4 @@
-use shd::{types::config::MoniEnvConfig, utils::r#static::CHANNEL_REDIS};
+use shd::{types::config::MoniEnvConfig, utils::constants::CHANNEL_REDIS};
 use tracing::Level;
 use tracing_subscriber::EnvFilter;
 

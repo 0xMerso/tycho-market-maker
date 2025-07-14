@@ -2,7 +2,7 @@ use alloy::providers::ProviderBuilder;
 use alloy_primitives::Address;
 use async_trait::async_trait;
 use serde::Deserialize;
-use std::{str::FromStr, sync::Arc};
+use std::sync::Arc;
 
 use crate::types::{config::MarketMakerConfig, sol::IChainLinkPF};
 

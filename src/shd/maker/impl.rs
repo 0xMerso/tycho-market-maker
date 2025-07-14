@@ -4,20 +4,20 @@ use crate::{
     maker::tycho::{cpname, get_component_balances},
     opti::routing,
     types::{
-        config::{EnvConfig, NetworkName},
-        maker::{CompReadjustment, ComponentPriceData, ExecutedPayload, ExecutionOrder, IMarketMaker, Inventory, MarketContext, MarketMaker, PreparedTransaction, SwapCalculation, TradeDirection},
+        config::EnvConfig,
+        maker::{CompReadjustment, ComponentPriceData, ExecutionOrder, IMarketMaker, Inventory, MarketContext, MarketMaker, PreparedTransaction, SwapCalculation, TradeDirection},
         moni::NewPricesMessage,
         tycho::{ProtoSimComp, PsbConfig, SharedTychoStreamState},
     },
-    utils::r#static::{
-        ADD_TVL_THRESHOLD, APPROVE_FN_SIGNATURE, BASIS_POINT_DENO, DEFAULT_APPROVE_GAS, DEFAULT_SWAP_GAS, HAS_EXECUTED, NULL_ADDRESS, PRICE_MOVE_DENO, PRICE_MOVE_THRESHOLD, SHARE_POOL_BAL_SWAP_BPS,
+    utils::constants::{
+        ADD_TVL_THRESHOLD, APPROVE_FN_SIGNATURE, BASIS_POINT_DENO, DEFAULT_APPROVE_GAS, DEFAULT_SWAP_GAS, NULL_ADDRESS, PRICE_MOVE_DENO, PRICE_MOVE_THRESHOLD, SHARE_POOL_BAL_SWAP_BPS,
     },
 };
 use alloy::{
     providers::{Provider, ProviderBuilder},
     rpc::types::{
-        TransactionInput, TransactionRequest,
         simulate::{SimBlock, SimulatePayload},
+        TransactionInput, TransactionRequest,
     },
     signers::local::PrivateKeySigner,
     sol_types::SolValue,

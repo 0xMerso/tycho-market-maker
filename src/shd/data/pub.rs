@@ -1,5 +1,5 @@
 use crate::types::moni::{MessageType, NewInstanceMessage, NewPricesMessage, NewTradeMessage, RedisMessage};
-use crate::utils::r#static::CHANNEL_REDIS;
+use crate::utils::constants::CHANNEL_REDIS;
 
 use redis::Commands;
 use serde::Serialize;

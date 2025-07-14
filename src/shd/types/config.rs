@@ -1,7 +1,15 @@
+use crate::utils;
 use serde::{Deserialize, Serialize};
 use std::{fs, time::Duration};
 
-use crate::utils;
+// Define local error types since we're not using the global error module
+#[derive(Debug, thiserror::Error)]
+pub enum ConfigError {
+    #[error("Configuration error: {0}")]
+    Config(String),
+}
+
+pub type Result<T> = std::result::Result<T, ConfigError>;
 
 use super::maker::PriceFeedConfig;
 
@@ -73,12 +81,23 @@ impl EnvConfig {
         }
     }
 
+    pub fn validate(&self) -> Result<()> {
+        if self.tycho_api_key.is_empty() {
+            return Err(ConfigError::Config("TYCHO_API_KEY cannot be empty".into()));
+        }
+        if self.wallet_private_key.is_empty() {
+            return Err(ConfigError::Config("WALLET_PRIVATE_KEY cannot be empty".into()));
+        }
+        Ok(())
+    }
+
     pub fn print(&self) {
-        tracing::debug!("Env Config:");
-        tracing::debug!("  Testing:               {}", self.testing);
-        tracing::debug!("  Heartbeat:             {}", self.heartbeat);
-        // tracing::debug!("  Private Key:           🤐");
-        tracing::debug!("  Tycho API Key:         {}...", &self.tycho_api_key[..5]);
+        tracing::info!("Environment Configuration:");
+        tracing::info!("  Config Path: {}", self.path);
+        tracing::info!("  Testing Mode: {}", self.testing);
+        tracing::info!("  Heartbeat URL: {}", self.heartbeat);
+        tracing::info!("  Tycho API Key: {}...", &self.tycho_api_key[..8.min(self.tycho_api_key.len())]);
+        tracing::info!("  Wallet Private Key: {}...", &self.wallet_private_key[..8.min(self.wallet_private_key.len())]);
     }
 }
 
@@ -217,15 +236,15 @@ impl MarketMakerConfig {
         format!("{}-{}-{}-{}", self.network_name, self.base_token, self.quote_token, self.price_feed_config.r#type)
     }
 
-    pub fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> Result<()> {
         if self.target_spread_bps > 10_000 {
-            return Err("target_spread_bps must be ≤ 10000 BPS (100%)".into());
+            return Err(ConfigError::Config("target_spread_bps must be ≤ 10000 BPS (100%)".into()));
         }
         if self.max_slippage_pct > 1. {
-            return Err("max_slippage_pct must be ≤ 1.0 (100%)".into());
+            return Err(ConfigError::Config("max_slippage_pct must be ≤ 1.0 (100%)".into()));
         }
         if !(0.0..=1.0).contains(&self.max_inventory_ratio) {
-            return Err("max_inventory_ratio must be between 0.0 and 1.0".into());
+            return Err(ConfigError::Config("max_inventory_ratio must be between 0.0 and 1.0".into()));
         }
         Ok(())
     }
@@ -235,9 +254,24 @@ impl MarketMakerConfig {
     }
 }
 
-pub fn load_market_maker_config(path: &str) -> MarketMakerConfig {
-    let contents = fs::read_to_string(path).map_err(|e| format!("Failed to read config file: {e}")).unwrap();
-    let config: MarketMakerConfig = toml::from_str(&contents).map_err(|e| format!("Failed to parse TOML: {e}")).unwrap();
-    config.validate().expect("Invalid configuration");
-    config
+/// Load and validate market maker configuration
+pub fn load_market_maker_config(path: &str) -> Result<MarketMakerConfig> {
+    let contents = match fs::read_to_string(path) {
+        Ok(contents) => contents,
+        Err(e) => {
+            return Err(ConfigError::Config(format!("Failed to read config file: {e}")));
+        }
+    };
+
+    let config: MarketMakerConfig = match toml::from_str(&contents) {
+        Ok(config) => config,
+        Err(e) => {
+            return Err(ConfigError::Config(format!("Failed to parse TOML: {e}")));
+        }
+    };
+
+    match config.validate() {
+        Ok(()) => Ok(config),
+        Err(e) => Err(e),
+    }
 }

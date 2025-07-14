@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::str::FromStr;
-use tycho_client::HttpRPCClient;
 use tycho_client::rpc::RPCClient;
-use tycho_common::Bytes;
+use tycho_client::HttpRPCClient;
 use tycho_common::dto::{PaginationParams, ProtocolStateRequestBody, ResponseToken, TokensRequestBody, VersionParam};
+use tycho_common::Bytes;
 use tycho_simulation::evm::protocol::ekubo::state::EkuboState;
 use tycho_simulation::evm::protocol::filters::{balancer_pool_filter, uniswap_v4_pool_with_hook_filter};
 use tycho_simulation::models::Token;
@@ -23,7 +23,7 @@ use tycho_simulation::protocol::models::ProtocolComponent;
 
 use crate::types::config::MarketMakerConfig;
 use crate::types::tycho::{AmmType, PsbConfig, TychoSupportedProtocol};
-use crate::utils::r#static::BASIS_POINT_DENO;
+use crate::utils::constants::BASIS_POINT_DENO;
 
 /// Due to library conflicts, we need to redefine the Chain type depending the use case, hence the following aliases.
 pub type ChainCommon = tycho_common::dto::Chain;

@@ -5,3 +5,5 @@ config/.env.*
 dump.rdb
 /src/generated
 node_modules
+.cursor
+.cursorignore

@@ -1,14 +1,14 @@
 #![allow(unused)] // silence unused warnings while exploring (to comment out)
 
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{error::Error, time::Duration};
 use tokio::time::sleep;
 
 use redis::{
-    AsyncCommands, Client, RedisError,
     aio::MultiplexedConnection,
     from_redis_value,
     streams::{StreamRangeReply, StreamReadOptions, StreamReadReply},
+    AsyncCommands, Client, RedisError,
 };
 
 use crate::types::misc::StreamState;
