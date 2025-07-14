@@ -21,13 +21,16 @@ COPY . .
 RUN rm -f .cargo/config.toml
 
 # Accept build args
-ARG BUILD_TYPE=release
-ARG PROGRAM=monitor
+ARG BUILD_TYPE
+ARG PROGRAM
+ARG CONFIG_PATH
 ENV BUILD_TYPE=${BUILD_TYPE}
 ENV PROGRAM=${PROGRAM}
+ENV CONFIG_PATH=${CONFIG_PATH}
 
 RUN echo "🐳  BUILD_TYPE: $BUILD_TYPE"
 RUN echo "🐳  PROGRAM: $PROGRAM"
+RUN if [ "$PROGRAM" = "maker" ]; then echo "🐳  [MAKER] CONFIG_PATH: $CONFIG_PATH"; fi
 
 # Build the Rust binary
 RUN if [ "$BUILD_TYPE" = "release" ]; then \
@@ -35,6 +38,9 @@ RUN if [ "$BUILD_TYPE" = "release" ]; then \
     else \
       cargo build --bin ${PROGRAM}; \
     fi
+
+# Set working directory to project root for config access
+WORKDIR /workspace
 
 # Default command: run built binary based on BUILD_TYPE
 CMD [ "bash", "-c", "if [ \"$BUILD_TYPE\" = \"release\" ]; then exec ./target/release/$PROGRAM; else exec ./target/debug/$PROGRAM; fi" ]

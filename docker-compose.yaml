@@ -7,7 +7,7 @@ networks:
 
 services:
 
-  maker-base-eth-usdc:
+  base-eth-usdc:
     build: 
       context: .
       dockerfile: ops/Dockerfile
