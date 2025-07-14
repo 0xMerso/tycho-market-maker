@@ -1,64 +1,40 @@
-# ---------- Builder stage ----------
-# Use official Rust + Alpine image for minimal footprint
-FROM rust:1.85-alpine AS builder
+# Single-stage Dockerfile using rust:slim
+FROM rust:slim
 
-# Install native build dependencies
-RUN apk add --no-cache \
-    build-base \
-    libusb-dev \
-    openssl-dev \
-    pkgconfig \
-    linux-headers \
-    curl \
-    git \
-    openssl
+# Install system dependencies for build and runtime
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      libssl-dev \
+      pkg-config \
+      build-essential \
+      curl \
+      git && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# Set workspace
 WORKDIR /workspace
 
-# Copy Rust manifests for dependency caching
-COPY Cargo.toml Cargo.lock ./
-
-# Now copy the full project source
+# Copy entire project
 COPY . .
 
-# Remove any local Cargo override (if present)
+# Remove any local Cargo override
 RUN rm -f .cargo/config.toml
 
-# Build arguments: allow debug or release builds
-ARG BUILD_TYPE=debug  # use 'release' for optimized binary
-ARG PROGRAM           # name of the binary to compile
+# Accept build args
+ARG BUILD_TYPE=release
+ARG PROGRAM=monitor
+ENV BUILD_TYPE=${BUILD_TYPE}
+ENV PROGRAM=${PROGRAM}
 
-# Compile the Rust program
+RUN echo "🐳  BUILD_TYPE: $BUILD_TYPE"
+RUN echo "🐳  PROGRAM: $PROGRAM"
+
+# Build the Rust binary
 RUN if [ "$BUILD_TYPE" = "release" ]; then \
-      cargo build --release --bin "$PROGRAM" -q; \
+      cargo build --release --bin ${PROGRAM}; \
     else \
-      cargo build --bin "$PROGRAM" -q; \
+      cargo build --bin ${PROGRAM}; \
     fi
 
-
-# ---------- Runtime stage ----------
-# Start from minimal Alpine image with only runtime libs
-FROM alpine:3.18
-
-# Install SSL and git (if needed at runtime by your app)
-RUN apk add --no-cache \
-    openssl \
-    git
-
-WORKDIR /workspace
-
-# Declare build args again to know which binary to copy
-ARG BUILD_TYPE=debug
-ARG PROGRAM
-
-# Log
-RUN echo "🐳 BUILD_TYPE: $BUILD_TYPE"
-RUN echo "🐳 PROGRAM: $PROGRAM"
-
-# Copy compiled binary from builder stage
-COPY --from=builder /workspace/target/${BUILD_TYPE}/$PROGRAM /usr/local/bin/$PROGRAM
-
-# Set entrypoint to your program
-ENTRYPOINT ["/usr/local/bin/$PROGRAM"]
-# Optionally allow additional args
-CMD ["$PROGRAM"]
+# Default command: run built binary based on BUILD_TYPE
+CMD [ "bash", "-c", "if [ \"$BUILD_TYPE\" = \"release\" ]; then exec ./target/release/$PROGRAM; else exec ./target/debug/$PROGRAM; fi" ]
