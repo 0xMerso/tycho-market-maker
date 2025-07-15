@@ -481,6 +481,7 @@ impl<E: ExecStrategy, F: PriceFeed> IMarketMaker for MarketMaker<E, F> {
 
     /// Convert a solution to a transaction payload
     /// Also build the approval transaction, presumed needed (never infinite approval)
+    /// We assume the bot always need to approve the router, so we don't need to check if it's already approved. Execution might be done in bundle
     fn encode(&self, solution: Solution, tx: Transaction, context: MarketContext, inventory: Inventory, env: EnvConfig) -> Result<PreparedTransaction, String> {
         let max_priority_fee_per_gas = context.max_priority_fee_per_gas; // 1 Gwei, not suited for L2s.
         let max_fee_per_gas = context.max_fee_per_gas;
@@ -595,24 +596,28 @@ impl<E: ExecStrategy, F: PriceFeed> IMarketMaker for MarketMaker<E, F> {
     /// In a recursive or dependent way, we would need to simulate each order one by one, possible with state overwrite
     /// Logic depends on the network, even for simulation
     async fn simulate(&self, transactions: Vec<PreparedTransaction>, env: EnvConfig) -> Vec<PreparedTransaction> {
+        let initial_len = transactions.len();
+        tracing::debug!("Simulating {} transactions (keeping only the first for now)", transactions.len());
         let alloy_chain = crate::maker::tycho::get_alloy_chain(self.config.network_name.as_str().to_string()).expect("Failed to get alloy chain");
         let rpc = self.config.rpc_url.parse::<url::Url>().unwrap().clone(); // ! Custom per network
         let pk = env.wallet_private_key.clone();
         let wallet = PrivateKeySigner::from_bytes(&B256::from_str(&pk).expect("Failed to convert swapper pk to B256")).expect("Failed to private key signer");
+        tracing::debug!("Wallet: {:?}", wallet.address().to_string().to_lowercase());
         let signer = alloy::network::EthereumWallet::from(wallet.clone());
         let mut transactions = transactions.clone();
         transactions.retain(|t| {
             let sender = t.approval.from.unwrap_or_default().to_string().to_lowercase();
-
+            tracing::debug!(" - Sender: {:?}", sender);
             wallet.address().to_string().eq_ignore_ascii_case(sender.clone().as_str())
         });
+        let removed = initial_len - transactions.len();
+        tracing::debug!("Removed {} transactions (criterias: not owned by the wallet)", removed);
         // Pure EVM simulation
         // Later, on mainnet, with flashbot bundle simu, it won't need it
         let mut simulations = HashMap::new();
         for i in 0..transactions.len() {
             simulations.insert(i, false);
         }
-        tracing::debug!("Simulating {} transactions (keeping only the first for now)", transactions.len());
         let provider = ProviderBuilder::new().with_chain(alloy_chain).wallet(signer.clone()).on_http(rpc.clone());
         let mut succeeded = vec![];
         if !transactions.is_empty() {
@@ -700,17 +705,16 @@ impl<E: ExecStrategy, F: PriceFeed> IMarketMaker for MarketMaker<E, F> {
                         Some(msg) => match msg {
                             Ok(msg) => {
                                 let time = std::time::SystemTime::now();
-                                let reference_price = self.fetch_market_price().await.unwrap_or_default();
 
                                 tracing::info!(
-                                    "{} '{}' stream: block # {} with {:<2} states updates | Market price: {} | Min exec spread: {}", // , + {} pairs, - {} pairs",
+                                    "{} '{}' stream: block # {} with {:<2} states updates | Min exec spread: {}", // , + {} pairs, - {} pairs",
                                     self.config.pair_tag,
                                     self.config.network_name.as_str().to_string(),
                                     msg.block_number,
                                     msg.states.len(),
-                                    reference_price,
                                     self.config.min_exec_spread_bps,
                                 );
+
                                 if !self.ready {
                                     // --- First stream ---
                                     protosims = msg.states.clone();
@@ -780,73 +784,78 @@ impl<E: ExecStrategy, F: PriceFeed> IMarketMaker for MarketMaker<E, F> {
                                         }
                                     }
 
-                                    let cpds = self.prices(&targets);
-                                    let identifier = self.identifier.clone();
-                                    // --- Price move evaluation ---
-                                    let price_move_bps = if previous_reference_price != 0.0 {
-                                        ((reference_price - previous_reference_price).abs() / previous_reference_price) * BASIS_POINT_DENO
-                                    } else {
-                                        // First run - always push to DB since we have no previous price
-                                        tracing::info!("First run - always push to DB since we have no previous price");
-                                        PRICE_MOVE_THRESHOLD + 1.0
-                                    };
-                                    let threshold = price_move_bps > PRICE_MOVE_THRESHOLD;
-                                    tracing::info!(
-                                        "Price movement {} threshold ({} bps), of {:.2} bps, from {} to {}",
-                                        if threshold { "above" } else { "below" },
-                                        PRICE_MOVE_THRESHOLD,
-                                        price_move_bps,
-                                        previous_reference_price,
-                                        reference_price
-                                    );
-                                    if threshold {
-                                        crate::data::r#pub::prices(NewPricesMessage {
-                                            identifier: identifier.clone(),
-                                            reference_price,
-                                            components: cpds.clone(),
-                                            block: msg.block_number,
-                                        });
-                                        previous_reference_price = reference_price;
-                                    } else {
-                                        continue;
-                                    }
-                                    // --- Evaluate ---
-                                    let spot_prices = cpds.iter().map(|x| x.price).collect::<Vec<f64>>();
-                                    let readjusments = self.evaluate(&targets.clone(), spot_prices.clone(), reference_price);
-                                    if !readjusments.is_empty() {
-                                        // --- Market context --- Need ALL components and thus all the protosims too
-                                        match self.fetch_market_context(components.clone(), &protosims, atks.clone()).await {
-                                            Some(context) => {
-                                                context.print();
-                                                // This async block should be optimised as much as possible
-                                                match self.fetch_inventory(env.clone()).await {
-                                                    Ok(inventory) => {
-                                                        // let context = self.market_context().await;
-                                                        let elapsed = time.elapsed().unwrap_or_default().as_millis();
-                                                        let orders = self.readjust(context.clone(), inventory.clone(), readjusments, env.clone()).await;
-                                                        tracing::info!("Elapsed from block_update to readjustments: {} ms", elapsed);
-                                                        if orders.is_empty() {
-                                                            // tracing::debug!("No readjustments to execute");
-                                                        } else {
-                                                            let transactions = self.prepare(orders, context.clone(), inventory.clone(), env.clone()).await;
-                                                            // tracing::info!("Publishing trade event for {}", self.config.identifier());
-                                                            let simulated = self.simulate(transactions, env.clone()).await;
-                                                            tracing::info!("Elapsed from block update to broadcast: {} ms", elapsed);
-                                                            let broadcast = self.execute(simulated, env.clone()).await;
+                                    if let Ok(reference_price) = self.fetch_market_price().await {
+                                        let cpds = self.prices(&targets);
+                                        let identifier = self.identifier.clone();
+                                        // --- Price move evaluation ---
+                                        let price_move_bps = if previous_reference_price != 0.0 {
+                                            ((reference_price - previous_reference_price).abs() / previous_reference_price) * BASIS_POINT_DENO
+                                        } else {
+                                            // First run - always push to DB since we have no previous price
+                                            tracing::info!("First run - always push to DB since we have no previous price");
+                                            PRICE_MOVE_THRESHOLD + 1.0
+                                        };
+                                        let threshold = price_move_bps > PRICE_MOVE_THRESHOLD;
+                                        tracing::info!(
+                                            "Price movement {} threshold ({} bps), of {:.2} bps, from {} to {}",
+                                            if threshold { "above" } else { "below" },
+                                            PRICE_MOVE_THRESHOLD,
+                                            price_move_bps,
+                                            previous_reference_price,
+                                            reference_price
+                                        );
+                                        if threshold {
+                                            crate::data::r#pub::prices(NewPricesMessage {
+                                                identifier: identifier.clone(),
+                                                reference_price,
+                                                components: cpds.clone(),
+                                                block: msg.block_number,
+                                            });
+                                            previous_reference_price = reference_price;
+                                        } else {
+                                            continue;
+                                        }
+                                        // --- Evaluate ---
+                                        let spot_prices = cpds.iter().map(|x| x.price).collect::<Vec<f64>>();
+                                        let readjusments = self.evaluate(&targets.clone(), spot_prices.clone(), reference_price);
+                                        if !readjusments.is_empty() {
+                                            // --- Market context --- Need ALL components and thus all the protosims too
+                                            match self.fetch_market_context(components.clone(), &protosims, atks.clone()).await {
+                                                Some(context) => {
+                                                    context.print();
+                                                    // This async block should be optimised as much as possible
+                                                    match self.fetch_inventory(env.clone()).await {
+                                                        Ok(inventory) => {
+                                                            // let context = self.market_context().await;
+                                                            let elapsed = time.elapsed().unwrap_or_default().as_millis();
+                                                            let orders = self.readjust(context.clone(), inventory.clone(), readjusments, env.clone()).await;
+                                                            tracing::info!("Elapsed from block_update to readjustments: {} ms", elapsed);
+                                                            if orders.is_empty() {
+                                                                // tracing::debug!("No readjustments to execute");
+                                                            } else {
+                                                                let transactions = self.prepare(orders, context.clone(), inventory.clone(), env.clone()).await;
+                                                                // tracing::info!("Publishing trade event for {}", self.config.identifier());
+                                                                let simulated = self.simulate(transactions, env.clone()).await;
+                                                                tracing::info!("Elapsed from block update to broadcast: {} ms", elapsed);
+                                                                let broadcast = self.execute(simulated, env.clone()).await;
+                                                            }
+                                                        }
+                                                        Err(e) => {
+                                                            tracing::warn!("Failed to get inventory: {:?}", e);
+                                                            continue;
                                                         }
                                                     }
-                                                    Err(e) => {
-                                                        tracing::warn!("Failed to get inventory: {:?}", e);
-                                                        continue;
-                                                    }
+                                                }
+                                                None => {
+                                                    tracing::warn!("Failed to get market context");
                                                 }
                                             }
-                                            None => {
-                                                tracing::warn!("Failed to get market context");
-                                            }
+                                        } else {
+                                            tracing::debug!("   - No readjustments found");
                                         }
                                     } else {
-                                        tracing::debug!("   - No readjustments found");
+                                        tracing::error!("Failed to fetch market price");
+                                        continue;
                                     }
                                 }
                             }

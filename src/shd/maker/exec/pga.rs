@@ -39,6 +39,10 @@ impl ExecStrategy for GasBribeExec {
         transactions
     }
 
+    async fn broadcast(&self, prepared: Vec<PreparedTransaction>, mmc: MarketMakerConfig, env: EnvConfig) {
+        panic!("GasBribeExec does not support broadcasting");
+    }
+
     fn name(&self) -> &'static str {
         "GasBribeExec"
     }

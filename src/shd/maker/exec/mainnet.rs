@@ -39,6 +39,10 @@ impl ExecStrategy for MainnetExec {
         transactions
     }
 
+    async fn broadcast(&self, prepared: Vec<PreparedTransaction>, mmc: MarketMakerConfig, env: EnvConfig) {
+        panic!("MainnetExec does not support broadcasting");
+    }
+
     fn name(&self) -> &'static str {
         "MainnetExec"
     }

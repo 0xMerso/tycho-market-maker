@@ -33,7 +33,7 @@ pub const APPROVE_FN_SIGNATURE: &str = "approve(address,uint256)";
 pub const NULL_ADDRESS: &str = "0x0000000000000000000000000000000000000000";
 
 /// Has executed flag
-pub static HAS_EXECUTED: AtomicBool = AtomicBool::new(false);
+pub static HAS_EXECUTED: AtomicBool = AtomicBool::new(true);
 
 /// Default Redis host
 pub const DEFAULT_REDIS_HOST: &str = "127.0.0.1:42044";

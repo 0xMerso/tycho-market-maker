@@ -11,6 +11,9 @@ pub trait ExecStrategy: Send + Sync {
     /// Execute the prepared transactions
     async fn execute(&self, config: MarketMakerConfig, transactions: Vec<PreparedTransaction>, env: EnvConfig) -> Vec<PreparedTransaction>;
 
+    /// Broadcast the transactions
+    async fn broadcast(&self, prepared: Vec<PreparedTransaction>, mmc: MarketMakerConfig, env: EnvConfig);
+
     /// Get the strategy name for logging
     fn name(&self) -> &'static str;
 }

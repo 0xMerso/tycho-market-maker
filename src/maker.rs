@@ -33,6 +33,8 @@ async fn run<M: IMarketMaker>(mut mk: M, identifier: String, config: MarketMaker
 
     if let Ok(price) = mk.fetch_market_price().await {
         tracing::info!("Market Price: {:?} ({})", price, config.price_feed_config.r#type);
+    } else {
+        tracing::error!("Failed to fetch market price");
     }
 
     let cache = Arc::new(RwLock::new(TychoStreamState {

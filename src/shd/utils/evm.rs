@@ -56,6 +56,19 @@ pub async fn balances(provider: &RootProvider<Http<Client>>, owner: String, toke
     Ok(balances)
 }
 
+/// Get allowances
+pub async fn allowance(provider: &RootProvider<Http<Client>>, owner: String, spender: String, token: String) -> Result<u128, String> {
+    let client = Arc::new(provider);
+    let contract = IERC20::new(token.parse().unwrap(), client.clone());
+    match contract.allowance(owner.parse().unwrap(), spender.parse().unwrap()).call().await {
+        Ok(allowance) => Ok(allowance._0.to_string().parse::<u128>().unwrap_or_default()),
+        Err(e) => {
+            tracing::error!("Failed to get allowance for {}: {:?}", token, e);
+            Err(format!("Failed to get allowance for {}: {:?}", token, e))
+        }
+    }
+}
+
 use crate::types::config::{EnvConfig, MarketMakerConfig};
 
 /// Initialize the wallet by checking the balances of the tokens, nonce, etc.
