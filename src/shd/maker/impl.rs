@@ -389,7 +389,7 @@ impl<E: ExecStrategy, F: PriceFeed> IMarketMaker for MarketMaker<E, F> {
                     let potential_profit_delta_spread_bps = potential_profit_delta / adjustment.reference * BASIS_POINT_DENO;
                     let profitable = potential_profit_delta_spread_bps > self.config.min_exec_spread_bps;
                     tracing::debug!(
-                        " - Profit: {}  with average_sell_price_net_gas: {:.4} vs reference_price: {:.4} | potential_profit_delta: {:.5} | 👀 potential_profit_delta_spread_bps: {:.2}",
+                        " - Profit: {}  with average_sell_price_net_gas: {:.4} vs reference_price: {:.4} | potential_profit_delta: {:.5} | 👀  potential_profit_delta_spread_bps: {:.2}",
                         if potential_profit_delta > 0. { "🟩" } else { "🟧" },
                         average_sell_price_net_gas,
                         adjustment.reference,
