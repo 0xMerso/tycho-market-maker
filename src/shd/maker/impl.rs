@@ -13,15 +13,11 @@ use crate::{
 };
 use alloy::{
     providers::{Provider, ProviderBuilder},
-    rpc::types::{
-        simulate::{SimBlock, SimulatePayload},
-        TransactionInput, TransactionRequest,
-    },
-    signers::local::PrivateKeySigner,
+    rpc::types::{TransactionInput, TransactionRequest},
     sol_types::SolValue,
 };
 
-use alloy_primitives::{Address, B256, U256};
+use alloy_primitives::{Address, U256};
 use async_trait::async_trait;
 use futures::StreamExt;
 use num_bigint::BigUint;
@@ -393,8 +389,8 @@ impl<E: ExecStrategy, F: PriceFeed> IMarketMaker for MarketMaker<E, F> {
                     let potential_profit_delta_spread_bps = potential_profit_delta / adjustment.reference * BASIS_POINT_DENO;
                     let profitable = potential_profit_delta_spread_bps > self.config.min_exec_spread_bps;
                     tracing::debug!(
-                        " - Profit: {}  with average_sell_price_net_gas: {:.4} vs reference_price: {:.4} | potential_profit_delta: {:.5} | potential_profit_delta_spread_bps: {:.2}",
-                        if potential_profit_delta > 0. { "💵" } else { "🔻" },
+                        " - Profit: {}  with average_sell_price_net_gas: {:.4} vs reference_price: {:.4} | potential_profit_delta: {:.5} | 👀 potential_profit_delta_spread_bps: {:.2}",
+                        if potential_profit_delta > 0. { "🟩" } else { "🟧" },
                         average_sell_price_net_gas,
                         adjustment.reference,
                         potential_profit_delta,
@@ -592,96 +588,15 @@ impl<E: ExecStrategy, F: PriceFeed> IMarketMaker for MarketMaker<E, F> {
         transactions
     }
 
-    /// No interdependencies between orders, so we can simulate them all at once
-    /// In a recursive or dependent way, we would need to simulate each order one by one, possible with state overwrite
-    /// Logic depends on the network, even for simulation
+    /// Simulate the transactions, depending on the execution strategy
     async fn simulate(&self, transactions: Vec<PreparedTransaction>, env: EnvConfig) -> Vec<PreparedTransaction> {
-        let initial_len = transactions.len();
-        tracing::debug!("Simulating {} transactions (keeping only the first for now)", transactions.len());
-        let alloy_chain = crate::maker::tycho::get_alloy_chain(self.config.network_name.as_str().to_string()).expect("Failed to get alloy chain");
-        let rpc = self.config.rpc_url.parse::<url::Url>().unwrap().clone(); // ! Custom per network
-        let pk = env.wallet_private_key.clone();
-        let wallet = PrivateKeySigner::from_bytes(&B256::from_str(&pk).expect("Failed to convert swapper pk to B256")).expect("Failed to private key signer");
-        tracing::debug!("Wallet: {:?}", wallet.address().to_string().to_lowercase());
-        let signer = alloy::network::EthereumWallet::from(wallet.clone());
-        let mut transactions = transactions.clone();
-        transactions.retain(|t| {
-            let sender = t.approval.from.unwrap_or_default().to_string().to_lowercase();
-            tracing::debug!(" - Sender: {:?}", sender);
-            wallet.address().to_string().eq_ignore_ascii_case(sender.clone().as_str())
-        });
-        let removed = initial_len - transactions.len();
-        tracing::debug!("Removed {} transactions (criterias: not owned by the wallet)", removed);
-        // Pure EVM simulation
-        // Later, on mainnet, with flashbot bundle simu, it won't need it
-        let mut simulations = HashMap::new();
-        for i in 0..transactions.len() {
-            simulations.insert(i, false);
-        }
-        let provider = ProviderBuilder::new().with_chain(alloy_chain).wallet(signer.clone()).on_http(rpc.clone());
-        let mut succeeded = vec![];
-        if !transactions.is_empty() {
-            // Tmp: using only the first transaction for now
-            let first = transactions.first().expect("No transactions found");
-            let transactions = vec![first.clone()];
-            // Call the first transaction, approval + swap
-
-            for (x, tx) in transactions.iter().enumerate() {
-                let calls = vec![tx.approval.clone(), tx.swap.clone()];
-                let names = ["approval".to_string(), "swap".to_string()];
-                let payload = SimulatePayload {
-                    block_state_calls: vec![SimBlock {
-                        block_overrides: None,
-                        state_overrides: None,
-                        calls,
-                    }],
-                    trace_transfers: true,
-                    validation: true,
-                    return_full_transactions: true,
-                };
-                // Simulate the transaction
-
-                // match self.config.netname {
-                //     NetworkName::Mainnet => {}
-                //     NetworkName::Base => {}
-                //     NetworkName::Unichain => {}
-                // };
-
-                match provider.simulate(&payload).await {
-                    Ok(output) => {
-                        for block in output.iter() {
-                            tracing::trace!(" 🔮 Simulated Block {}:", block.inner.header.number);
-                            for (x, scr) in block.calls.iter().enumerate() {
-                                let name = names.get(x).unwrap();
-                                tracing::trace!("  SimCallResult for '{}': Gas: {} | Simulation status: {}", name, scr.gas_used, scr.status);
-                                if !scr.status {
-                                    let reason = scr.error.clone().unwrap().message;
-                                    tracing::error!("Simulation failed on SimCallResult on '{}'. No broadcast. Reason: {}", name, reason);
-                                    // ? Publish failed status for both transactions ?
-                                } else {
-                                    succeeded.push(tx.clone());
-                                }
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        tracing::error!("Failed to simulate: {:?}", e);
-                    }
-                };
-                // Save the simulation result
-                simulations.insert(x, true);
-            }
-        }
-        succeeded
+        self.execution.simulate(self.config.clone(), transactions, env).await
     }
 
-    /// Broadcast the transaction to the network
-    /// Swap are sensitive to MEV so we need to be careful
-    /// Logic depends on the network
+    /// Broadcast the transaction to the network. Swap are sensitive to MEV so we need to be careful
     async fn execute(&self, prepared: Vec<PreparedTransaction>, env: EnvConfig) {
-        // Use the execution strategy to process transactions
         tracing::info!("Using execution strategy: {}", self.execution.name());
-        let processed = self.execution.execute(self.config.clone(), prepared.clone(), env.clone()).await;
+        let _ = self.execution.execute(self.config.clone(), prepared.clone(), env.clone()).await;
     }
 
     /// Monitor the ProtocolStreamBuilder for new pairs and updates, evaluate if MM bot has opportunities
@@ -835,9 +750,8 @@ impl<E: ExecStrategy, F: PriceFeed> IMarketMaker for MarketMaker<E, F> {
                                                             } else {
                                                                 let transactions = self.prepare(orders, context.clone(), inventory.clone(), env.clone()).await;
                                                                 // tracing::info!("Publishing trade event for {}", self.config.identifier());
-                                                                let simulated = self.simulate(transactions, env.clone()).await;
-                                                                tracing::info!("Elapsed from block update to broadcast: {} ms", elapsed);
-                                                                let broadcast = self.execute(simulated, env.clone()).await;
+                                                                let executed = self.execution.execute(self.config.clone(), transactions, env.clone()).await;
+                                                                tracing::info!("Elapsed from block update to execution: {} ms", elapsed);
                                                             }
                                                         }
                                                         Err(e) => {

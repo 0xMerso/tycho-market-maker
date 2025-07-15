@@ -24,10 +24,18 @@ pub struct DefaultExec;
 #[async_trait]
 impl ExecStrategy for DefaultExec {
     /// Execute the transactions
-    async fn execute(&self, _config: MarketMakerConfig, transactions: Vec<PreparedTransaction>, _env: EnvConfig) -> Vec<PreparedTransaction> {
+    async fn execute(&self, config: MarketMakerConfig, transactions: Vec<PreparedTransaction>, env: EnvConfig) -> Vec<PreparedTransaction> {
         tracing::info!("🔧 [DefaultExec] Executing {} transactions with default strategy", transactions.len());
-        let _ = self.broadcast(transactions.clone(), _config, _env).await;
-        transactions
+
+        // Simulate transactions first
+        let simulated = self.simulate(config.clone(), transactions, env.clone()).await;
+        tracing::info!("🔧 [DefaultExec] Simulation completed, {} transactions passed", simulated.len());
+
+        if !simulated.is_empty() {
+            let _ = self.broadcast(simulated.clone(), config, env).await;
+        }
+
+        simulated
     }
 
     /// Broadcast the transactions

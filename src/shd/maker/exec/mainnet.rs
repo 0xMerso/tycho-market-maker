@@ -21,6 +21,11 @@ impl MainnetExec {
 
 #[async_trait]
 impl ExecStrategy for MainnetExec {
+    async fn simulate(&self, _config: MarketMakerConfig, _transactions: Vec<PreparedTransaction>, _env: EnvConfig) -> Vec<PreparedTransaction> {
+        tracing::warn!("🌐 [MainnetExec] Simulation not implemented for mainnet strategy");
+        vec![]
+    }
+
     async fn execute(&self, _config: MarketMakerConfig, transactions: Vec<PreparedTransaction>, _env: EnvConfig) -> Vec<PreparedTransaction> {
         tracing::info!(
             "🌐 [MainnetExec] Executing {} transactions on mainnet (flashbots: {}, target_block_offset: {})",
