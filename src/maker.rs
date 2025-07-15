@@ -1,4 +1,5 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
+use std::sync::Arc;
 
 use futures::FutureExt;
 use shd::error::{MarketMakerError, Result};
@@ -63,7 +64,15 @@ async fn initialize() -> Result<()> {
     let filter = EnvFilter::from_default_env();
     tracing_subscriber::fmt().with_max_level(Level::TRACE).with_env_filter(filter).init();
 
-    dotenv::from_filename("config/.env.maker.ex").ok();
+    // To improve !
+    let path = std::env::var("CONFIG_PATH").unwrap();
+    let path = path.replace(".toml", "");
+    let path = path.replace("config/", "");
+    let secrets = format!("config/secrets/.env.{}", path);
+    tracing::info!("Loading secrets from: {}", secrets);
+
+    // Load secrets from file
+    dotenv::from_filename(secrets).ok();
     let env = EnvConfig::new();
     env.print();
 

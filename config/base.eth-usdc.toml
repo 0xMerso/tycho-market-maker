@@ -14,9 +14,10 @@ gas_token_chainlink_price_feed = "0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70"
 rpc_url = "https://base-mainnet.blastapi.io/1437c115-f259-4690-a2d7-8c32e658a164"
 explorer_url = "https://basescan.org/"
 tycho_api = "tycho-base-beta.propellerheads.xyz"
+
 # === Execution ===
 target_spread_bps = 15
-min_exec_spread_bps = -50.0
+min_exec_spread_bps = -75.0
 max_slippage_pct = 0.0005
 profitability_check = true
 max_inventory_ratio = 0.5
@@ -27,8 +28,10 @@ tx_gas_limit = 300000
 block_offset = 1
 permit2_address = "0x000000000022D473030F116dDEE9F6B43aC78BA3"
 tycho_router_address = "0xea3207778e39EB02D72C9D3c4Eac7E224ac5d369"
+
 # === Misc ===
 poll_interval_ms = 1000
+publish_events = false 
 
 [price_feed_config]
 # type = "chainlink"

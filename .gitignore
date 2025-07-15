@@ -1,7 +1,12 @@
 /target
 .env*
 .env.prod*
+
+# *.env*
 config/.env.*
+config/.env/*
+config/secrets
+config/secrets/*
 dump.rdb
 /src/generated
 node_modules

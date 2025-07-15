@@ -8,12 +8,13 @@ quote_token = "USDC"
 quote_token_address = "0x078D782b760474a361dDA0AF3839290b0EF57AD6"
 network_name = "unichain"
 chain_id = 130
-wallet_public_key = "0xC0F7d041defAE1045e11A6101284AbA4BCc3770f"
+wallet_public_key = "0x785d7477037a8fa2b1e0fd077cd40a979ee02007"
 gas_token_symbol = "0x4200000000000000000000000000000000000006"
 gas_token_chainlink_price_feed = ""
 rpc_url = "https://unichain-mainnet.blastapi.io/1437c115-f259-4690-a2d7-8c32e658a164"
 explorer_url = "https://uniscan.xyz/"
 tycho_api = "tycho-unichain-beta.propellerheads.xyz"
+
 # === Execution ===
 target_spread_bps = 1
 min_exec_spread_bps = -10.0
@@ -26,8 +27,10 @@ tx_gas_limit = 300000
 block_offset = 1
 permit2_address = "0x000000000022D473030F116dDEE9F6B43aC78BA3"
 tycho_router_address = "0xFfA5ec2e444e4285108e4a17b82dA495c178427B"
+
 # === Misc ===
 poll_interval_ms = 1000
+publish_events = false 
 
 [price_feed_config]
 type = "binance"
@@ -37,3 +40,7 @@ reverse = false
 # type = "chainlink"                   
 # source = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419"
 # reverse = false
+
+
+# idea: TEE Builder, Echo, Flashbots Protect etc.
+# auto topping up of gas: automatically buy some ETH when you run low on it.

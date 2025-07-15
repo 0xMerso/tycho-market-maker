@@ -73,11 +73,11 @@ impl Default for EnvConfig {
 impl EnvConfig {
     pub fn new() -> Self {
         EnvConfig {
-            path: std::env::var("CONFIG_PATH").unwrap_or_else(|_| "config/mmc.mainnet.eth-usdc.toml".to_string()),
-            testing: std::env::var("TESTING").map(|v| v == "true").unwrap_or(false),
-            heartbeat: std::env::var("HEARTBEAT").unwrap_or_else(|_| "http://localhost:8080".to_string()),
-            wallet_private_key: std::env::var("WALLET_PRIVATE_KEY").unwrap_or_else(|_| "0x0000000000000000000000000000000000000000000000000000000000000000".to_string()),
-            tycho_api_key: std::env::var("TYCHO_API_KEY").unwrap_or_else(|_| "test_key".to_string()),
+            path: std::env::var("CONFIG_PATH").unwrap(),
+            testing: std::env::var("TESTING").unwrap() == "true",
+            heartbeat: std::env::var("HEARTBEAT").unwrap(),
+            wallet_private_key: std::env::var("WALLET_PRIVATE_KEY").unwrap(),
+            tycho_api_key: std::env::var("TYCHO_API_KEY").unwrap(),
         }
     }
 
@@ -187,6 +187,7 @@ pub struct MarketMakerConfig {
     pub poll_interval_ms: u64,
     pub permit2_address: String,
     pub tycho_router_address: String,
+    pub publish_events: bool,
     pub price_feed_config: PriceFeedConfig,
 }
 
@@ -216,9 +217,9 @@ impl MarketMakerConfig {
         tracing::debug!("  Gas token:             {}", self.gas_token_symbol);
         tracing::debug!("  Gas Oracle Feed:       {}", self.gas_token_chainlink_price_feed);
         tracing::debug!("  Spread (bps):          {}", self.target_spread_bps);
-        tracing::debug!("  min_exec_spread (bps): {}", self.min_exec_spread_bps);
-        tracing::debug!("  Max Slippage (%):      {}", self.max_slippage_pct);
-        tracing::debug!("  Profitability Check:   {}", self.profitability_check);
+        tracing::debug!("  🔸 Min exec spread (bps): {}", self.min_exec_spread_bps);
+        tracing::debug!("  🔸 Max Slippage (%):      {}", self.max_slippage_pct);
+        tracing::debug!("  🔸 Profitability Check:   {}", self.profitability_check);
         tracing::debug!("  Max Inventory Ratio:   {}", self.max_inventory_ratio);
         tracing::debug!("  Broadcast:             {}", self.broadcast_url);
         tracing::debug!("  Depths:                {:?}", self.quote_depths);
@@ -228,6 +229,7 @@ impl MarketMakerConfig {
         tracing::debug!("  Poll Interval (ms):    {}", self.poll_interval_ms);
         tracing::debug!("  Permit2:               {}", self.permit2_address);
         tracing::debug!("  Tycho Router:          {}", self.tycho_router_address);
+        tracing::debug!("  Publish Events:        {}", self.publish_events);
         tracing::debug!("  Price Feed Config:     {:?}", self.price_feed_config);
     }
 

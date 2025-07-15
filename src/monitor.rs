@@ -7,7 +7,7 @@ async fn main() {
     let filter = EnvFilter::from_default_env();
     tracing_subscriber::fmt().with_max_level(Level::TRACE).with_env_filter(filter).init();
 
-    dotenv::from_filename("config/.env.monitor.ex").ok();
+    dotenv::from_filename("config/env/.env.monitor.global").ok();
     let env = MoniEnvConfig::new();
     env.print();
 
