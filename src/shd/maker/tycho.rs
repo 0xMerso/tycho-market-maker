@@ -5,7 +5,7 @@ use tycho_client::HttpRPCClient;
 use tycho_common::dto::{PaginationParams, ProtocolStateRequestBody, ResponseToken, TokensRequestBody, VersionParam};
 use tycho_common::Bytes;
 use tycho_simulation::evm::protocol::ekubo::state::EkuboState;
-use tycho_simulation::evm::protocol::filters::{balancer_pool_filter, uniswap_v4_pool_with_hook_filter};
+use tycho_simulation::evm::protocol::filters::{balancer_pool_filter, curve_pool_filter, uniswap_v4_pool_with_hook_filter};
 use tycho_simulation::models::Token;
 
 use tycho_simulation::evm::protocol::uniswap_v3::state::UniswapV3State;
@@ -201,7 +201,7 @@ pub async fn psb(mmc: MarketMakerConfig, key: String, psbc: PsbConfig, tokens: V
     let (_, _, chain) = crate::types::tycho::chain(mmc.network_name.clone().as_str().to_string()).expect("Invalid chain");
     let u4 = uniswap_v4_pool_with_hook_filter;
     let balancer = balancer_pool_filter;
-    // let curve = curve_pool_filter;
+    let curve = curve_pool_filter;
     let filter = psbc.filter.clone();
     let mut hmt = HashMap::new();
     tokens.iter().for_each(|t| {
@@ -224,7 +224,7 @@ pub async fn psb(mmc: MarketMakerConfig, key: String, psbc: PsbConfig, tokens: V
             .exchange::<UniswapV3State>(TychoSupportedProtocol::PancakeswapV3.to_string().as_str(), filter.clone(), None)
             .exchange::<EkuboState>(TychoSupportedProtocol::EkuboV2.to_string().as_str(), filter.clone(), None)
             .exchange::<EVMPoolState<PreCachedDB>>(TychoSupportedProtocol::BalancerV2.to_string().as_str(), filter.clone(), Some(balancer))
-        // .exchange::<EVMPoolState<PreCachedDB>>(TychoSupportedProtocol::Curve.to_string().as_str(), filter.clone(), Some(curve));
+            .exchange::<EVMPoolState<PreCachedDB>>(TychoSupportedProtocol::Curve.to_string().as_str(), filter.clone(), Some(curve));
     }
     psb
 }

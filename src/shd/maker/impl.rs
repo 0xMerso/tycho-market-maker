@@ -9,9 +9,7 @@ use crate::{
         moni::NewPricesMessage,
         tycho::{ProtoSimComp, PsbConfig, SharedTychoStreamState},
     },
-    utils::constants::{
-        ADD_TVL_THRESHOLD, APPROVE_FN_SIGNATURE, BASIS_POINT_DENO, DEFAULT_APPROVE_GAS, DEFAULT_SWAP_GAS, NULL_ADDRESS, PRICE_MOVE_DENO, PRICE_MOVE_THRESHOLD, SHARE_POOL_BAL_SWAP_BPS,
-    },
+    utils::constants::{ADD_TVL_THRESHOLD, APPROVE_FN_SIGNATURE, BASIS_POINT_DENO, DEFAULT_APPROVE_GAS, DEFAULT_SWAP_GAS, NULL_ADDRESS, PRICE_MOVE_THRESHOLD, SHARE_POOL_BAL_SWAP_BPS},
 };
 use alloy::{
     providers::{Provider, ProviderBuilder},
@@ -216,7 +214,7 @@ impl<E: ExecStrategy, F: PriceFeed> IMarketMaker for MarketMaker<E, F> {
     fn evaluate(&self, targets: &Vec<ProtoSimComp>, sps: Vec<f64>, reference: f64) -> Vec<CompReadjustment> {
         let mut orders = vec![];
         // let mut snapshots = vec![];
-        if sps.is_empty() || targets.len() != sps.len() {
+        if sps.is_empty() || (targets.len() != sps.len()) {
             tracing::warn!("Components targets and spot prices length mismatch ({} != {})", targets.len(), sps.len());
             return vec![];
         }
@@ -786,7 +784,7 @@ impl<E: ExecStrategy, F: PriceFeed> IMarketMaker for MarketMaker<E, F> {
                                     let identifier = self.identifier.clone();
                                     // --- Price move evaluation ---
                                     let price_move_bps = if previous_reference_price != 0.0 {
-                                        ((reference_price - previous_reference_price).abs() / previous_reference_price) * PRICE_MOVE_DENO
+                                        ((reference_price - previous_reference_price).abs() / previous_reference_price) * BASIS_POINT_DENO
                                     } else {
                                         // First run - always push to DB since we have no previous price
                                         tracing::info!("First run - always push to DB since we have no previous price");
@@ -794,7 +792,7 @@ impl<E: ExecStrategy, F: PriceFeed> IMarketMaker for MarketMaker<E, F> {
                                     };
                                     let threshold = price_move_bps > PRICE_MOVE_THRESHOLD;
                                     tracing::info!(
-                                        "Price movement {} threshold ({} bps), of {} bps, from {} to {}",
+                                        "Price movement {} threshold ({} bps), of {:.2} bps, from {} to {}",
                                         if threshold { "above" } else { "below" },
                                         PRICE_MOVE_THRESHOLD,
                                         price_move_bps,

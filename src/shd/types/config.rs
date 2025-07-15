@@ -73,11 +73,11 @@ impl Default for EnvConfig {
 impl EnvConfig {
     pub fn new() -> Self {
         EnvConfig {
-            path: utils::misc::get("CONFIG_PATH"),
-            testing: utils::misc::get("TESTING") == "true",
-            heartbeat: utils::misc::get("HEARTBEAT"),
-            wallet_private_key: utils::misc::get("WALLET_PRIVATE_KEY"),
-            tycho_api_key: utils::misc::get("TYCHO_API_KEY"),
+            path: std::env::var("CONFIG_PATH").unwrap_or_else(|_| "config/mmc.mainnet.eth-usdc.toml".to_string()),
+            testing: std::env::var("TESTING").map(|v| v == "true").unwrap_or(false),
+            heartbeat: std::env::var("HEARTBEAT").unwrap_or_else(|_| "http://localhost:8080".to_string()),
+            wallet_private_key: std::env::var("WALLET_PRIVATE_KEY").unwrap_or_else(|_| "0x0000000000000000000000000000000000000000000000000000000000000000".to_string()),
+            tycho_api_key: std::env::var("TYCHO_API_KEY").unwrap_or_else(|_| "test_key".to_string()),
         }
     }
 

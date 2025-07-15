@@ -29,9 +29,7 @@ pub async fn heartbeats(mmc: MarketMakerConfig, env: EnvConfig) {
         tracing::info!("Testing mode, heartbeat task not spawned.");
         return;
     }
-
     tracing::info!("Spawning heartbeat task.");
-
     tokio::spawn(async move {
         let mut hb = tokio::time::interval(Duration::from_secs(HEARTBEAT_DELAY / 2));
         loop {

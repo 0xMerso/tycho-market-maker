@@ -59,7 +59,6 @@ async fn initialize_market_maker() -> Result<()> {
 
     dotenv::from_filename("config/.env").ok();
     let env = EnvConfig::new();
-    env.validate().map_err(|e| MarketMakerError::Config(format!("Failed to validate environment: {}", e)))?;
     env.print();
 
     tracing::info!("MarketMaker Config Path: '{}'", env.path);
