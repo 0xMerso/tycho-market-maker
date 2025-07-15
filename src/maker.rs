@@ -2,6 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use futures::FutureExt;
 use shd::error::{MarketMakerError, Result};
+use shd::types::config::MarketMakerConfig;
 use shd::{
     maker::{
         exec::DefaultExec,
@@ -20,7 +21,10 @@ use tracing::Level;
 use tracing_subscriber::EnvFilter;
 use tycho_simulation::models::Token;
 
-async fn run_market_maker<M: IMarketMaker>(mut mk: M, identifier: String, config: shd::types::config::MarketMakerConfig, env: EnvConfig, commit: String, tokens: Vec<Token>) -> Result<()> {
+async fn run<M: IMarketMaker>(mut mk: M, identifier: String, config: MarketMakerConfig, env: EnvConfig, tokens: Vec<Token>) -> Result<()> {
+    let commit = shd::utils::misc::commit().unwrap_or_default();
+    tracing::info!("♻️  MarketMaker program commit: {:?}", commit);
+
     shd::data::r#pub::instance(NewInstanceMessage {
         config: config.clone(),
         identifier: identifier.clone(),
@@ -53,11 +57,11 @@ async fn run_market_maker<M: IMarketMaker>(mut mk: M, identifier: String, config
     }
 }
 
-async fn initialize_market_maker() -> Result<()> {
+async fn initialize() -> Result<()> {
     let filter = EnvFilter::from_default_env();
     tracing_subscriber::fmt().with_max_level(Level::TRACE).with_env_filter(filter).init();
 
-    dotenv::from_filename("config/.env").ok();
+    dotenv::from_filename("config/.env.maker.ex").ok();
     let env = EnvConfig::new();
     env.print();
 
@@ -71,9 +75,6 @@ async fn initialize_market_maker() -> Result<()> {
 
     let latest = shd::utils::evm::latest(config.rpc_url.clone()).await;
     tracing::info!("Launching Tycho Market Maker | 🧪 Testing mode: {:?} | Latest block: {}", env.testing, latest);
-
-    let commit = shd::utils::misc::commit().unwrap_or_default();
-    tracing::info!("♻️  MarketMaker program commit: {:?}", commit);
 
     let tokens = shd::maker::tycho::tokens(config.clone(), Some(env.tycho_api_key.as_str()))
         .await
@@ -102,7 +103,7 @@ async fn initialize_market_maker() -> Result<()> {
             let mk = builder
                 .build(base.clone(), quote.clone())
                 .map_err(|e| MarketMakerError::Config(format!("Failed to build Market Maker with Binance feed: {}", e)))?;
-            run_market_maker(mk, identifier, config, env, commit, tokens).await?;
+            let _ = run(mk, identifier, config, env, tokens).await;
         }
         PriceFeedType::Chainlink => {
             let feed = ChainlinkPriceFeed;
@@ -111,7 +112,7 @@ async fn initialize_market_maker() -> Result<()> {
             let mk = builder
                 .build(base.clone(), quote.clone())
                 .map_err(|e| MarketMakerError::Config(format!("Failed to build Market Maker with Chainlink feed: {}", e)))?;
-            run_market_maker(mk, identifier, config, env, commit, tokens).await?;
+            let _ = run(mk, identifier, config, env, tokens).await;
         }
     }
 
@@ -120,7 +121,7 @@ async fn initialize_market_maker() -> Result<()> {
 
 #[tokio::main]
 async fn main() {
-    if let Err(e) = initialize_market_maker().await {
+    if let Err(e) = initialize().await {
         tracing::error!("Market maker failed to start: {}", e);
         std::process::exit(1);
     }
