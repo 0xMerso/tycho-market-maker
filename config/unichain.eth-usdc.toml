@@ -21,7 +21,7 @@ min_exec_spread_bps = 0.0
 max_slippage_pct = 0.0005
 profitability_check = true
 max_inventory_ratio = 0.25
-broadcast_url = "classic"
+
 tx_gas_limit = 300000
 block_offset = 1
 permit2_address = "0x000000000022D473030F116dDEE9F6B43aC78BA3"

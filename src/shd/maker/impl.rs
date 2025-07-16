@@ -317,7 +317,12 @@ impl IMarketMaker for MarketMaker {
                 continue;
             }
 
-            // Optimum:
+            // Optimum
+
+            if context.eth_to_usd <= 0. {
+                tracing::warn!("Cannot readjust, skipping due to eth_to_usd <= 0 !");
+                continue;
+            }
 
             let base_to_quote = *selling == self.base;
             let inventory_balance = if base_to_quote { inventory.base_balance } else { inventory.quote_balance };
@@ -539,7 +544,7 @@ impl IMarketMaker for MarketMaker {
 
     /// Entrypoint for executing the orders
     async fn prepare(&self, orders: Vec<ExecutionOrder>, context: MarketContext, inventory: Inventory, env: EnvConfig) -> Vec<PreparedTransaction> {
-        tracing::debug!("Executing {} orders. Broadcast config: {}", orders.len(), self.config.broadcast_url);
+        tracing::debug!("Executing {} orders", orders.len());
         unsafe {
             std::env::set_var("RPC_URL", self.config.rpc_url.clone());
         }

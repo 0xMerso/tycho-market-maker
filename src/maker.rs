@@ -6,12 +6,7 @@ use shd::error::{MarketMakerError, Result};
 use shd::types::config::MarketMakerConfig;
 use shd::{
     maker::{exec::ExecStrategyFactory, feed::PriceFeedFactory},
-    types::{
-        config::EnvConfig,
-        maker::{IMarketMaker, MarketMakerBuilder},
-        moni::NewInstanceMessage,
-        tycho::TychoStreamState,
-    },
+    types::{builder::MarketMakerBuilder, config::EnvConfig, maker::IMarketMaker, moni::NewInstanceMessage, tycho::TychoStreamState},
     utils::constants::RESTART,
 };
 use tokio::sync::RwLock;
@@ -103,13 +98,10 @@ async fn initialize() -> Result<()> {
 
     // Create dynamic feed and strategy based on configuration
     let feed = PriceFeedFactory::create(config.price_feed_config.r#type.as_str());
-    let execution = ExecStrategyFactory::create(config.broadcast_url.as_str(), config.block_offset);
+    let execution = ExecStrategyFactory::create(config.network_name.as_str());
 
     // Build market maker with dynamic components
-    let builder = MarketMakerBuilder::new(config.clone(), feed, execution);
-    let mk = builder
-        .build(base.clone(), quote.clone())
-        .map_err(|e| MarketMakerError::Config(format!("Failed to build Market Maker: {}", e)))?;
+    let mk = MarketMakerBuilder::create(config.clone(), feed, execution, base.clone(), quote.clone()).map_err(|e| MarketMakerError::Config(format!("Failed to build Market Maker: {}", e)))?;
 
     let identifier = mk.identifier.clone();
     let _ = run(mk, identifier, config, env, tokens).await;

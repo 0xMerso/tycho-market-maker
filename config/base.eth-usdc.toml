@@ -16,17 +16,11 @@ explorer_url = "https://basescan.org/"
 tycho_api = "tycho-base-beta.propellerheads.xyz"
 
 # === Execution ===
-# Execution strategy is automatically selected based on broadcast_url:
-# - "classic" → DefaultExec (standard broadcasting)
-# - "flashbots" → MainnetExec (MEV protection)
-# - "pga" or "gas-bribe" → GasBribeExec (competitive gas bidding)
-broadcast_url = "classic"
 target_spread_bps = 15
-min_exec_spread_bps = -75.0
+min_exec_spread_bps = 0
 max_slippage_pct = 0.0005
 profitability_check = true
 max_inventory_ratio = 0.5
-quote_depths = [50.0, 250.0, 500.0, 750.0, 1000.0, 1250.0, 1500.0]
 
 tx_gas_limit = 300000
 block_offset = 1
@@ -35,7 +29,7 @@ tycho_router_address = "0xea3207778e39EB02D72C9D3c4Eac7E224ac5d369"
 
 # === Misc ===
 poll_interval_ms = 1000
-publish_events = false 
+publish_events = false
 
 [price_feed_config]
 # type = "chainlink"

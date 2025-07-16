@@ -179,7 +179,6 @@ pub struct MarketMakerConfig {
     pub max_slippage_pct: f64,
     pub profitability_check: bool,
     pub max_inventory_ratio: f64,
-    pub broadcast_url: String,
     pub tx_gas_limit: u64,
     pub block_offset: u64,
     pub tycho_api: String,
@@ -220,7 +219,6 @@ impl MarketMakerConfig {
         tracing::debug!("  🔸 Max Slippage (%):      {}", self.max_slippage_pct);
         tracing::debug!("  🔸 Profitability Check:   {}", self.profitability_check);
         tracing::debug!("  Max Inventory Ratio:   {}", self.max_inventory_ratio);
-        tracing::debug!("  Broadcast:             {}", self.broadcast_url);
         tracing::debug!("  Gas Limit:             {}", self.tx_gas_limit);
         tracing::debug!("  Block Offset:          {}", self.block_offset);
         tracing::debug!("  Tycho API:             {}", self.tycho_api);

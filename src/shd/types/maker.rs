@@ -9,10 +9,7 @@ use tycho_simulation::{
     protocol::{models::ProtocolComponent, state::ProtocolSim},
 };
 
-use crate::maker::{
-    exec::{default::DefaultExec, mainnet::MainnetExec, pga::GasBribeExec, ExecStrategy},
-    feed::PriceFeed,
-};
+use crate::maker::{exec::ExecStrategy, feed::PriceFeed};
 
 use super::{
     config::{EnvConfig, MarketMakerConfig},
@@ -72,41 +69,6 @@ pub struct MarketMaker {
 
     // Execution strategy (dynamic)
     pub execution: Box<dyn ExecStrategy>,
-}
-
-/// ================== Builder ==================
-pub struct MarketMakerBuilder {
-    config: MarketMakerConfig,
-    feed: Box<dyn PriceFeed>,
-    execution: Box<dyn ExecStrategy>,
-}
-
-impl MarketMakerBuilder {
-    pub fn new(config: MarketMakerConfig, feed: Box<dyn PriceFeed>, execution: Box<dyn ExecStrategy>) -> Self {
-        Self { config, feed, execution }
-    }
-
-    pub fn identifier(&self) -> String {
-        let timestamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
-        // Merging of config.identifier() and timestamp
-        let identifier = format!("{}-instance-{}", self.config.identifier(), timestamp);
-        identifier.to_string()
-    }
-
-    pub fn build(self, base: Token, quote: Token) -> Result<MarketMaker, String> {
-        let identifier = self.identifier();
-        Ok(MarketMaker {
-            ready: false,
-            identifier,
-            config: self.config,
-            feed: self.feed,
-            initialised: false,
-            base,
-            quote,
-            single: false,
-            execution: self.execution,
-        })
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -214,34 +176,4 @@ pub struct ExecTxResult {
 pub struct ExecutedPayload {
     pub approval: ExecTxResult,
     pub swap: ExecTxResult,
-}
-
-/// Example usage functions for different execution strategies
-impl MarketMaker {
-    /// Create a market maker with dynamic execution strategy and dynamic feed
-    pub fn new(config: MarketMakerConfig, feed: Box<dyn PriceFeed>, execution: Box<dyn ExecStrategy>, base: Token, quote: Token) -> Result<Self, String> {
-        let builder = MarketMakerBuilder::new(config, feed, execution);
-        builder.build(base, quote)
-    }
-
-    /// Create a market maker with default execution strategy
-    pub fn with_default_exec(config: MarketMakerConfig, feed: Box<dyn PriceFeed>, base: Token, quote: Token) -> Result<Self, String> {
-        let execution = Box::new(DefaultExec);
-        let builder = MarketMakerBuilder::new(config, feed, execution);
-        builder.build(base, quote)
-    }
-
-    /// Create a market maker with gas bribe execution strategy
-    pub fn with_gas_bribe_exec(config: MarketMakerConfig, feed: Box<dyn PriceFeed>, base: Token, quote: Token, bribe_amount_wei: u128) -> Result<Self, String> {
-        let execution = Box::new(GasBribeExec::new(bribe_amount_wei));
-        let builder = MarketMakerBuilder::new(config, feed, execution);
-        builder.build(base, quote)
-    }
-
-    /// Create a market maker with mainnet execution strategy
-    pub fn with_mainnet_exec(config: MarketMakerConfig, feed: Box<dyn PriceFeed>, base: Token, quote: Token, use_flashbots: bool, target_block_offset: u64) -> Result<Self, String> {
-        let execution = Box::new(MainnetExec::new(use_flashbots, target_block_offset));
-        let builder = MarketMakerBuilder::new(config, feed, execution);
-        builder.build(base, quote)
-    }
 }
