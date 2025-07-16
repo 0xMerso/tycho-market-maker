@@ -1,8 +1,11 @@
 use async_trait::async_trait;
 
-use crate::types::{
-    config::{EnvConfig, MarketMakerConfig},
-    maker::PreparedTransaction,
+use crate::{
+    maker::exec::simu::simulate_transactions,
+    types::{
+        config::{EnvConfig, MarketMakerConfig},
+        maker::PreparedTransaction,
+    },
 };
 
 /// Execution strategy trait for handling different execution methods
@@ -29,7 +32,7 @@ pub mod mainnet;
 pub mod pga;
 pub mod simu;
 
-pub use default::DefaultExec;
-pub use mainnet::MainnetExec;
-pub use pga::GasBribeExec;
-pub use simu::simulate_transactions;
+// pub use default::DefaultExec;
+// pub use mainnet::MainnetExec;
+// pub use pga::GasBribeExec;
+// pub use simu::simulate_transactions;

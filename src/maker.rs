@@ -3,12 +3,10 @@ use std::sync::Arc;
 
 use futures::FutureExt;
 use shd::error::{MarketMakerError, Result};
+use shd::maker::exec::default::DefaultExec;
 use shd::types::config::MarketMakerConfig;
 use shd::{
-    maker::{
-        exec::DefaultExec,
-        feed::{BinancePriceFeed, ChainlinkPriceFeed, PriceFeedType},
-    },
+    maker::feed::{BinancePriceFeed, ChainlinkPriceFeed, PriceFeedType},
     types::{
         config::EnvConfig,
         maker::{IMarketMaker, MarketMakerBuilder},

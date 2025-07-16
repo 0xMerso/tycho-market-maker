@@ -9,7 +9,10 @@ use tycho_simulation::{
     protocol::{models::ProtocolComponent, state::ProtocolSim},
 };
 
-use crate::maker::{exec::ExecStrategy, feed::PriceFeed};
+use crate::maker::{
+    exec::{default::DefaultExec, mainnet::MainnetExec, pga::GasBribeExec, ExecStrategy},
+    feed::PriceFeed,
+};
 
 use super::{
     config::{EnvConfig, MarketMakerConfig},
@@ -222,43 +225,29 @@ impl<E: ExecStrategy, F: PriceFeed> MarketMaker<E, F> {
     }
 }
 
-impl<F: PriceFeed> MarketMaker<crate::maker::exec::DefaultExec, F> {
+impl<F: PriceFeed> MarketMaker<DefaultExec, F> {
     /// Create a market maker with default execution strategy
     pub fn with_default_exec(config: MarketMakerConfig, feed: F, base: Token, quote: Token) -> Result<Self, String> {
-        let execution = crate::maker::exec::DefaultExec;
+        let execution = DefaultExec;
         let builder = MarketMakerBuilder::new(config, feed, execution);
         builder.build(base, quote)
     }
 }
 
-impl<F: PriceFeed> MarketMaker<crate::maker::exec::GasBribeExec, F> {
+impl<F: PriceFeed> MarketMaker<GasBribeExec, F> {
     /// Create a market maker with gas bribe execution strategy
     pub fn with_gas_bribe_exec(config: MarketMakerConfig, feed: F, base: Token, quote: Token, bribe_amount_wei: u128) -> Result<Self, String> {
-        let execution = crate::maker::exec::GasBribeExec::new(bribe_amount_wei);
+        let execution = GasBribeExec::new(bribe_amount_wei);
         let builder = MarketMakerBuilder::new(config, feed, execution);
         builder.build(base, quote)
     }
 }
 
-impl<F: PriceFeed> MarketMaker<crate::maker::exec::MainnetExec, F> {
+impl<F: PriceFeed> MarketMaker<MainnetExec, F> {
     /// Create a market maker with mainnet execution strategy
     pub fn with_mainnet_exec(config: MarketMakerConfig, feed: F, base: Token, quote: Token, use_flashbots: bool, target_block_offset: u64) -> Result<Self, String> {
-        let execution = crate::maker::exec::MainnetExec::new(use_flashbots, target_block_offset);
+        let execution = MainnetExec::new(use_flashbots, target_block_offset);
         let builder = MarketMakerBuilder::new(config, feed, execution);
         builder.build(base, quote)
     }
-}
-
-/// Example function showing how to use different execution strategies
-pub fn example_execution_strategies() {
-    // Example 1: Default execution strategy
-    // let mk_default = MarketMaker::with_default_exec(config, feed, base, quote)?;
-
-    // Example 2: Gas bribe execution strategy with 1 ETH bribe
-    // let mk_bribe = MarketMaker::with_gas_bribe_exec(config, feed, base, quote, 1_000_000_000_000_000_000)?;
-
-    // Example 3: Mainnet execution strategy with flashbots
-    // let mk_mainnet = MarketMaker::with_mainnet_exec(config, feed, base, quote, true, 1)?;
-
-    tracing::info!("Execution strategy examples available - uncomment to use");
 }
