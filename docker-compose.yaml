@@ -16,15 +16,16 @@ services:
         - BUILD_TYPE=debug #!
     ports:
       - "42042:42042"
-    depends_on:
-      redis:
-        condition: service_healthy
-      monitor:
-        condition: service_started
+    depends_on: []
+    # depends_on:
+    #   redis:
+    #     condition: service_healthy
+    #   monitor:
+    #     condition: service_started
     environment:
       - RUST_LOG="off,maker=trace,shd=trace,monitor=trace,test=trace"
       - REDIS_HOST=redis
-      - CONFIG_PATH=config/mmc.base.eth-usdc.toml
+      - CONFIG_PATH=config/unichain.eth-usdc.toml
     restart: always
     networks:
       - tmm
@@ -33,6 +34,7 @@ services:
 
   # One monitor for all market maker instances
   monitor:
+    profiles: ["monitor"]
     build: 
       context: .
       dockerfile: ops/Dockerfile
@@ -51,6 +53,7 @@ services:
 
   # One Redis server for all market maker instances and the monitor
   redis:
+    profiles: ["monitor"]
     image: redis:latest
     restart: always
     ports:
