@@ -3,10 +3,9 @@ use std::sync::Arc;
 
 use futures::FutureExt;
 use shd::error::{MarketMakerError, Result};
-use shd::maker::exec::default::DefaultExec;
 use shd::types::config::MarketMakerConfig;
 use shd::{
-    maker::feed::{BinancePriceFeed, ChainlinkPriceFeed, PriceFeedType},
+    maker::{exec::ExecStrategyFactory, feed::PriceFeedFactory},
     types::{
         config::EnvConfig,
         maker::{IMarketMaker, MarketMakerBuilder},
@@ -22,7 +21,6 @@ use tycho_simulation::models::Token;
 
 async fn run<M: IMarketMaker>(mut mk: M, identifier: String, config: MarketMakerConfig, env: EnvConfig, tokens: Vec<Token>) -> Result<()> {
     let commit = shd::utils::misc::commit().unwrap_or_default();
-    tracing::info!("♻️  MarketMaker program commit: {:?}", commit);
 
     if config.publish_events {
         shd::data::r#pub::instance(NewInstanceMessage {
@@ -33,9 +31,9 @@ async fn run<M: IMarketMaker>(mut mk: M, identifier: String, config: MarketMaker
     }
 
     if let Ok(price) = mk.fetch_market_price().await {
-        tracing::info!("Market Price: {:?} ({})", price, config.price_feed_config.r#type);
+        tracing::info!("First market price: {:?} ({})", price, config.price_feed_config.r#type);
     } else {
-        tracing::error!("Failed to fetch market price");
+        tracing::error!("Failed to fetch the first market price");
     }
 
     let cache = Arc::new(RwLock::new(TychoStreamState {
@@ -45,8 +43,8 @@ async fn run<M: IMarketMaker>(mut mk: M, identifier: String, config: MarketMaker
     }));
 
     loop {
-        tracing::info!("Starting market maker loop for {}", identifier);
-        tracing::debug!("Launching stream for network {}", config.network_name.as_str());
+        tracing::debug!("Starting market make inf. loop (id: {}) and launching stream for network {}", identifier, config.network_name.as_str());
+        tracing::info!("♻️  MarketMaker program commit: {:?}", commit.clone());
 
         let state = Arc::clone(&cache);
         match std::panic::AssertUnwindSafe(mk.run(state.clone(), env.clone())).catch_unwind().await {
@@ -103,29 +101,18 @@ async fn initialize() -> Result<()> {
 
     tracing::info!("Base token: {} | Quote token: {}", base.symbol, quote.symbol);
 
-    let strategy = DefaultExec;
-    let pft = config.price_feed_config.r#type.as_str();
+    // Create dynamic feed and strategy based on configuration
+    let feed = PriceFeedFactory::create(config.price_feed_config.r#type.as_str());
+    let execution = ExecStrategyFactory::create(config.broadcast_url.as_str(), config.block_offset);
 
-    match PriceFeedType::from_str(pft) {
-        PriceFeedType::Binance => {
-            let feed = BinancePriceFeed;
-            let builder = MarketMakerBuilder::new(config.clone(), feed, strategy);
-            let identifier = builder.identifier();
-            let mk = builder
-                .build(base.clone(), quote.clone())
-                .map_err(|e| MarketMakerError::Config(format!("Failed to build Market Maker with Binance feed: {}", e)))?;
-            let _ = run(mk, identifier, config, env, tokens).await;
-        }
-        PriceFeedType::Chainlink => {
-            let feed = ChainlinkPriceFeed;
-            let builder = MarketMakerBuilder::new(config.clone(), feed, strategy);
-            let identifier = builder.identifier();
-            let mk = builder
-                .build(base.clone(), quote.clone())
-                .map_err(|e| MarketMakerError::Config(format!("Failed to build Market Maker with Chainlink feed: {}", e)))?;
-            let _ = run(mk, identifier, config, env, tokens).await;
-        }
-    }
+    // Build market maker with dynamic components
+    let builder = MarketMakerBuilder::new(config.clone(), feed, execution);
+    let mk = builder
+        .build(base.clone(), quote.clone())
+        .map_err(|e| MarketMakerError::Config(format!("Failed to build Market Maker: {}", e)))?;
+
+    let identifier = mk.identifier.clone();
+    let _ = run(mk, identifier, config, env, tokens).await;
 
     Ok(())
 }

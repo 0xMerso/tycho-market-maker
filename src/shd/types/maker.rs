@@ -49,15 +49,15 @@ pub trait IMarketMaker: Send + Sync {
 }
 
 /// ================== Market Maker ==================
-pub struct MarketMaker<E: ExecStrategy, F: PriceFeed> {
+pub struct MarketMaker {
     // Ready when the ProtocolStreamBuilder is initialised
     pub ready: bool,
     // Hash of the instance, used to uniquely identify the instance, for external programs (monitoring, etc.)
     pub identifier: String,
     // Configuration for the market maker
     pub config: MarketMakerConfig,
-    // Price feed to use for market price
-    pub feed: F,
+    // Price feed to use for market price (dynamic)
+    pub feed: Box<dyn PriceFeed>,
     // Indicates whether the ProtocolStreamBuilder has been initialised (true if first stream has been received and saved)
     pub initialised: bool,
     // Base token from Tycho Client
@@ -70,19 +70,19 @@ pub struct MarketMaker<E: ExecStrategy, F: PriceFeed> {
     // Used to limit the bot to 1 single swap exec in his entire lifetime, for testing purpose
     pub single: bool,
 
-    // Execution strategy
-    pub execution: E,
+    // Execution strategy (dynamic)
+    pub execution: Box<dyn ExecStrategy>,
 }
 
 /// ================== Builder ==================
-pub struct MarketMakerBuilder<E: ExecStrategy, F: PriceFeed> {
+pub struct MarketMakerBuilder {
     config: MarketMakerConfig,
-    feed: F,
-    execution: E,
+    feed: Box<dyn PriceFeed>,
+    execution: Box<dyn ExecStrategy>,
 }
 
-impl<E: ExecStrategy, F: PriceFeed> MarketMakerBuilder<E, F> {
-    pub fn new(config: MarketMakerConfig, feed: F, execution: E) -> Self {
+impl MarketMakerBuilder {
+    pub fn new(config: MarketMakerConfig, feed: Box<dyn PriceFeed>, execution: Box<dyn ExecStrategy>) -> Self {
         Self { config, feed, execution }
     }
 
@@ -93,7 +93,7 @@ impl<E: ExecStrategy, F: PriceFeed> MarketMakerBuilder<E, F> {
         identifier.to_string()
     }
 
-    pub fn build(self, base: Token, quote: Token) -> Result<MarketMaker<E, F>, String> {
+    pub fn build(self, base: Token, quote: Token) -> Result<MarketMaker, String> {
         let identifier = self.identifier();
         Ok(MarketMaker {
             ready: false,
@@ -217,36 +217,30 @@ pub struct ExecutedPayload {
 }
 
 /// Example usage functions for different execution strategies
-impl<E: ExecStrategy, F: PriceFeed> MarketMaker<E, F> {
-    /// Create a market maker with custom execution and feed strategies
-    pub fn new(config: MarketMakerConfig, feed: F, execution: E, base: Token, quote: Token) -> Result<Self, String> {
+impl MarketMaker {
+    /// Create a market maker with dynamic execution strategy and dynamic feed
+    pub fn new(config: MarketMakerConfig, feed: Box<dyn PriceFeed>, execution: Box<dyn ExecStrategy>, base: Token, quote: Token) -> Result<Self, String> {
         let builder = MarketMakerBuilder::new(config, feed, execution);
         builder.build(base, quote)
     }
-}
 
-impl<F: PriceFeed> MarketMaker<DefaultExec, F> {
     /// Create a market maker with default execution strategy
-    pub fn with_default_exec(config: MarketMakerConfig, feed: F, base: Token, quote: Token) -> Result<Self, String> {
-        let execution = DefaultExec;
+    pub fn with_default_exec(config: MarketMakerConfig, feed: Box<dyn PriceFeed>, base: Token, quote: Token) -> Result<Self, String> {
+        let execution = Box::new(DefaultExec);
         let builder = MarketMakerBuilder::new(config, feed, execution);
         builder.build(base, quote)
     }
-}
 
-impl<F: PriceFeed> MarketMaker<GasBribeExec, F> {
     /// Create a market maker with gas bribe execution strategy
-    pub fn with_gas_bribe_exec(config: MarketMakerConfig, feed: F, base: Token, quote: Token, bribe_amount_wei: u128) -> Result<Self, String> {
-        let execution = GasBribeExec::new(bribe_amount_wei);
+    pub fn with_gas_bribe_exec(config: MarketMakerConfig, feed: Box<dyn PriceFeed>, base: Token, quote: Token, bribe_amount_wei: u128) -> Result<Self, String> {
+        let execution = Box::new(GasBribeExec::new(bribe_amount_wei));
         let builder = MarketMakerBuilder::new(config, feed, execution);
         builder.build(base, quote)
     }
-}
 
-impl<F: PriceFeed> MarketMaker<MainnetExec, F> {
     /// Create a market maker with mainnet execution strategy
-    pub fn with_mainnet_exec(config: MarketMakerConfig, feed: F, base: Token, quote: Token, use_flashbots: bool, target_block_offset: u64) -> Result<Self, String> {
-        let execution = MainnetExec::new(use_flashbots, target_block_offset);
+    pub fn with_mainnet_exec(config: MarketMakerConfig, feed: Box<dyn PriceFeed>, base: Token, quote: Token, use_flashbots: bool, target_block_offset: u64) -> Result<Self, String> {
+        let execution = Box::new(MainnetExec::new(use_flashbots, target_block_offset));
         let builder = MarketMakerBuilder::new(config, feed, execution);
         builder.build(base, quote)
     }

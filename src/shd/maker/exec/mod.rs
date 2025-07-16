@@ -27,12 +27,32 @@ pub trait ExecStrategy: Send + Sync {
     fn name(&self) -> &'static str;
 }
 
+/// Dynamic execution strategy factory
+pub struct ExecStrategyFactory;
+
+impl ExecStrategyFactory {
+    /// Create the appropriate execution strategy based on broadcast URL configuration
+    pub fn create(broadcast_url: &str, block_offset: u64) -> Box<dyn ExecStrategy> {
+        match broadcast_url {
+            "flashbots" => {
+                tracing::info!("🌐 Creating MainnetExec strategy with Flashbots");
+                Box::new(mainnet::MainnetExec::new(true, block_offset))
+            }
+            "pga" | "gas-bribe" => {
+                tracing::info!("🎯 Creating GasBribeExec strategy for PGA");
+                let bribe_amount = 1_000_000_000; // 1 gwei in wei
+                Box::new(pga::GasBribeExec::new(bribe_amount))
+            }
+            _ => {
+                // Default: classic broadcasting
+                tracing::info!("🔵 Creating DefaultExec strategy for classic broadcasting");
+                Box::new(default::DefaultExec)
+            }
+        }
+    }
+}
+
 pub mod default;
 pub mod mainnet;
 pub mod pga;
 pub mod simu;
-
-// pub use default::DefaultExec;
-// pub use mainnet::MainnetExec;
-// pub use pga::GasBribeExec;
-// pub use simu::simulate_transactions;

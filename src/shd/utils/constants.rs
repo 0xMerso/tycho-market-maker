@@ -6,7 +6,7 @@ use std::sync::atomic::AtomicBool;
 pub const CHANNEL_REDIS: &str = "tycho_market_maker";
 
 /// Restart delay in seconds
-pub const RESTART: u64 = 5;
+pub const RESTART: u64 = 60;
 
 /// Basis point denominator (10000 = 100%)
 pub const BASIS_POINT_DENO: f64 = 10_000.0;

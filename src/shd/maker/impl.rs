@@ -58,7 +58,7 @@ impl MarketContext {
 }
 
 #[async_trait]
-impl<E: ExecStrategy, F: PriceFeed> IMarketMaker for MarketMaker<E, F> {
+impl IMarketMaker for MarketMaker {
     /// Market Maker main functions
 
     async fn fetch_market_price(&self) -> Result<f64, String> {

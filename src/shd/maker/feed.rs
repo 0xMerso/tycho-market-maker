@@ -16,6 +16,29 @@ pub trait PriceFeed: Send + Sync {
     fn name(&self) -> &'static str;
 }
 
+/// Dynamic price feed factory
+pub struct PriceFeedFactory;
+
+impl PriceFeedFactory {
+    /// Create the appropriate price feed based on configuration
+    pub fn create(feed_type: &str) -> Box<dyn PriceFeed> {
+        match feed_type {
+            "binance" => {
+                tracing::info!("📊 Creating BinancePriceFeed");
+                Box::new(BinancePriceFeed)
+            }
+            "chainlink" => {
+                tracing::info!("🔗 Creating ChainlinkPriceFeed");
+                Box::new(ChainlinkPriceFeed)
+            }
+            _ => {
+                tracing::warn!("⚠️ Unknown feed type '{}', using BinancePriceFeed as default", feed_type);
+                Box::new(BinancePriceFeed)
+            }
+        }
+    }
+}
+
 pub enum PriceFeedType {
     Chainlink,
     Binance,
