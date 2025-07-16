@@ -17,7 +17,7 @@ tycho_api = "tycho-beta.propellerheads.xyz"
 
 # === Execution ===
 target_spread_bps = 25
-min_exec_spread_bps = 0.0
+min_exec_spread_bps = 1.0
 max_slippage_pct = 0.0005
 profitability_check = true
 max_inventory_ratio = 0.5
