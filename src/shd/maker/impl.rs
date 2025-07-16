@@ -9,7 +9,9 @@ use crate::{
         moni::NewPricesMessage,
         tycho::{ProtoSimComp, PsbConfig, SharedTychoStreamState},
     },
-    utils::constants::{ADD_TVL_THRESHOLD, APPROVE_FN_SIGNATURE, BASIS_POINT_DENO, DEFAULT_APPROVE_GAS, DEFAULT_SWAP_GAS, NULL_ADDRESS, PRICE_MOVE_THRESHOLD, SHARE_POOL_BAL_SWAP_BPS},
+    utils::constants::{
+        ADD_TVL_THRESHOLD, APPROVE_FN_SIGNATURE, BASIS_POINT_DENO, DEFAULT_APPROVE_GAS, DEFAULT_SWAP_GAS, MIN_AMOUNT_WORTH_USD, NULL_ADDRESS, PRICE_MOVE_THRESHOLD, SHARE_POOL_BAL_SWAP_BPS,
+    },
 };
 use alloy::{
     providers::{Provider, ProviderBuilder},
@@ -347,6 +349,18 @@ impl<E: ExecStrategy, F: PriceFeed> IMarketMaker for MarketMaker<E, F> {
                 (selling_amount * context.quote_to_eth, buying_amount * context.base_to_eth)
             };
             let (selling_amount_worth_usd, buying_amount_worth_usd) = (selling_amount_worth_eth * context.eth_to_usd, buying_amount_worth_eth * context.eth_to_usd);
+
+            let is_amount_worth_usd_enough = selling_amount_worth_usd > MIN_AMOUNT_WORTH_USD;
+            tracing::warn!(
+                "Selling amount worth USD is = {:.2}. It's >>> {} <<< than the minimum amount worth USD (of {} $)",
+                selling_amount_worth_usd,
+                if is_amount_worth_usd_enough { "higher" } else { "lower" },
+                MIN_AMOUNT_WORTH_USD
+            );
+            if is_amount_worth_usd_enough == false {
+                continue;
+            }
+
             match adjustment.psc.protosim.get_amount_out(powered_selling_amount_bg.clone(), selling, buying) {
                 Ok(result) => {
                     let amount_out_powered = result.amount.to_f64().unwrap_or(0.0);
@@ -720,12 +734,14 @@ impl<E: ExecStrategy, F: PriceFeed> IMarketMaker for MarketMaker<E, F> {
                                             reference_price
                                         );
                                         if threshold {
-                                            crate::data::r#pub::prices(NewPricesMessage {
-                                                identifier: identifier.clone(),
-                                                reference_price,
-                                                components: cpds.clone(),
-                                                block: msg.block_number,
-                                            });
+                                            if self.config.publish_events {
+                                                crate::data::r#pub::prices(NewPricesMessage {
+                                                    identifier: identifier.clone(),
+                                                    reference_price,
+                                                    components: cpds.clone(),
+                                                    block: msg.block_number,
+                                                });
+                                            }
                                             previous_reference_price = reference_price;
                                         } else {
                                             continue;

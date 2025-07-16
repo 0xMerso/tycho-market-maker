@@ -26,11 +26,13 @@ async fn run<M: IMarketMaker>(mut mk: M, identifier: String, config: MarketMaker
     let commit = shd::utils::misc::commit().unwrap_or_default();
     tracing::info!("♻️  MarketMaker program commit: {:?}", commit);
 
-    shd::data::r#pub::instance(NewInstanceMessage {
-        config: config.clone(),
-        identifier: identifier.clone(),
-        commit: commit.clone(),
-    });
+    if config.publish_events {
+        shd::data::r#pub::instance(NewInstanceMessage {
+            config: config.clone(),
+            identifier: identifier.clone(),
+            commit: commit.clone(),
+        });
+    }
 
     if let Ok(price) = mk.fetch_market_price().await {
         tracing::info!("Market Price: {:?} ({})", price, config.price_feed_config.r#type);

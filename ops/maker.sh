@@ -41,6 +41,6 @@ function start() {
 # export CONFIG_PATH="config/mainnet.eth-usdc.toml"
 # export CONFIG_PATH="config/mainnet.usdc-dai.toml"
 # export CONFIG_PATH="config/mainnet.eth-wbtc.toml"
-# export CONFIG_PATH="config/unichain.eth-usdc.toml"
-export CONFIG_PATH="config/base.eth-usdc.toml"
+# export CONFIG_PATH="config/base.eth-usdc.toml"
+export CONFIG_PATH="config/unichain.eth-usdc.toml"
 start $1

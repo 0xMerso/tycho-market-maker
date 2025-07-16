@@ -21,10 +21,13 @@ pub const ADD_TVL_THRESHOLD: f64 = 100.0;
 pub const SHARE_POOL_BAL_SWAP_BPS: f64 = 0.1;
 
 /// Default approve gas limit
-pub const DEFAULT_APPROVE_GAS: u64 = 50_000;
+pub const DEFAULT_APPROVE_GAS: u64 = 75_000;
 
 /// Default swap gas limit
 pub const DEFAULT_SWAP_GAS: u64 = 300_000;
+
+/// Min amount worth USD to swap
+pub const MIN_AMOUNT_WORTH_USD: f64 = 5.0;
 
 /// Approve function signature
 pub const APPROVE_FN_SIGNATURE: &str = "approve(address,uint256)";
@@ -33,7 +36,7 @@ pub const APPROVE_FN_SIGNATURE: &str = "approve(address,uint256)";
 pub const NULL_ADDRESS: &str = "0x0000000000000000000000000000000000000000";
 
 /// Has executed flag
-pub static HAS_EXECUTED: AtomicBool = AtomicBool::new(true);
+pub static HAS_EXECUTED: AtomicBool = AtomicBool::new(false);
 
 /// Default Redis host
 pub const DEFAULT_REDIS_HOST: &str = "127.0.0.1:42044";

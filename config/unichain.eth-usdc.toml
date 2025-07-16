@@ -8,7 +8,7 @@ quote_token = "USDC"
 quote_token_address = "0x078D782b760474a361dDA0AF3839290b0EF57AD6"
 network_name = "unichain"
 chain_id = 130
-wallet_public_key = "0x785d7477037a8fa2b1e0fd077cd40a979ee02007"
+wallet_public_key = "0xF5029A50494714b3f80b39F05acC2c9Cea017FD6"
 gas_token_symbol = "0x4200000000000000000000000000000000000006"
 gas_token_chainlink_price_feed = ""
 rpc_url = "https://unichain-mainnet.blastapi.io/1437c115-f259-4690-a2d7-8c32e658a164"
@@ -17,12 +17,11 @@ tycho_api = "tycho-unichain-beta.propellerheads.xyz"
 
 # === Execution ===
 target_spread_bps = 1
-min_exec_spread_bps = -10.0
+min_exec_spread_bps = 0.0
 max_slippage_pct = 0.0005
 profitability_check = true
-max_inventory_ratio = 0.5
+max_inventory_ratio = 0.25
 broadcast_url = "classic"
-quote_depths = [50.0, 250.0, 500.0, 750.0, 1000.0, 1250.0, 1500.0]
 tx_gas_limit = 300000
 block_offset = 1
 permit2_address = "0x000000000022D473030F116dDEE9F6B43aC78BA3"
@@ -41,6 +40,3 @@ reverse = false
 # source = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419"
 # reverse = false
 
-
-# idea: TEE Builder, Echo, Flashbots Protect etc.
-# auto topping up of gas: automatically buy some ETH when you run low on it.

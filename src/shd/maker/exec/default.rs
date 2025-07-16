@@ -53,11 +53,12 @@ impl ExecStrategy for DefaultExec {
         for (x, tx) in prepared.iter().enumerate() {
             tracing::debug!("Trade: #{} | Broadcasting on {} | Method: {}", x, mmc.network_name.as_str().to_string(), mmc.broadcast_url);
 
-            if HAS_EXECUTED.load(std::sync::atomic::Ordering::Relaxed) {
-                // ! This is a hack to prevent the program from executing transactions in testing phase
-                tracing::info!("⏩ Skipping broadcast ! Already executed a transaction in the program lifetime");
-                return;
-            }
+            // For testing purposes, it might be hardcoded to true
+            // if HAS_EXECUTED.load(std::sync::atomic::Ordering::Relaxed) {
+            //     // ! This is a hack to prevent the program from executing transactions in testing phase
+            //     tracing::info!("⏩ Skipping broadcast ! Already executed a transaction in the program lifetime");
+            //     return;
+            // }
 
             if env.testing {
                 tracing::info!("🧪 Skipping broadcast ! Testing mode enabled");

@@ -28,7 +28,9 @@ pub async fn simulate_transactions(transactions: Vec<PreparedTransaction>, confi
         wallet.address().to_string().eq_ignore_ascii_case(sender.clone().as_str())
     });
     let removed = initial_len - transactions.len();
-    tracing::debug!("Removed {} transactions (criterias: not owned by the wallet)", removed);
+    if removed > 0 {
+        tracing::debug!("Removed {} transactions (criterias: not owned by the wallet)", removed);
+    }
     let mut simulations = HashMap::new();
     for i in 0..transactions.len() {
         simulations.insert(i, false);
@@ -56,13 +58,13 @@ pub async fn simulate_transactions(transactions: Vec<PreparedTransaction>, confi
             match provider.simulate(&payload).await {
                 Ok(output) => {
                     for block in output.iter() {
-                        tracing::trace!(" 🔮 Simulated Block {}:", block.inner.header.number);
+                        tracing::trace!("Simulated 🔮 on block #{} ...", block.inner.header.number);
                         for (x, scr) in block.calls.iter().enumerate() {
                             let name = names.get(x).unwrap();
-                            tracing::trace!("  SimCallResult for '{}': Gas: {} | Simulation status: {}", name, scr.gas_used, scr.status);
+                            tracing::trace!(" - SimCallResult for '{}': Gas: {} | Simulation status: {}", name, scr.gas_used, scr.status);
                             if !scr.status {
                                 let reason = scr.error.clone().unwrap().message;
-                                tracing::error!("Simulation failed on SimCallResult on '{}'. No broadcast. Reason: {}", name, reason);
+                                tracing::error!(" - Simulation failed on SimCallResult on '{}'. No broadcast. Reason: {}", name, reason);
                                 // ? Publish failed status for both transactions ?
                             } else {
                                 succeeded.push(tx.clone());

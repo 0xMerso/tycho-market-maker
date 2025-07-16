@@ -1,0 +1,30 @@
+2025-07-16T11:34:44.561490Z  INFO shd::maker::r#impl: 🟣 'unichain' stream: block # 21917325 with 0  states updates | Min exec spread: -10
+2025-07-16T11:34:44.821238Z  INFO shd::maker::r#impl: Price movement above threshold (1 bps), of 2.63 bps, from 3155.04 to 3154.21
+2025-07-16T11:34:44.821313Z DEBUG shd::maker::r#impl:    - Evaluating pool [0x89270      uniswap_v3  30]: Spot: 3154.20055 | Reference: 3154.21000 | Spread: -0.00945 | Spread BPS: -0.03 | Should buy 📈
+2025-07-16T11:34:44.821326Z DEBUG shd::maker::r#impl:    - Evaluating pool [0x65081      uniswap_v3   5]: Spot: 3155.26576 | Reference: 3154.21000 | Spread: 1.05576 | Spread BPS: 3.35 | Should sell 📉
+2025-07-16T11:34:45.004956Z  WARN shd::maker::r#impl: No gas oracle feed found, using Coingecko
+2025-07-16T11:34:45.235838Z DEBUG shd::maker::r#impl: Market context fetched in 414 ms
+2025-07-16T11:34:45.236470Z  INFO shd::maker::r#impl: Market Context: Base to ETH: 1.000000 | Quote to ETH: 0.000317 | ETH to USD: 0.00 | Max Fee per Gas: 1374 | Max Priority Fee per Gas: 482 | Native Gas Price: 1000446 | Block: 21917325
+2025-07-16T11:34:45.421118Z DEBUG shd::maker::r#impl: Inventory evaluation: Nonce 41 | Wallet 0xF5029A50494714b3f80b39F05acC2c9Cea017FD6 | 💵 Holding 0.045 of WETH and 59.038 of USDC
+2025-07-16T11:34:45.604466Z DEBUG shd::maker::r#impl:  - Pool [0x65081      uniswap_v3   5] | Tycho Spot:   3155.26576 vs ref   3154.21000 | Spread:    1.06 USDC =     3 bps |  - Inventory: 0.04 WETH | Optimal: 0.0003838428484979214 | Max: 0.00898 | Selling 0.00898 WETH for 28.32955 USDC
+2025-07-16T11:34:45.604680Z DEBUG shd::maker::r#impl:  - Swap: 0.00898 WETH for 28.31521 USDC | Gas cost : 0.00000 $ | Gas cost in output: 0.04 %
+2025-07-16T11:34:45.604691Z DEBUG shd::maker::r#impl:  - Profit: 🟧  with average_sell_price_net_gas: 3153.6232 vs reference_price: 3154.2100 | potential_profit_delta: -0.58678 | 👀  potential_profit_delta_spread_bps: -1.86
+2025-07-16T11:34:45.604728Z  INFO shd::maker::r#impl: Elapsed from block_update to readjustments: 859 ms
+2025-07-16T11:34:45.604743Z DEBUG shd::maker::r#impl: Executing 1 orders. Broadcast config: classic
+2025-07-16T11:34:45.604782Z DEBUG shd::maker::r#impl:  - [0x65081      uniswap_v3   5] : Building Tycho solution: Buying USDC with WETH | Amount in: 8978497596243324 | Amount out: 28315215 | Amount out min: 28301057 => 28.3010573925 of USDC
+2025-07-16T11:34:45.705302Z  INFO shd::maker::exec::default: 🔧 [DefaultExec] Executing 1 transactions with default strategy
+2025-07-16T11:34:45.705336Z DEBUG shd::maker::exec::simu: Simulating 1 transactions (keeping only the first for now)
+2025-07-16T11:34:45.706260Z DEBUG shd::maker::exec::simu: Wallet: "0xf5029a50494714b3f80b39f05acc2c9cea017fd6"
+2025-07-16T11:34:45.706386Z DEBUG shd::maker::exec::simu:  - Sender: "0xf5029a50494714b3f80b39f05acc2c9cea017fd6"
+2025-07-16T11:34:45.919461Z TRACE shd::maker::exec::simu: 🔮 Simulated Block 21917327:
+2025-07-16T11:34:45.919514Z TRACE shd::maker::exec::simu:   SimCallResult for 'approval': Gas: 46105 | Simulation status: true
+2025-07-16T11:34:45.919531Z TRACE shd::maker::exec::simu:   SimCallResult for 'swap': Gas: 166636 | Simulation status: true
+2025-07-16T11:34:45.919624Z  INFO shd::maker::exec::default: 🔧 [DefaultExec] Simulation completed, 2 transactions passed
+2025-07-16T11:34:45.927527Z DEBUG shd::maker::exec::default: Trade: #0 | Broadcasting on unichain | Method: classic
+2025-07-16T11:34:46.554447Z DEBUG shd::maker::exec::default: Explorer: https://uniscan.xyz/tx/0x7e1fdb97af71e77b1eeea5a8883f32972446a3429260195b9d557d9469e435a7 | Approval shoot took 626 ms
+2025-07-16T11:34:46.726911Z DEBUG shd::maker::exec::default: Explorer: https://uniscan.xyz/tx/0x64301f954f05a9d708699da5065e9b99d5a3bbaf00950e06d9ebfc41c1a767cb | Swap (+ approval) shoot took 799 ms
+2025-07-16T11:34:48.778193Z DEBUG shd::maker::exec::default: Approval get_receipt + Swap get_receipt took 2051 ms
+2025-07-16T11:34:48.778299Z DEBUG shd::maker::exec::default: Approval receipt: status: true
+2025-07-16T11:34:48.778324Z DEBUG shd::maker::exec::default: Trade: #1 | Broadcasting on unichain | Method: classic
+2025-07-16T11:34:48.778337Z  INFO shd::maker::exec::default: ⏩ Skipping broadcast ! Already executed a transaction in the program lifetime
+2025-07-16T11:34:48.778477Z  INFO shd::maker::r#impl: Elapsed from block update to execution: 859 ms
