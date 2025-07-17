@@ -16,7 +16,7 @@ explorer_url = "https://uniscan.xyz/"
 tycho_api = "tycho-unichain-beta.propellerheads.xyz"
 
 # === Execution ===
-target_spread_bps = 1
+target_spread_bps = 5.0
 min_exec_spread_bps = 1.0
 max_slippage_pct = 0.0005
 profitability_check = true

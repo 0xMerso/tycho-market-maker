@@ -20,15 +20,11 @@ impl UnichainExec {
 impl ExecStrategy for UnichainExec {
     async fn execute(&self, config: MarketMakerConfig, transactions: Vec<PreparedTransaction>, env: EnvConfig) -> Vec<PreparedTransaction> {
         tracing::info!("🔗 [UnichainExec] Executing {} transactions on Unichain", transactions.len());
-
-        // Simulate transactions first
         let simulated = self.simulate(config.clone(), transactions.clone(), env.clone()).await;
         tracing::info!("🔗 [UnichainExec] Simulation completed, {} transactions passed", simulated.len());
-
         if !simulated.is_empty() {
             let _ = self.broadcast(simulated.clone(), config, env).await;
         }
-
         simulated
     }
 

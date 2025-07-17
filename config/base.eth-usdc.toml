@@ -8,7 +8,7 @@ quote_token = "USDC"
 quote_token_address = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
 network_name = "base"
 chain_id = 8453
-wallet_public_key = "0xC0F7d041defAE1045e11A6101284AbA4BCc3770f"
+wallet_public_key = "0xF5029A50494714b3f80b39F05acC2c9Cea017FD6" # "0xC0F7d041defAE1045e11A6101284AbA4BCc3770f"
 gas_token_symbol = "0x4200000000000000000000000000000000000006"
 gas_token_chainlink_price_feed = "0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70"
 rpc_url = "https://base-mainnet.blastapi.io/1437c115-f259-4690-a2d7-8c32e658a164"
@@ -16,8 +16,8 @@ explorer_url = "https://basescan.org/"
 tycho_api = "tycho-base-beta.propellerheads.xyz"
 
 # === Execution ===
-target_spread_bps = 15
-min_exec_spread_bps = 0
+target_spread_bps = 5.0
+min_exec_spread_bps = 1.0
 max_slippage_pct = 0.0005
 profitability_check = true
 max_inventory_ratio = 0.5

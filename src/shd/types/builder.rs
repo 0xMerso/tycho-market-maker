@@ -39,6 +39,7 @@ impl MarketMakerBuilder {
 
     /// Create a market maker with dynamic execution strategy and dynamic feed
     pub fn create(config: super::config::MarketMakerConfig, feed: Box<dyn PriceFeed>, execution: Box<dyn ExecStrategy>, base: Token, quote: Token) -> Result<MarketMaker, String> {
+        tracing::info!("Building MarketMaker with feed: {} and execution: {}", feed.name(), execution.name());
         let builder = Self::new(config, feed, execution);
         builder.build(base, quote)
     }

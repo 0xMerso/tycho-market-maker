@@ -31,23 +31,10 @@ impl ExecStrategyFactory {
     /// Create the appropriate execution strategy based on broadcast URL configuration
     pub fn create(network: &str) -> Box<dyn ExecStrategy> {
         match NetworkName::from_str(network) {
-            Some(NetworkName::Ethereum) => {
-                tracing::info!("🌐 Creating MainnetExec strategy with Flashbots");
-                Box::new(chain::mainnet::MainnetExec::new())
-            }
-            Some(NetworkName::Base) => {
-                tracing::info!("🔵 Creating BaseExec strategy for Base L2");
-                Box::new(chain::base::BaseExec::new())
-            }
-            Some(NetworkName::Unichain) => {
-                tracing::info!("🔗 Creating UnichainExec strategy for Unichain");
-                Box::new(chain::unichain::UnichainExec::new())
-            }
-            _ => {
-                // Default: classic broadcasting (using BaseExec as fallback)
-                tracing::warn!("⚠️ Unknown network '{}', using BaseExec strategy as fallback", network);
-                panic!("Unknown network '{}', please check the network name in the config file", network);
-            }
+            Some(NetworkName::Ethereum) => Box::new(chain::mainnet::MainnetExec::new()),
+            Some(NetworkName::Base) => Box::new(chain::base::BaseExec::new()),
+            Some(NetworkName::Unichain) => Box::new(chain::unichain::UnichainExec::new()),
+            None => panic!("Unknown network '{}', please check the network name in the config file", network),
         }
     }
 }

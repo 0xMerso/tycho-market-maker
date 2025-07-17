@@ -1,4 +1,4 @@
-use crate::utils;
+use crate::utils::{self, constants::BASIS_POINT_DENO};
 use serde::{Deserialize, Serialize};
 use std::{fs, time::Duration};
 
@@ -28,9 +28,7 @@ pub struct EnvConfig {
 /// Environment configuration expected
 #[derive(Debug, Clone)]
 pub struct MoniEnvConfig {
-    // pub paths: String,
     pub testing: bool,
-    // APIs
     pub heartbeat: String,
     pub database_url: String,
     pub database_name: String,
@@ -128,38 +126,6 @@ impl MoniEnvConfig {
     }
 }
 
-// #[derive(Debug, Serialize, Deserialize, Clone)]
-// pub struct MarketMakerConfig {
-//     // Exact match with config (e.g. mmc.toml)
-//     pub token0: String,
-//     pub addr0: String,
-//     pub token1: String,
-//     pub addr1: String,
-//     pub tag: String,
-//     pub network: String,
-//     pub chainid: u64,
-//     pub gas_token: String,
-//     pub gas_token_chainlink: String,
-//     pub rpc: String,
-//     pub explorer: String,
-//     pub spread: u32,
-//     pub min_exec_spread: f64,
-//     // pub max_consistent_spread: u32, // security
-//     // pub min_profit_spread_threshold: u32 // trigger
-//     pub slippage: f64,
-//     pub profitability: bool,
-//     pub max_trade_allocation: f64,
-//     pub broadcast: String,
-//     pub depths: Vec<f64>, // Quoted
-//     pub gas_limit: u64,
-//     pub target_block_offset: u64,
-//     pub tycho_endpoint: String,
-//     pub poll_interval_ms: u64,
-//     pub permit2: String,
-//     pub tycho_router: String,
-//     pub pfc: PriceFeedConfig,
-// }
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MarketMakerConfig {
     pub wallet_public_key: String,
@@ -174,7 +140,7 @@ pub struct MarketMakerConfig {
     pub gas_token_chainlink_price_feed: String,
     pub rpc_url: String,
     pub explorer_url: String,
-    pub target_spread_bps: u32,
+    pub target_spread_bps: f64,
     pub min_exec_spread_bps: f64,
     pub max_slippage_pct: f64,
     pub profitability_check: bool,
@@ -235,7 +201,7 @@ impl MarketMakerConfig {
     }
 
     pub fn validate(&self) -> Result<()> {
-        if self.target_spread_bps > 10_000 {
+        if self.target_spread_bps > BASIS_POINT_DENO as f64 {
             return Err(ConfigError::Config("target_spread_bps must be ≤ 10000 BPS (100%)".into()));
         }
         if self.max_slippage_pct > 1. {

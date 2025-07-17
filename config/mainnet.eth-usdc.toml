@@ -8,7 +8,7 @@ quote_token = "USDC"
 quote_token_address = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
 network_name = "ethereum"
 chain_id = 1
-wallet_public_key = "0x785d7477037a8fa2b1e0fd077cd40a979ee02007"
+wallet_public_key = "0xF5029A50494714b3f80b39F05acC2c9Cea017FD6" # "0xC0F7d041defAE1045e11A6101284AbA4BCc3770f"
 gas_token_symbol = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
 gas_token_chainlink_price_feed = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419"
 rpc_url = "https://eth-mainnet.blastapi.io/1437c115-f259-4690-a2d7-8c32e658a164"
@@ -16,7 +16,7 @@ explorer_url = "https://etherscan.io/"
 tycho_api = "tycho-beta.propellerheads.xyz"
 
 # === Execution ===
-target_spread_bps = 25
+target_spread_bps = 5.0
 min_exec_spread_bps = 1.0
 max_slippage_pct = 0.0005
 profitability_check = true

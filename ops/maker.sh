@@ -77,10 +77,10 @@ function start() {
 # Mainnet configurations (production)
 # export CONFIG_PATH="config/mainnet.eth-usdc.toml"
 # export CONFIG_PATH="config/mainnet.usdc-dai.toml"
-# export CONFIG_PATH="config/mainnet.eth-wbtc.toml"
+export CONFIG_PATH="config/mainnet.eth-wbtc.toml"
 
 # L2 configurations (testing/development)
-export CONFIG_PATH="config/base.eth-usdc.toml"
+# export CONFIG_PATH="config/base.eth-usdc.toml"
 # export CONFIG_PATH="config/unichain.eth-usdc.toml"
 
 # =============================================================================

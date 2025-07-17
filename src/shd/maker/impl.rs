@@ -65,7 +65,10 @@ impl IMarketMaker for MarketMaker {
     async fn fetch_eth_usd(&self) -> Result<f64, String> {
         if self.config.gas_token_chainlink_price_feed.is_empty() {
             tracing::warn!("No gas oracle feed found, using Coingecko");
-            return Ok(super::feed::coingecko().await.unwrap_or(0.));
+            if let Some(price) = super::feed::coingecko_eth_usd().await {
+                return Ok(price);
+            }
+            return Err("No gas oracle feed found, even using Coingecko".to_string());
         }
         super::feed::chainlink(self.config.rpc_url.clone(), self.config.gas_token_chainlink_price_feed.clone()).await
     }
