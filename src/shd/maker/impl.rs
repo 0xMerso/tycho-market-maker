@@ -779,7 +779,7 @@ impl IMarketMaker for MarketMaker {
                                                             } else {
                                                                 let transactions = self.prepare(orders, context.clone(), inventory.clone(), env.clone()).await;
                                                                 // tracing::info!("Publishing trade event for {}", self.config.identifier());
-                                                                let executed = self.execution.execute(self.config.clone(), transactions, env.clone()).await;
+                                                                let _executed = self.execution.execute(self.config.clone(), transactions, env.clone()).await;
                                                                 tracing::info!("Elapsed from block update to execution: {} ms", elapsed);
                                                             }
                                                         }
