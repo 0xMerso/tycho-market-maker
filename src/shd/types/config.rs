@@ -152,6 +152,7 @@ pub struct MarketMakerConfig {
     pub permit2_address: String,
     pub tycho_router_address: String,
     pub publish_events: bool,
+    pub skip_simulation: bool,
     pub price_feed_config: PriceFeedConfig,
 }
 
@@ -192,6 +193,7 @@ impl MarketMakerConfig {
         tracing::debug!("  Permit2:               {}", self.permit2_address);
         tracing::debug!("  Tycho Router:          {}", self.tycho_router_address);
         tracing::debug!("  Publish Events:        {}", self.publish_events);
+        tracing::debug!("  Skip Simulation:       {}", self.skip_simulation);
         tracing::debug!("  Price Feed Config:     {:?}", self.price_feed_config);
     }
 

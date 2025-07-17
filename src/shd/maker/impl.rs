@@ -233,7 +233,6 @@ impl IMarketMaker for MarketMaker {
                 spread_bps,
                 symbol
             );
-            // let snapshot = MarketSnapshot {};
             if spread_bps.abs() > self.config.target_spread_bps as f64 {
                 match spread_bps > 0. {
                     true => {
@@ -333,7 +332,7 @@ impl IMarketMaker for MarketMaker {
             let selling_amount = max_alloc; // For testing
             let buying_amount = if base_to_quote { selling_amount * adjustment.spot } else { selling_amount / adjustment.spot };
             let pool_msg = format!(
-                " - Pool {} | Tycho Spot: {:>12.5} vs ref {:>12.5} | Spread: {:>7.2} {} = {:>5.0} bps",
+                "Pool {} | Tycho Spot: {:>12.5} vs ref {:>12.5} | Spread: {:>7.2} {} = {:>5.0} bps",
                 cpname(adjustment.psc.component.clone()),
                 adjustment.spot,
                 adjustment.reference,
@@ -357,12 +356,14 @@ impl IMarketMaker for MarketMaker {
             let (selling_amount_worth_usd, buying_amount_worth_usd) = (selling_amount_worth_eth * context.eth_to_usd, buying_amount_worth_eth * context.eth_to_usd);
 
             let is_amount_worth_usd_enough = selling_amount_worth_usd > MIN_AMOUNT_WORTH_USD;
-            tracing::warn!(
-                "Selling amount worth USD is = {:.2}. It's >>> {} <<< than the minimum amount worth USD (of {} $)",
-                selling_amount_worth_usd,
-                if is_amount_worth_usd_enough { "higher" } else { "lower" },
-                MIN_AMOUNT_WORTH_USD
-            );
+
+            // tracing::info!(
+            //     " - Selling amount worth USD is = {:.2}. It's >>> {} <<< than the minimum amount worth USD (of {} $)",
+            //     selling_amount_worth_usd,
+            //     if is_amount_worth_usd_enough { "higher" } else { "lower" },
+            //     MIN_AMOUNT_WORTH_USD
+            // );
+
             if is_amount_worth_usd_enough == false {
                 continue;
             }
@@ -378,7 +379,7 @@ impl IMarketMaker for MarketMaker {
                     let gas_cost_eth = (gas_units.saturating_mul(context.native_gas_price)) as f64 / 1e18;
                     let gas_cost_usd = gas_cost_eth * context.eth_to_usd;
                     let gas_cost_in_output = if base_to_quote { gas_cost_eth / context.quote_to_eth } else { gas_cost_eth / context.base_to_eth };
-                    tracing::debug!(
+                    tracing::info!(
                         " - Swap: {:.5} {} for {:.5} {} | Gas cost : {:.5} $ | Gas cost in output: {:.2} %",
                         selling_amount,
                         selling.symbol,
@@ -408,8 +409,8 @@ impl IMarketMaker for MarketMaker {
                     };
                     let potential_profit_delta_spread_bps = potential_profit_delta / adjustment.reference * BASIS_POINT_DENO;
                     let profitable = potential_profit_delta_spread_bps > self.config.min_exec_spread_bps;
-                    tracing::debug!(
-                        " - Profit: {}  with average_sell_price_net_gas: {:.4} vs reference_price: {:.4} | potential_profit_delta: {:.5} | 👀  potential_profit_delta_spread_bps: {:.2}",
+                    tracing::info!(
+                        " ---> Profit: {}  with average_sell_price_net_gas: {:.4} vs reference_price: {:.4} | potential_profit_delta: {:.5} | 👀  potential_profit_delta_spread_bps: {:.2}",
                         if potential_profit_delta > 0. { "🟩" } else { "🟧" },
                         average_sell_price_net_gas,
                         adjustment.reference,
@@ -443,6 +444,14 @@ impl IMarketMaker for MarketMaker {
                             calculation,
                         };
                         orders.push(order);
+                    } else {
+                        if potential_profit_delta_spread_bps > 0. {
+                            tracing::info!(
+                                " ---> Potential profit but not enough to reach min_exec_spread_bps (of {:.2}) ! Missing {:.2} bps",
+                                self.config.min_exec_spread_bps,
+                                self.config.min_exec_spread_bps - potential_profit_delta_spread_bps
+                            );
+                        }
                     }
                 }
                 Err(e) => {
@@ -468,13 +477,12 @@ impl IMarketMaker for MarketMaker {
         let amount_out_min = BigUint::from((order.calculation.amount_out_min_powered).floor() as u128);
 
         tracing::debug!(
-            " - {} : Building Tycho solution: Buying {} with {} | Amount in: {} | Amount out: {} | Amount out min: {} => {} of {}",
+            " - {} : Building Tycho solution: Buying {} with {} | Amount in: {} | Amount out: {} | Amount out min: {} {}",
             cpname(order.adjustment.psc.component.clone()),
             order.adjustment.buying.symbol,
             order.adjustment.selling.symbol,
             amount_in,
             amount_out,
-            amount_out_min,
             order.calculation.amount_out_min_normalized,
             order.adjustment.buying.symbol
         );
@@ -554,7 +562,7 @@ impl IMarketMaker for MarketMaker {
 
     /// Entrypoint for executing the orders
     async fn prepare(&self, orders: Vec<ExecutionOrder>, context: MarketContext, inventory: Inventory, env: EnvConfig) -> Vec<PreparedTransaction> {
-        tracing::debug!("Executing {} orders", orders.len());
+        tracing::debug!(" === Executing {} orders === ", orders.len());
         unsafe {
             std::env::set_var("RPC_URL", self.config.rpc_url.clone());
         }
@@ -578,17 +586,16 @@ impl IMarketMaker for MarketMaker {
                         Ok(encoded) => {
                             // --- Prepare the transactions ---
                             // tracing::debug!("Encoded {} solutions", encoded.len());
-                            for i in 0..orders.len() {
-                                // Looping = executing multiple trades, potential conflicts
-                                // Need to handle inventory, nonce, etc.
-                                // For now it doesn't handle that, for testing purposes
-                                let order = orders.get(i);
-                                let solution = solutions.get(i);
-                                let esolution = encoded.get(i);
+                            // For now, only process the first order to avoid nonce conflicts
+                            if !orders.is_empty() {
+                                let order = orders.get(0);
+                                let solution = solutions.get(0);
+                                let esolution = encoded.get(0);
                                 match (order, solution, esolution) {
                                     (Some(_order), Some(solution), Some(esolution)) => match self.encode(solution.clone(), esolution.clone(), context.clone(), inventory.clone(), env.clone()) {
                                         Ok(prepared) => {
                                             transactions.push(prepared);
+                                            tracing::info!("Prepared first trade only (🧪 skipping {} other opportunities for now)", orders.len() - 1);
                                         }
                                         Err(e) => {
                                             tracing::error!("Failed to prepare transaction: {:?}", e);
@@ -751,7 +758,7 @@ impl IMarketMaker for MarketMaker {
                                         );
                                         if threshold {
                                             if self.config.publish_events {
-                                                crate::data::r#pub::prices(NewPricesMessage {
+                                                let _ = crate::data::r#pub::prices(NewPricesMessage {
                                                     identifier: identifier.clone(),
                                                     reference_price,
                                                     components: cpds.clone(),

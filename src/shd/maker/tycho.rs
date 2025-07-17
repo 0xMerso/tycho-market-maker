@@ -4,18 +4,13 @@ use tycho_client::rpc::RPCClient;
 use tycho_client::HttpRPCClient;
 use tycho_common::dto::{PaginationParams, ProtocolStateRequestBody, ResponseToken, TokensRequestBody, VersionParam};
 use tycho_common::Bytes;
-use tycho_simulation::evm::protocol::ekubo::state::EkuboState;
 use tycho_simulation::evm::protocol::filters::{balancer_pool_filter, curve_pool_filter, uniswap_v4_pool_with_hook_filter};
 use tycho_simulation::models::Token;
 
 use tycho_simulation::evm::protocol::uniswap_v3::state::UniswapV3State;
 use tycho_simulation::evm::protocol::uniswap_v4::state::UniswapV4State;
 
-use tycho_simulation::evm::{
-    engine_db::tycho_db::PreCachedDB,
-    protocol::{uniswap_v2::state::UniswapV2State, vm::state::EVMPoolState},
-    stream::ProtocolStreamBuilder,
-};
+use tycho_simulation::evm::{protocol::uniswap_v2::state::UniswapV2State, stream::ProtocolStreamBuilder};
 
 use alloy_chains::NamedChain;
 use num_bigint::BigUint;
@@ -200,15 +195,15 @@ pub async fn tokens(mmc: MarketMakerConfig, key: Option<&str>) -> Option<Vec<Tok
 pub async fn psb(mmc: MarketMakerConfig, key: String, psbc: PsbConfig, tokens: Vec<Token>) -> ProtocolStreamBuilder {
     let (_, _, chain) = crate::types::tycho::chain(mmc.network_name.clone().as_str().to_string()).expect("Invalid chain");
     let u4 = uniswap_v4_pool_with_hook_filter;
-    let balancer = balancer_pool_filter;
-    let curve = curve_pool_filter;
+    let _balancer = balancer_pool_filter;
+    let _curve = curve_pool_filter;
     let filter = psbc.filter.clone();
     let mut hmt = HashMap::new();
     tokens.iter().for_each(|t| {
         hmt.insert(t.address.clone(), t.clone());
     });
     tracing::debug!("Tycho endpoint: {} and chain: {}", mmc.tycho_api, chain);
-    let mut psb = ProtocolStreamBuilder::new(&mmc.tycho_api, chain)
+    let psb = ProtocolStreamBuilder::new(&mmc.tycho_api, chain)
         .exchange::<UniswapV2State>(TychoSupportedProtocol::UniswapV2.to_string().as_str(), filter.clone(), None)
         .exchange::<UniswapV3State>(TychoSupportedProtocol::UniswapV3.to_string().as_str(), filter.clone(), None)
         .exchange::<UniswapV4State>(TychoSupportedProtocol::UniswapV4.to_string().as_str(), filter.clone(), Some(u4))

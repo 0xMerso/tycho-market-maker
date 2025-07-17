@@ -21,17 +21,16 @@ use crate::{
 /// Pure EVM simulation, no bundle, etc.
 pub async fn simulate(transactions: Vec<PreparedTransaction>, config: &MarketMakerConfig, env: EnvConfig) -> Vec<PreparedTransaction> {
     let initial_len = transactions.len();
-    tracing::debug!("Simulating {} transactions (keeping only the first for now)", transactions.len());
+    tracing::debug!("Simulating {} transactions", transactions.len());
     let alloy_chain = get_alloy_chain(config.network_name.as_str().to_string()).expect("Failed to get alloy chain");
     let rpc = config.rpc_url.parse::<url::Url>().unwrap().clone(); // ! Custom per network
     let pk = env.wallet_private_key.clone();
     let wallet = PrivateKeySigner::from_bytes(&B256::from_str(&pk).expect("Failed to convert swapper pk to B256")).expect("Failed to private key signer");
-    tracing::debug!("Wallet: {:?}", wallet.address().to_string().to_lowercase());
+    tracing::debug!("Wallet configured: {:?}", wallet.address().to_string().to_lowercase());
     let signer = alloy::network::EthereumWallet::from(wallet.clone());
     let mut transactions = transactions.clone();
     transactions.retain(|t| {
         let sender = t.approval.from.unwrap_or_default().to_string().to_lowercase();
-        tracing::debug!(" - Sender: {:?}", sender);
         wallet.address().to_string().eq_ignore_ascii_case(sender.clone().as_str())
     });
     let removed = initial_len - transactions.len();
@@ -46,9 +45,7 @@ pub async fn simulate(transactions: Vec<PreparedTransaction>, config: &MarketMak
     let mut succeeded = vec![];
 
     if !transactions.is_empty() {
-        // ! Tmp: using only the first transaction for now
-        let first = transactions.first().expect("No transactions found");
-        let transactions = vec![first.clone()];
+        let time = std::time::SystemTime::now();
         for (x, tx) in transactions.iter().enumerate() {
             let calls = vec![tx.approval.clone(), tx.swap.clone()];
             let names = ["approval".to_string(), "swap".to_string()];
@@ -68,7 +65,8 @@ pub async fn simulate(transactions: Vec<PreparedTransaction>, config: &MarketMak
                         tracing::trace!("Simulated 🔮 on block #{} ...", block.inner.header.number);
                         for (x, scr) in block.calls.iter().enumerate() {
                             let name = names.get(x).unwrap();
-                            tracing::trace!(" - SimCallResult for '{}': Gas: {} | Simulation status: {}", name, scr.gas_used, scr.status);
+                            let took = time.elapsed().unwrap_or_default().as_millis();
+                            tracing::trace!(" - SimCallResult for '{}': Gas: {} | Simulation status: {} | Took: {} ms", name, scr.gas_used, scr.status, took);
                             if !scr.status {
                                 let reason = scr.error.clone().unwrap().message;
                                 tracing::error!(" - Simulation failed on SimCallResult on '{}'. No broadcast. Reason: {}", name, reason);
@@ -90,24 +88,26 @@ pub async fn simulate(transactions: Vec<PreparedTransaction>, config: &MarketMak
 }
 
 /// Shared broadcasting function used by all strategies
-pub async fn broadcast(prepared: Vec<PreparedTransaction>, mmc: MarketMakerConfig, env: EnvConfig) {
+pub async fn broadcast(prepared: Vec<PreparedTransaction>, mmc: MarketMakerConfig, env: EnvConfig) -> Vec<ExecutedPayload> {
     let alloy_chain = get_alloy_chain(mmc.network_name.as_str().to_string()).expect("Failed to get alloy chain");
     let rpc = mmc.rpc_url.parse::<url::Url>().unwrap().clone();
     let pk = env.wallet_private_key.clone();
     let wallet = PrivateKeySigner::from_bytes(&B256::from_str(&pk).expect("Failed to convert swapper pk to B256")).expect("Failed to private key signer");
     let signer = alloy::network::EthereumWallet::from(wallet.clone());
     let provider = ProviderBuilder::new().with_chain(alloy_chain).wallet(signer.clone()).on_http(rpc.clone());
-    let mut exec = ExecutedPayload::default();
+    let mut results = Vec::new();
     let _network = NetworkName::from_str(mmc.network_name.as_str()).unwrap();
 
     if env.testing {
         tracing::info!("🧪 Skipping broadcast ! Testing mode enabled");
-        return;
+        return results;
     }
     for (x, tx) in prepared.iter().enumerate() {
-        tracing::debug!("Trade: #{} | Broadcasting on {}", x, mmc.network_name.as_str().to_string());
+        tracing::debug!("Tx: #{} | Broadcasting on {}", x, mmc.network_name.as_str().to_string());
         // --- Sending, without waiting for receipt ---
         let time = std::time::SystemTime::now();
+        let mut exec = ExecutedPayload::default();
+
         match provider.send_transaction(tx.approval.clone()).await {
             Ok(approve) => {
                 let approval_time = time.elapsed().unwrap_or_default().as_millis();
@@ -123,7 +123,7 @@ pub async fn broadcast(prepared: Vec<PreparedTransaction>, mmc: MarketMakerConfi
                         exec.swap.hash = swap.tx_hash().to_string();
                         //  --- Wait for receipt ---
                         let time = std::time::SystemTime::now();
-                        let approve_receipt = approve.get_receipt().await;
+                        let approve_receipt = approve.get_receipt().await; // ! Optional ?
                         let swap_receipt = swap.get_receipt().await;
                         let total_time = time.elapsed().unwrap_or_default().as_millis();
                         tracing::debug!("Approval get_receipt + Swap get_receipt took {} ms", total_time);
@@ -149,5 +149,9 @@ pub async fn broadcast(prepared: Vec<PreparedTransaction>, mmc: MarketMakerConfi
                 exec.approval.error = Some(e.to_string());
             }
         }
+
+        results.push(exec);
     }
+
+    results
 }

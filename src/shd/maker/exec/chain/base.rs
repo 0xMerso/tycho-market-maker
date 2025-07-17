@@ -17,7 +17,6 @@ use super::super::{evm, ExecStrategy};
 /// - Each flashblock has a built-in gas limit based on its index in the sequence
 /// - Once a flashblock is broadcast, its transaction ordering will be reflected in the final block
 /// - The sequence of flashblocks is **fixed**, a flashblock cannot preempt another one
-/// - New
 pub struct BaseExec;
 
 impl BaseExec {
@@ -29,12 +28,20 @@ impl BaseExec {
 #[async_trait]
 impl ExecStrategy for BaseExec {
     async fn execute(&self, config: MarketMakerConfig, transactions: Vec<PreparedTransaction>, env: EnvConfig) -> Vec<PreparedTransaction> {
-        tracing::info!("🔵 [BaseExec] Executing {} transactions on Base L2", transactions.len());
-        // Simulate transactions first
-        let simulated = self.simulate(config.clone(), transactions.clone(), env.clone()).await;
-        tracing::info!("🔵 [BaseExec] Simulation completed, {} transactions passed", simulated.len());
+        tracing::info!("[{}] Executing {} transactions", self.name(), transactions.len());
+
+        let simulated = if config.skip_simulation {
+            tracing::info!("🚀 Skipping simulation - direct execution enabled");
+            transactions
+        } else {
+            // Simulate transactions first
+            let simulated = self.simulate(config.clone(), transactions.clone(), env.clone()).await;
+            tracing::info!("Simulation completed, transactions passed");
+            simulated
+        };
+
         if !simulated.is_empty() {
-            let _ = self.broadcast(simulated.clone(), config, env).await;
+            let _results = self.broadcast(simulated.clone(), config, env).await;
         }
         simulated
     }

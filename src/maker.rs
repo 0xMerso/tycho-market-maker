@@ -37,7 +37,7 @@ async fn run<M: IMarketMaker>(mut mk: M, identifier: String, config: MarketMaker
 
     // Publish instance start event if configured
     if config.publish_events {
-        shd::data::r#pub::instance(NewInstanceMessage {
+        let _ = shd::data::r#pub::instance(NewInstanceMessage {
             config: config.clone(),
             identifier: identifier.clone(),
             commit: commit.clone(),

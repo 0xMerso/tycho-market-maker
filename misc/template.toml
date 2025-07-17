@@ -26,6 +26,7 @@ block_offset = ""
 permit2_address = ""
 tycho_router_address = ""
 publish_events = false
+skip_simulation = false
 
 [price_feed_config] # ======= MM Price Feed Config ======= 
 # Expected price is base_token per quote_token => if base_token is ETH and quote_token is USDC, then price is ~2500, not 0.0004

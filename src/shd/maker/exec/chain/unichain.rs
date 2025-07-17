@@ -21,10 +21,18 @@ impl UnichainExec {
 impl ExecStrategy for UnichainExec {
     async fn execute(&self, config: MarketMakerConfig, transactions: Vec<PreparedTransaction>, env: EnvConfig) -> Vec<PreparedTransaction> {
         tracing::info!("🔗 [UnichainExec] Executing {} transactions on Unichain", transactions.len());
-        let simulated = self.simulate(config.clone(), transactions.clone(), env.clone()).await;
-        tracing::info!("🔗 [UnichainExec] Simulation completed, {} transactions passed", simulated.len());
+
+        let simulated = if config.skip_simulation {
+            tracing::info!("🚀 Skipping simulation - direct execution enabled");
+            transactions
+        } else {
+            let simulated = self.simulate(config.clone(), transactions.clone(), env.clone()).await;
+            tracing::info!("🔗 [UnichainExec] Simulation completed, {} transactions passed", simulated.len());
+            simulated
+        };
+
         if !simulated.is_empty() {
-            let _ = self.broadcast(simulated.clone(), config, env).await;
+            let _results = self.broadcast(simulated.clone(), config, env).await;
         }
         simulated
     }
