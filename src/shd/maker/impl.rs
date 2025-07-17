@@ -37,9 +37,6 @@ use tycho_simulation::{
 
 use alloy_primitives::Bytes as AlloyBytes;
 
-use crate::maker::exec::ExecStrategy;
-use crate::maker::feed::PriceFeed;
-
 // Impl print for MarketContext
 // Implemented here for tracing/log purposes, prefix path has to be maker.rs file
 impl MarketContext {
@@ -104,7 +101,8 @@ impl IMarketMaker for MarketMaker {
     /// Token inventory balances and metadata
     /// Might take some delay to get the balances which is an problem to deal with later
     /// Should be stored in memory and updated after each readjustment only
-    async fn fetch_inventory(&self, env: EnvConfig) -> Result<Inventory, String> {
+    /// @param _env: Environment configuration (unused but kept for future use)
+    async fn fetch_inventory(&self, _env: EnvConfig) -> Result<Inventory, String> {
         let provider = ProviderBuilder::new().on_http(self.config.rpc_url.clone().parse().expect("Failed to parse RPC_URL"));
         let tokens = [self.base.clone(), self.quote.clone()];
         let addresses = tokens.iter().map(|t| t.address.to_string()).collect::<Vec<String>>();
@@ -392,14 +390,14 @@ impl IMarketMaker for MarketMaker {
                         1. / (amount_out_normalized / selling_amount)
                     };
                     let delta = average_sell_price - adjustment.spot;
-                    let price_impact_bps = ((delta / adjustment.spot) * BASIS_POINT_DENO).round();
+                    let _price_impact_bps = ((delta / adjustment.spot) * BASIS_POINT_DENO).round();
                     let average_sell_price_net_gas = if base_to_quote {
                         (amount_out_normalized - gas_cost_in_output) / selling_amount
                     } else {
                         1. / ((amount_out_normalized - gas_cost_in_output) / selling_amount)
                     };
                     let delta_net_of_gas = average_sell_price_net_gas - adjustment.spot;
-                    let price_impact_net_of_gas_bps = ((delta_net_of_gas / adjustment.spot) * BASIS_POINT_DENO).round();
+                    let _price_impact_net_of_gas_bps = ((delta_net_of_gas / adjustment.spot) * BASIS_POINT_DENO).round();
                     let potential_profit_delta = if base_to_quote {
                         average_sell_price_net_gas - adjustment.reference
                     } else {
@@ -454,7 +452,10 @@ impl IMarketMaker for MarketMaker {
     }
 
     /// Build a Tycho Solution struct, for the given order
-    async fn solution(&self, order: ExecutionOrder, env: EnvConfig) -> Solution {
+    /// @param order: Execution order containing adjustment and calculation data
+    /// @param _env: Environment configuration (unused but kept for future use)
+    /// @return Solution: Tycho solution struct for execution
+    async fn solution(&self, order: ExecutionOrder, _env: EnvConfig) -> Solution {
         let split = 0.;
         let input = order.adjustment.selling.address;
         let output = order.adjustment.buying.address;
@@ -497,7 +498,13 @@ impl IMarketMaker for MarketMaker {
     /// Convert a solution to a transaction payload
     /// Also build the approval transaction, presumed needed (never infinite approval)
     /// We assume the bot always need to approve the router, so we don't need to check if it's already approved. Execution might be done in bundle
-    fn encode(&self, solution: Solution, tx: Transaction, context: MarketContext, inventory: Inventory, env: EnvConfig) -> Result<PreparedTransaction, String> {
+    /// @param solution: Tycho solution struct
+    /// @param tx: Transaction data
+    /// @param context: Market context with gas prices and block info
+    /// @param inventory: Current inventory state
+    /// @param _env: Environment configuration (unused but kept for future use)
+    /// @return Result<PreparedTransaction, String>: Prepared transaction with approval and swap
+    fn encode(&self, solution: Solution, tx: Transaction, context: MarketContext, inventory: Inventory, _env: EnvConfig) -> Result<PreparedTransaction, String> {
         let max_priority_fee_per_gas = context.max_priority_fee_per_gas; // 1 Gwei, not suited for L2s.
         let max_fee_per_gas = context.max_fee_per_gas;
 
@@ -576,7 +583,7 @@ impl IMarketMaker for MarketMaker {
                                 let solution = solutions.get(i);
                                 let esolution = encoded.get(i);
                                 match (order, solution, esolution) {
-                                    (Some(order), Some(solution), Some(esolution)) => match self.encode(solution.clone(), esolution.clone(), context.clone(), inventory.clone(), env.clone()) {
+                                    (Some(_order), Some(solution), Some(esolution)) => match self.encode(solution.clone(), esolution.clone(), context.clone(), inventory.clone(), env.clone()) {
                                         Ok(prepared) => {
                                             transactions.push(prepared);
                                         }
@@ -612,10 +619,11 @@ impl IMarketMaker for MarketMaker {
         self.execution.simulate(self.config.clone(), transactions, env).await
     }
 
-    /// Broadcast the transaction to the network. Swap are sensitive to MEV so we need to be careful
+    /// Execute prepared transactions using the configured execution strategy
+    /// @param prepared: Vector of prepared transactions to execute
+    /// @param env: Environment configuration
     async fn execute(&self, prepared: Vec<PreparedTransaction>, env: EnvConfig) {
-        tracing::info!("Using execution strategy: {}", self.execution.name());
-        let _ = self.execution.execute(self.config.clone(), prepared.clone(), env.clone()).await;
+        let _executed = self.execution.execute(self.config.clone(), prepared.clone(), env.clone()).await;
     }
 
     /// Monitor the ProtocolStreamBuilder for new pairs and updates, evaluate if MM bot has opportunities

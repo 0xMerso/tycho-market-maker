@@ -22,9 +22,9 @@ pub async fn alive(endpoint: String) -> bool {
 }
 
 /// Conditional heartbeat, with a dedicated task. Not used for now.
-/// 1. Fetch Redis data size > 0
-/// 2. Assert Network status latest > 0
-pub async fn heartbeats(mmc: MarketMakerConfig, env: EnvConfig) {
+/// @param _mmc: Market maker configuration (unused but kept for future use)
+/// @param env: Environment configuration containing testing mode and heartbeat endpoint
+pub async fn heartbeats(_mmc: MarketMakerConfig, env: EnvConfig) {
     if env.testing {
         tracing::info!("Testing mode, heartbeat task not spawned.");
         return;

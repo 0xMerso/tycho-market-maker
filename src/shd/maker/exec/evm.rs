@@ -100,14 +100,12 @@ pub async fn broadcast(prepared: Vec<PreparedTransaction>, mmc: MarketMakerConfi
     let mut exec = ExecutedPayload::default();
     let _network = NetworkName::from_str(mmc.network_name.as_str()).unwrap();
 
+    if env.testing {
+        tracing::info!("🧪 Skipping broadcast ! Testing mode enabled");
+        return;
+    }
     for (x, tx) in prepared.iter().enumerate() {
         tracing::debug!("Trade: #{} | Broadcasting on {}", x, mmc.network_name.as_str().to_string());
-
-        if env.testing {
-            tracing::info!("🧪 Skipping broadcast ! Testing mode enabled");
-            return;
-        }
-
         // --- Sending, without waiting for receipt ---
         let time = std::time::SystemTime::now();
         match provider.send_transaction(tx.approval.clone()).await {

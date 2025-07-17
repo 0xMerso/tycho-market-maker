@@ -8,19 +8,42 @@ use reqwest::Client;
 
 use crate::types::sol::IERC20;
 
-/// Retrieve the latest block number
+/// =============================================================================
+/// EVM Blockchain Utilities
+/// =============================================================================
+///
+/// @description: Collection of utility functions for interacting with EVM-compatible
+/// blockchains including Ethereum, Base, and other L2 networks
+/// =============================================================================
+
+/// =============================================================================
+/// @function: latest
+/// @description: Retrieve the latest block number from the specified RPC endpoint
+/// @param provider: RPC endpoint URL as string
+/// @return u64: Latest block number (returns 0 if failed)
+/// =============================================================================
 pub async fn latest(provider: String) -> u64 {
     let provider = ProviderBuilder::new().on_http(provider.parse().unwrap());
     provider.get_block_number().await.unwrap_or_default()
 }
 
-/// Used to retrieve gas price
+/// =============================================================================
+/// @function: gas_price
+/// @description: Retrieve the current gas price from the specified RPC endpoint
+/// @param provider: RPC endpoint URL as string
+/// @return u128: Current gas price in wei (returns 0 if failed)
+/// =============================================================================
 pub async fn gas_price(provider: String) -> u128 {
     let provider = ProviderBuilder::new().on_http(provider.parse().unwrap());
     provider.get_gas_price().await.unwrap_or_default()
 }
 
-/// Used to retrieve gas price
+/// =============================================================================
+/// @function: eip1559_fees
+/// @description: Estimate EIP-1559 gas fees (max fee and priority fee) for the network
+/// @param provider: RPC endpoint URL as string
+/// @return Result<Eip1559Estimation, String>: EIP-1559 fee estimation or error
+/// =============================================================================
 pub async fn eip1559_fees(provider: String) -> Result<Eip1559Estimation, String> {
     let provider = ProviderBuilder::new().on_http(provider.parse().unwrap());
 
@@ -33,7 +56,14 @@ pub async fn eip1559_fees(provider: String) -> Result<Eip1559Estimation, String>
     }
 }
 
-/// Get the balance of the owner for the specified tokens.
+/// =============================================================================
+/// @function: balances
+/// @description: Get token balances for a specific owner address across multiple tokens
+/// @param provider: Alloy provider instance
+/// @param owner: Owner address as string
+/// @param tokens: Vector of token contract addresses
+/// @return Result<Vec<u128>, String>: Vector of token balances in wei or error
+/// =============================================================================
 pub async fn balances(provider: &RootProvider<Http<Client>>, owner: String, tokens: Vec<String>) -> Result<Vec<u128>, String> {
     let mut balances = vec![];
     let client = Arc::new(provider);
@@ -56,7 +86,15 @@ pub async fn balances(provider: &RootProvider<Http<Client>>, owner: String, toke
     Ok(balances)
 }
 
-/// Get allowances
+/// =============================================================================
+/// @function: allowance
+/// @description: Get the allowance amount for a specific token between owner and spender
+/// @param provider: Alloy provider instance
+/// @param owner: Token owner address
+/// @param spender: Spender address
+/// @param token: Token contract address
+/// @return Result<u128, String>: Allowance amount in wei or error
+/// =============================================================================
 pub async fn allowance(provider: &RootProvider<Http<Client>>, owner: String, spender: String, token: String) -> Result<u128, String> {
     let client = Arc::new(provider);
     let contract = IERC20::new(token.parse().unwrap(), client.clone());
@@ -71,8 +109,19 @@ pub async fn allowance(provider: &RootProvider<Http<Client>>, owner: String, spe
 
 use crate::types::config::{EnvConfig, MarketMakerConfig};
 
-/// Initialize the wallet by checking the balances of the tokens, nonce, etc.
-pub async fn wallet(config: MarketMakerConfig, env: EnvConfig) {
+/// =============================================================================
+/// @function: wallet
+/// @description: Initialize the wallet by checking token balances, nonce, and wallet state
+/// @param config: Market maker configuration containing RPC URL and token addresses
+/// @param _env: Environment configuration (unused but kept for future use)
+/// @return: None
+///
+/// @behavior:
+/// - Fetches balances for base and quote tokens
+/// - Gets current nonce for transaction ordering
+/// - Logs wallet state for debugging
+/// =============================================================================
+pub async fn wallet(config: MarketMakerConfig, _env: EnvConfig) {
     let provider = ProviderBuilder::new().on_http(config.rpc_url.clone().parse().expect("Failed to parse RPC_URL"));
 
     let tokens = vec![config.base_token_address.clone(), config.quote_token_address.clone()];

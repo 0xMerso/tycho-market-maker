@@ -26,7 +26,7 @@ pub fn publish<T: Serialize>(event: &T) {
 
     match conn.publish::<&str, &str, ()>(CHANNEL_REDIS, &msg) {
         Ok(_) => {
-            let elapsed = start_time.elapsed().unwrap_or_default().as_millis();
+            let _elapsed = start_time.elapsed().unwrap_or_default().as_millis();
             // tracing::debug!("Message has been sent (of size: {}) | Took {} ms", msg.len(), elapsed);
         }
         Err(e) => {

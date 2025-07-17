@@ -250,7 +250,7 @@ pub async fn get_component_balances(mmc: MarketMakerConfig, cp: ProtocolComponen
 
             match client.get_protocol_states(&body).await {
                 Ok(response) => {
-                    let attributes = response.states.clone().into_iter().map(|state| state.attributes.clone()).collect::<Vec<_>>();
+                    let _attributes = response.states.clone().into_iter().map(|state| state.attributes.clone()).collect::<Vec<_>>();
                     // for attribute in attributes.iter() {
                     //     for a in attribute.iter() {
                     //         tracing::debug!(" - Attribute key: {:?}", a.0);
