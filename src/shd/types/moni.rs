@@ -43,12 +43,15 @@ pub enum ParsedMessage {
     NewInstance(NewInstanceMessage),
     NewPrices(NewPricesMessage),
     NewTrade(NewTradeMessage),
+    Ping,
     Unknown(Value),
 }
 
 /// Message types for Redis pub/sub communication
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum MessageType {
+    #[serde(rename = "ping")]
+    Ping,
     #[serde(rename = "new_instance")]
     NewInstance,
     #[serde(rename = "new_trade")]

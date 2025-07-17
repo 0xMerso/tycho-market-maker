@@ -14,8 +14,6 @@ services:
       args:
         - PROGRAM=maker
         - BUILD_TYPE=debug #!
-    ports:
-      - "42042:42042"
     depends_on: []
     # depends_on:
     #   redis:
@@ -30,7 +28,21 @@ services:
     networks:
       - tmm
 
-
+  base-eth-usdc:
+    build: 
+      context: .
+      dockerfile: ops/Dockerfile
+      args:
+        - PROGRAM=maker
+        - BUILD_TYPE=debug #!
+    depends_on: []
+    environment:
+      - RUST_LOG="off,maker=trace,shd=trace,monitor=trace,test=trace"
+      - REDIS_HOST=redis
+      - CONFIG_PATH=config/base.eth-usdc.toml
+    restart: always
+    networks:
+      - tmm
 
   # One monitor for all market maker instances
   monitor:

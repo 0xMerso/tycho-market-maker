@@ -8,6 +8,7 @@ pub fn parse(value: &str) -> Result<ParsedMessage, String> {
     let rdmsg: RedisMessage = serde_json::from_str(value).map_err(|e| format!("Failed to parse Redis message: {}", e))?;
 
     match rdmsg.message {
+        MessageType::Ping => Ok(ParsedMessage::Ping),
         MessageType::NewInstance => {
             let msg: NewInstanceMessage = serde_json::from_value(rdmsg.data).map_err(|e| format!("Failed to parse NewInstance message: {}", e))?;
             Ok(ParsedMessage::NewInstance(msg))

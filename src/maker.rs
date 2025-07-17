@@ -51,6 +51,8 @@ async fn run<M: IMarketMaker>(mut mk: M, identifier: String, config: MarketMaker
         tracing::error!("Failed to fetch the first market price");
     }
 
+    // ! ToDo: Add a check to see if the price is valid (not 0) and if both prices (reference and Tycho) are close to each other (within x% ?) at launch
+
     // Initialize shared state cache
     let cache = Arc::new(RwLock::new(TychoStreamState {
         protosims: HashMap::new(),
@@ -121,6 +123,16 @@ async fn initialize() -> Result<()> {
     // Validate network connectivity and get latest block
     let latest = shd::utils::evm::latest(config.rpc_url.clone()).await;
     tracing::info!("Launching Tycho Market Maker | 🧪 Testing mode: {:?} | Latest block: {}", env.testing, latest);
+
+    if config.publish_events {
+        tracing::info!("🏓  PublishEvent mode enabled. Publishing ping event to make sure Redis and Monitor are running");
+        if let Err(e) = shd::data::r#pub::ping() {
+            tracing::error!("Failed to publish ping event: {}", e);
+            std::process::exit(1);
+        } else {
+            tracing::info!("Ping event published successfully");
+        }
+    }
 
     // Fetch available tokens from Tycho API
     let tokens = shd::maker::tycho::tokens(config.clone(), Some(env.tycho_api_key.as_str()))

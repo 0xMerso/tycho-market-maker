@@ -41,6 +41,9 @@ pub async fn handle(msg: &ParsedMessage, env: MoniEnvConfig) {
     };
 
     match msg {
+        ParsedMessage::Ping => {
+            tracing::trace!("Ping received !");
+        }
         ParsedMessage::NewInstance(msg) => {
             tracing::trace!("NewInstance received with config identifier: {}", msg.config.identifier());
             let config_hash = msg.config.hash();
