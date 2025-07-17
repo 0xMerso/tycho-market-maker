@@ -8,6 +8,7 @@ use crate::types::{
 use super::super::{evm, ExecStrategy};
 
 /// Unichain execution strategy - optimized for Unichain network
+/// https://docs.unichain.org/docs/technical-information/advanced-txn
 pub struct UnichainExec;
 
 impl UnichainExec {
