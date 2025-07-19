@@ -389,6 +389,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "alloy-mev"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a3ddea8374904dec2ae28339423650c1f3497b04dafe5fc5b433827a68d37d21"
+dependencies = [
+ "alloy 0.5.4",
+ "async-trait",
+ "futures 0.3.31",
+ "pin-project 1.1.10",
+ "reqwest 0.12.15",
+ "serde_json",
+ "tower 0.5.2",
+ "url",
+]
+
+[[package]]
 name = "alloy-network"
 version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5588,6 +5604,7 @@ version = "0.1.0"
 dependencies = [
  "alloy 0.5.4",
  "alloy-chains",
+ "alloy-mev",
  "alloy-primitives",
  "anyhow",
  "async-trait",

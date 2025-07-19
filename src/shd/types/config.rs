@@ -147,6 +147,7 @@ pub struct MarketMakerConfig {
     pub max_inventory_ratio: f64,
     pub tx_gas_limit: u64,
     pub block_offset: u64,
+    pub inclusion_block_delay: u64,
     pub tycho_api: String,
     pub poll_interval_ms: u64,
     pub permit2_address: String,
@@ -171,6 +172,20 @@ impl MarketMakerConfig {
     }
 
     pub fn print(&self) {
+        // Ultra warnings for negative spreads
+        if self.target_spread_bps < 0.0 {
+            tracing::warn!(
+                "🚨 Target spread is NEGATIVE: {} bps! This will cause unprofitable execution (and drain the inventory) ! 🚨",
+                self.target_spread_bps
+            );
+        }
+        if self.min_exec_spread_bps < 0.0 {
+            tracing::warn!(
+                "🚨 Min exec spread is NEGATIVE: {} bps! This will cause unprofitable execution (and drain the inventory) ! 🚨",
+                self.min_exec_spread_bps
+            );
+        }
+
         tracing::debug!("Market Maker Config:");
         tracing::debug!("  Network:               {} with ID {}", self.network_name, self.chain_id);
         tracing::debug!("  Tag:                   {}", self.pair_tag);
@@ -188,6 +203,7 @@ impl MarketMakerConfig {
         tracing::debug!("  Max Inventory Ratio:   {}", self.max_inventory_ratio);
         tracing::debug!("  Gas Limit:             {}", self.tx_gas_limit);
         tracing::debug!("  Block Offset:          {}", self.block_offset);
+        tracing::debug!("  Inclusion Block Delay: {}", self.inclusion_block_delay);
         tracing::debug!("  Tycho API:             {}", self.tycho_api);
         tracing::debug!("  Poll Interval (ms):    {}", self.poll_interval_ms);
         tracing::debug!("  Permit2:               {}", self.permit2_address);

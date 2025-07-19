@@ -24,8 +24,10 @@ max_inventory_ratio = 0.5
 
 tx_gas_limit = 300000
 block_offset = 1
+inclusion_block_delay = 0
 permit2_address = "0x000000000022D473030F116dDEE9F6B43aC78BA3"
 tycho_router_address = "0xFfA5ec2e444e4285108e4a17b82dA495c178427B"
+skip_simulation = false # ! Very important parameter
 
 # === Misc ===
 poll_interval_ms = 1000

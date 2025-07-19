@@ -16,20 +16,22 @@ explorer_url = "https://etherscan.io/"
 tycho_api = "tycho-beta.propellerheads.xyz"
 
 # === Execution ===
-target_spread_bps = 5.0
-min_exec_spread_bps = 1.0
+target_spread_bps = 10.0
+min_exec_spread_bps = -50.0
 max_slippage_pct = 0.0005
 profitability_check = true
 max_inventory_ratio = 0.5
 
 tx_gas_limit = 300000
 block_offset = 1
+inclusion_block_delay = 1
 permit2_address = "0x000000000022D473030F116dDEE9F6B43aC78BA3"
 tycho_router_address = "0xfD0b31d2E955fA55e3fa641Fe90e08b677188d35"
 
 # === Misc ===
 poll_interval_ms = 12000
 publish_events = false 
+skip_simulation = true # ! Very important parameter
 
 [price_feed_config]
 # type = "chainlink"

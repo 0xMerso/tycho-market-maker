@@ -39,6 +39,7 @@ alloy = { version = "0.5.4", features = [
 alloy-primitives = "0.8.23"
 alloy-chains = "0.1.63"
 primitive-types = "0.10.1"
+alloy-mev = "0.5"
 
 # --- Database ---
 redis = { version = "0.26.1", features = ["tokio-comp", "aio", "connection-manager"] }

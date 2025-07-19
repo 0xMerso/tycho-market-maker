@@ -11,7 +11,7 @@ use alloy_primitives::B256;
 use crate::{
     maker::tycho::get_alloy_chain,
     types::{
-        config::{EnvConfig, MarketMakerConfig, NetworkName},
+        config::{EnvConfig, MarketMakerConfig},
         maker::{ExecutedPayload, PreparedTransaction},
     },
     utils::constants::HAS_EXECUTED,
@@ -89,6 +89,7 @@ pub async fn simulate(transactions: Vec<PreparedTransaction>, config: &MarketMak
 
 /// Shared broadcasting function used by all strategies
 pub async fn broadcast(prepared: Vec<PreparedTransaction>, mmc: MarketMakerConfig, env: EnvConfig) -> Vec<ExecutedPayload> {
+    // Intro stuff
     let alloy_chain = get_alloy_chain(mmc.network_name.as_str().to_string()).expect("Failed to get alloy chain");
     let rpc = mmc.rpc_url.parse::<url::Url>().unwrap().clone();
     let pk = env.wallet_private_key.clone();
@@ -96,7 +97,6 @@ pub async fn broadcast(prepared: Vec<PreparedTransaction>, mmc: MarketMakerConfi
     let signer = alloy::network::EthereumWallet::from(wallet.clone());
     let provider = ProviderBuilder::new().with_chain(alloy_chain).wallet(signer.clone()).on_http(rpc.clone());
     let mut results = Vec::new();
-    let _network = NetworkName::from_str(mmc.network_name.as_str()).unwrap();
 
     if env.testing {
         tracing::info!("🧪 Skipping broadcast ! Testing mode enabled");
