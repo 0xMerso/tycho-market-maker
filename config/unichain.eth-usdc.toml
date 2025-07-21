@@ -31,7 +31,7 @@ skip_simulation = false # ! Very important parameter
 
 # === Misc ===
 poll_interval_ms = 1000
-publish_events = false 
+publish_events = true 
 
 [price_feed_config]
 type = "binance"

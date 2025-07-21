@@ -12,8 +12,8 @@ wallet_public_key = "0xF5029A50494714b3f80b39F05acC2c9Cea017FD6" # "0xC0F7d041de
 gas_token_symbol = "0x4200000000000000000000000000000000000006"
 gas_token_chainlink_price_feed = "0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70"
 # rpc_url = "https://base-mainnet.blastapi.io/1437c115-f259-4690-a2d7-8c32e658a164"
-# rpc_url = "https://base-mainnet.g.alchemy.com/v2/lSi7J0gmr1jHBVV-gi29Z" # FlashBlock support ? Also support simulate, where the preconf doesn't support it ..
-rpc_url = "https://mainnet-preconf.base.org" # ! Can only be used if skip_simulation is true 
+rpc_url = "https://base-mainnet.g.alchemy.com/v2/lSi7J0gmr1jHBVV-gi29Z" # FlashBlock support ? Also support simulate, where the preconf doesn't support it ..
+# rpc_url = "https://mainnet-preconf.base.org" # ! Can only be used if skip_simulation is true 
 explorer_url = "https://basescan.org/"
 tycho_api = "tycho-base-beta.propellerheads.xyz"
 
@@ -33,7 +33,7 @@ tycho_router_address = "0xea3207778e39EB02D72C9D3c4Eac7E224ac5d369"
 # === Misc ===
 poll_interval_ms = 1000
 publish_events = false
-skip_simulation = true # ! Very important parameter
+skip_simulation = false # ! Very important parameter
 
 [price_feed_config]
 # type = "chainlink"
