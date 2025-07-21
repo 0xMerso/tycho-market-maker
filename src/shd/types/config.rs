@@ -160,7 +160,7 @@ pub struct MarketMakerConfig {
 
 impl MarketMakerConfig {
     /// mk-instance-<network_name>-<chain_id>-<base_token_symbol>-<quote_token_symbol>-<pub_address>
-    pub fn identifier(&self) -> String {
+    pub fn id(&self) -> String {
         let f7 = self.wallet_public_key[..9].to_string(); // 0x + 7 chars
         let msg = format!("mmc-{}-{}-{}-{}", self.network_name, self.base_token, self.quote_token, f7);
         msg.to_lowercase()

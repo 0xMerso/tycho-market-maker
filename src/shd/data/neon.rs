@@ -45,7 +45,7 @@ pub async fn handle(msg: &ParsedMessage, env: MoniEnvConfig) {
             tracing::trace!("Ping received !");
         }
         ParsedMessage::NewInstance(msg) => {
-            tracing::trace!("NewInstance received with config identifier: {}", msg.config.identifier());
+            tracing::trace!("NewInstance received with config identifier: {}", msg.config.id());
             let config_hash = msg.config.hash();
             tracing::trace!("Config Keccak256: {}", config_hash);
 
@@ -68,7 +68,7 @@ pub async fn handle(msg: &ParsedMessage, env: MoniEnvConfig) {
                         return;
                     }
                 };
-                tracing::trace!("    - Configuration: {}: Keccak256: {}", mmc.identifier(), cfg.hash);
+                tracing::trace!("    - Configuration: {}: Keccak256: {}", mmc.id(), cfg.hash);
 
                 let instances = match pull::instances(&db).await {
                     Ok(instances) => instances,
@@ -136,6 +136,23 @@ pub async fn handle(msg: &ParsedMessage, env: MoniEnvConfig) {
         }
         ParsedMessage::NewTrade(msg) => {
             tracing::trace!("NewTrade received, with instance identifier: {}", msg.identifier);
+
+            let instances = match pull::instances(&db).await {
+                Ok(instances) => instances,
+                Err(err) => {
+                    tracing::error!("Error finding instance by hash: {}", err);
+                    return;
+                }
+            };
+
+            if let Some(instance) = instances.into_iter().find(|inst| inst.identifier == msg.identifier) {
+                if let Err(err) = create::trade(&db, &instance, msg).await {
+                    tracing::error!("Error storing trade data: {}", err);
+                }
+                tracing::info!("Trade data stored successfully");
+            } else {
+                tracing::warn!("Instance not found for hash: {}", msg.identifier);
+            }
         }
         ParsedMessage::Unknown(data) => {
             tracing::warn!("Unknown message type: {:?}", data);
@@ -222,7 +239,7 @@ pub mod create {
     }
 
     /// Insert a new trade record and return its full Model
-    pub async fn trade(db: &DatabaseConnection, instance: &instance::Model, msg: NewTradeMessage) -> Result<trade::Model, sea_orm::DbErr> {
+    pub async fn trade(db: &DatabaseConnection, instance: &instance::Model, msg: &NewTradeMessage) -> Result<trade::Model, sea_orm::DbErr> {
         let now = chrono::Utc::now().naive_utc();
         let model = trade::ActiveModel {
             created_at: Set(now),

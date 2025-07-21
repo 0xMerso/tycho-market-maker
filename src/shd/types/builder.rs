@@ -18,7 +18,9 @@ impl MarketMakerBuilder {
     pub fn identifier(&self) -> String {
         let timestamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
         // Merging of config.identifier() and timestamp
-        let identifier = format!("{}-instance-{}", self.config.identifier(), timestamp);
+        let f7 = self.config.wallet_public_key[..9].to_string(); // 0x + 7 chars
+        let msg = format!("mmc-{}-{}-{}-{}", self.config.network_name, self.config.base_token, self.config.quote_token, f7);
+        let identifier = format!("{}-instance-{}", msg.to_lowercase(), timestamp);
         identifier.to_string()
     }
 

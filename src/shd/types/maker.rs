@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use alloy::rpc::types::TransactionRequest;
+use alloy::rpc::types::{TransactionReceipt, TransactionRequest};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use tycho_execution::encoding::models::{Solution, Transaction};
@@ -28,7 +28,6 @@ pub trait IMarketMaker: Send + Sync {
     async fn fetch_market_context(&self, components: Vec<ProtocolComponent>, protosims: &HashMap<std::string::String, Box<dyn ProtocolSim>>, tokens: Vec<Token>) -> Option<MarketContext>;
     async fn fetch_eth_usd(&self) -> Result<f64, String>;
     async fn fetch_market_price(&self) -> Result<f64, String>;
-
     // fn optimum(&self, context: MarketContext, inventory: Inventory, adjustment: CompReadjustment) -> OptimizationResult;
 
     // Functions to build Tycho solution, encode, prepare, sign transactions
@@ -164,15 +163,16 @@ pub struct PreparedTransaction {
     pub swap: TransactionRequest,
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct ExecTxResult {
     pub sent: bool,
     pub status: bool,
     pub hash: String,
     pub error: Option<String>,
+    pub receipt: Option<TransactionReceipt>,
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct ExecutedPayload {
     pub approval: ExecTxResult,
     pub swap: ExecTxResult,

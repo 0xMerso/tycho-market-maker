@@ -118,7 +118,7 @@ async fn initialize() -> Result<()> {
         Err(e) => return Err(MarketMakerError::Config(format!("Failed to load config: {}", e))),
     };
     config.print();
-    tracing::debug!("🤖 MarketMaker Config Identifier: '{}'", config.identifier());
+    tracing::debug!("🤖 MarketMaker Config Identifier: '{}'", config.id());
 
     // Validate network connectivity and get latest block
     let latest = shd::utils::evm::latest(config.rpc_url.clone()).await;

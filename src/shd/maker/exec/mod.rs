@@ -22,51 +22,23 @@ use crate::{
 /// Execution strategy trait for handling different execution methods
 #[async_trait]
 pub trait ExecStrategy: Send + Sync {
-    /// Execute the prepared transactions (orchestration)
-    async fn execute(&self, config: MarketMakerConfig, transactions: Vec<PreparedTransaction>, env: EnvConfig) -> Result<Vec<ExecutedPayload>, String> {
-        self.pre_exec_hook(&config).await;
-
-        tracing::info!("[{}] Executing {} transactions", self.name(), transactions.len());
-
-        let simulated = if config.skip_simulation {
-            tracing::info!("🚀 Skipping simulation - direct execution enabled");
-            transactions
-        } else {
-            let simulated = self.simulate(config.clone(), transactions.clone(), env.clone()).await?;
-            tracing::info!("Simulation completed, {} transactions passed", simulated.len());
-            simulated
-        };
-
-        let results = if !simulated.is_empty() {
-            self.broadcast(simulated.clone(), config.clone(), env).await?
-        } else {
-            vec![]
-        };
-
-        self.post_exec_hook(&config).await;
-        Ok(results)
-    }
-
-    /// Simulate transactions (validation)
-    async fn simulate(&self, config: MarketMakerConfig, transactions: Vec<PreparedTransaction>, env: EnvConfig) -> Result<Vec<PreparedTransaction>, String> {
-        Ok(default_simulate(transactions, &config, env).await)
-    }
-
-    /// Broadcast transactions (execution)
-    async fn broadcast(&self, prepared: Vec<PreparedTransaction>, mmc: MarketMakerConfig, env: EnvConfig) -> Result<Vec<ExecutedPayload>, String>;
-
     /// Get the strategy name for logging
     fn name(&self) -> &'static str;
 
     /// Pre-execution hook
-    async fn pre_exec_hook(&self, config: &MarketMakerConfig) {
-        pre_exec_hook(self.name(), config).await;
-    }
+    async fn pre_exec_hook(&self, config: &MarketMakerConfig);
 
     /// Post-execution hook
-    async fn post_exec_hook(&self, config: &MarketMakerConfig) {
-        post_exec_hook(self.name(), config).await;
-    }
+    async fn post_exec_hook(&self, config: &MarketMakerConfig, transactions: Vec<ExecutedPayload>, identifier: String);
+
+    /// Execute the prepared transactions (orchestration)
+    async fn execute(&self, config: MarketMakerConfig, transactions: Vec<PreparedTransaction>, env: EnvConfig, identifier: String) -> Result<Vec<ExecutedPayload>, String>;
+
+    /// Simulate transactions (validation)
+    async fn simulate(&self, config: MarketMakerConfig, transactions: Vec<PreparedTransaction>, env: EnvConfig) -> Result<Vec<PreparedTransaction>, String>;
+
+    /// Broadcast transactions (execution)
+    async fn broadcast(&self, prepared: Vec<PreparedTransaction>, mmc: MarketMakerConfig, env: EnvConfig) -> Result<Vec<ExecutedPayload>, String>;
 }
 
 /// Dynamic execution strategy factory
@@ -88,7 +60,7 @@ impl ExecStrategyFactory {
 /// Pure EVM simulation, no bundle, etc.
 pub async fn default_simulate(transactions: Vec<PreparedTransaction>, config: &MarketMakerConfig, env: EnvConfig) -> Vec<PreparedTransaction> {
     let initial_len = transactions.len();
-    tracing::debug!("Simulating {} transactions", transactions.len());
+    tracing::debug!("default_simulate: {} transactions", transactions.len());
     let alloy_chain = get_alloy_chain(config.network_name.as_str().to_string()).expect("Failed to get alloy chain");
     let rpc = config.rpc_url.parse::<url::Url>().unwrap().clone(); // ! Custom per network
     let pk = env.wallet_private_key.clone();
@@ -156,7 +128,7 @@ pub async fn default_simulate(transactions: Vec<PreparedTransaction>, config: &M
 
 /// Shared broadcasting function used by all strategies
 pub async fn default_broadcast(prepared: Vec<PreparedTransaction>, mmc: MarketMakerConfig, env: EnvConfig) -> Result<Vec<ExecutedPayload>, String> {
-    // Intro stuff
+    tracing::debug!("default_broadcast: {} transactions", prepared.len());
     let alloy_chain = get_alloy_chain(mmc.network_name.as_str().to_string()).expect("Failed to get alloy chain");
     let rpc = mmc.rpc_url.parse::<url::Url>().unwrap().clone();
     let pk = env.wallet_private_key.clone();
@@ -200,6 +172,8 @@ pub async fn default_broadcast(prepared: Vec<PreparedTransaction>, mmc: MarketMa
                                 tracing::debug!("Approval receipt: status: {:?}", approval_receipt.status());
                                 exec.approval.status = approval_receipt.status();
                                 exec.swap.status = swap_receipt.status();
+                                exec.swap.receipt = Some(swap_receipt);
+                                exec.approval.receipt = Some(approval_receipt);
                             }
                             _ => {
                                 tracing::error!("Failed to get receipt");
@@ -224,11 +198,11 @@ pub async fn default_broadcast(prepared: Vec<PreparedTransaction>, mmc: MarketMa
     Ok(results)
 }
 
-pub async fn pre_exec_hook(exec_name: &str, _config: &crate::types::config::MarketMakerConfig) {
+pub async fn default_pre_exec_hook(exec_name: &str, _config: &crate::types::config::MarketMakerConfig) {
     tracing::info!("[{}] pre-exec hook", exec_name);
 }
 
-pub async fn post_exec_hook(exec_name: &str, _config: &crate::types::config::MarketMakerConfig) {
+pub async fn default_post_exec_hook(exec_name: &str, _config: &crate::types::config::MarketMakerConfig) {
     tracing::info!("[{}] post-exec hook", exec_name);
 }
 

@@ -9,7 +9,10 @@ use alloy_primitives::B256;
 use async_trait::async_trait;
 
 use crate::{
-    maker::tycho::get_alloy_chain,
+    maker::{
+        exec::{default_post_exec_hook, default_pre_exec_hook},
+        tycho::get_alloy_chain,
+    },
     types::{
         config::{EnvConfig, MarketMakerConfig},
         maker::{ExecutedPayload, PreparedTransaction},
@@ -37,22 +40,41 @@ impl ExecStrategy for MainnetExec {
 
     async fn pre_exec_hook(&self, config: &MarketMakerConfig) {
         tracing::info!("🔗 [{}] Pre-exec hook", self.name());
-        crate::maker::exec::pre_exec_hook(self.name(), config).await;
+        default_pre_exec_hook(self.name(), config).await;
     }
 
-    async fn post_exec_hook(&self, config: &MarketMakerConfig) {
+    async fn post_exec_hook(&self, config: &MarketMakerConfig, _transactions: Vec<ExecutedPayload>, _identifier: String) {
         tracing::info!("🔗 [{}] Post-exec hook", self.name());
-        crate::maker::exec::post_exec_hook(self.name(), config).await;
+        default_post_exec_hook(self.name(), config).await;
+    }
+
+    async fn execute(&self, config: MarketMakerConfig, transactions: Vec<PreparedTransaction>, env: EnvConfig, identifier: String) -> Result<Vec<ExecutedPayload>, String> {
+        self.pre_exec_hook(&config).await;
+        tracing::info!("[{}] Executing {} transactions", self.name(), transactions.len());
+        let simulated = if config.skip_simulation {
+            tracing::info!("🚀 Skipping simulation - direct execution enabled");
+            transactions
+        } else {
+            let simulated = self.simulate(config.clone(), transactions.clone(), env.clone()).await?;
+            tracing::info!("Simulation completed, {} transactions passed", simulated.len());
+            simulated
+        };
+        let transactions = if !simulated.is_empty() {
+            self.broadcast(simulated.clone(), config.clone(), env).await?
+        } else {
+            vec![]
+        };
+        self.post_exec_hook(&config, transactions.clone(), identifier).await;
+        Ok(transactions)
     }
 
     async fn simulate(&self, _config: MarketMakerConfig, _transactions: Vec<PreparedTransaction>, _env: EnvConfig) -> Result<Vec<PreparedTransaction>, String> {
         tracing::warn!("[{}] Simulation not implemented for mainnet strategy", self.name());
-        panic!("Simulation not implemented for mainnet strategy");
-        // Ok(vec![])
+        Ok(vec![])
     }
 
     async fn broadcast(&self, prepared: Vec<PreparedTransaction>, mmc: MarketMakerConfig, env: EnvConfig) -> Result<Vec<ExecutedPayload>, String> {
-        tracing::info!("🌐 [{}] Broadcasting {} transactions on Mainnet with Flashbots", self.name(), prepared.len());
+        tracing::info!("🌐 [{}] Broadcasting {} transactions on Mainnet with Flashbots for instance {}", self.name(), prepared.len(), mmc.id());
 
         let ac = get_alloy_chain(mmc.network_name.as_str().to_string()).expect("Failed to get alloy chain");
         let rpc = mmc.rpc_url.parse::<url::Url>().unwrap().clone();

@@ -643,7 +643,7 @@ impl IMarketMaker for MarketMaker {
     /// @param prepared: Vector of prepared transactions to execute
     /// @param env: Environment configuration
     async fn execute(&self, prepared: Vec<PreparedTransaction>, env: EnvConfig) -> Result<Vec<ExecutedPayload>, String> {
-        self.execution.execute(self.config.clone(), prepared.clone(), env.clone()).await
+        self.execution.execute(self.config.clone(), prepared.clone(), env.clone(), self.identifier.clone()).await
     }
 
     /// Monitor the ProtocolStreamBuilder for new pairs and updates, evaluate if MM bot has opportunities
@@ -777,6 +777,8 @@ impl IMarketMaker for MarketMaker {
                                             previous_reference_price,
                                             reference_price
                                         );
+
+                                        // ===== Publish Price event =====
                                         if threshold {
                                             if self.config.publish_events {
                                                 let now = std::time::Instant::now();
