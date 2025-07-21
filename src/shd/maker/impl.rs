@@ -5,7 +5,7 @@ use crate::{
     opti::routing,
     types::{
         config::EnvConfig,
-        maker::{CompReadjustment, ComponentPriceData, ExecutionOrder, IMarketMaker, Inventory, MarketContext, MarketMaker, PreparedTransaction, SwapCalculation, TradeDirection},
+        maker::{CompReadjustment, ComponentPriceData, ExecutedPayload, ExecutionOrder, IMarketMaker, Inventory, MarketContext, MarketMaker, PreparedTransaction, SwapCalculation, TradeDirection},
         moni::NewPricesMessage,
         tycho::{ProtoSimComp, PsbConfig, SharedTychoStreamState},
     },
@@ -68,7 +68,9 @@ impl IMarketMaker for MarketMaker {
             if let Some(price) = super::feed::coingecko_eth_usd().await {
                 return Ok(price);
             }
-            return Err("No gas oracle feed found, even using Coingecko".to_string());
+            tracing::warn!("No gas oracle feed found, using fallback price of 3500 $");
+            return Ok(3500.0);
+            // return Err("No gas oracle feed found, even using Coingecko".to_string());
         }
         super::feed::chainlink(self.config.rpc_url.clone(), self.config.gas_token_chainlink_price_feed.clone()).await
     }
@@ -195,8 +197,16 @@ impl IMarketMaker for MarketMaker {
                             }
                         }
                     }
-                    _ => {
-                        tracing::error!("Failed to find path for base|quote to ETH.");
+                    (Err(e), _, _) => {
+                        tracing::error!("Failed to find path for base to ETH: {:?}", e);
+                        None
+                    }
+                    (_, Err(e), _) => {
+                        tracing::error!("Failed to find path for quote to ETH: {:?}", e);
+                        None
+                    }
+                    (_, _, Err(_)) => {
+                        tracing::error!("Failed to fetch ETH/USD price.");
                         None
                     }
                 }
@@ -625,19 +635,21 @@ impl IMarketMaker for MarketMaker {
     }
 
     /// Simulate the transactions, depending on the execution strategy
-    async fn simulate(&self, transactions: Vec<PreparedTransaction>, env: EnvConfig) -> Vec<PreparedTransaction> {
+    async fn simulate(&self, transactions: Vec<PreparedTransaction>, env: EnvConfig) -> Result<Vec<PreparedTransaction>, String> {
         self.execution.simulate(self.config.clone(), transactions, env).await
     }
 
     /// Execute prepared transactions using the configured execution strategy
     /// @param prepared: Vector of prepared transactions to execute
     /// @param env: Environment configuration
-    async fn execute(&self, prepared: Vec<PreparedTransaction>, env: EnvConfig) {
-        let _executed = self.execution.execute(self.config.clone(), prepared.clone(), env.clone()).await;
+    async fn execute(&self, prepared: Vec<PreparedTransaction>, env: EnvConfig) -> Result<Vec<ExecutedPayload>, String> {
+        self.execution.execute(self.config.clone(), prepared.clone(), env.clone()).await
     }
 
     /// Monitor the ProtocolStreamBuilder for new pairs and updates, evaluate if MM bot has opportunities
     async fn run(&mut self, mtx: SharedTychoStreamState, env: EnvConfig) {
+        let mut last_publish = std::time::Instant::now() - std::time::Duration::from_millis(self.config.min_publish_timeframe_ms);
+        let mut last_poll = std::time::Instant::now() - std::time::Duration::from_millis(self.config.poll_interval_ms);
         loop {
             tracing::debug!("Connecting ProtocolStreamBuilder for {}", self.config.network_name.as_str().to_string());
             let psbc = PsbConfig {
@@ -736,6 +748,15 @@ impl IMarketMaker for MarketMaker {
                                         }
                                     }
 
+                                    // Use poll_interval_ms here to avoid spamming the RPC, DB, etc
+                                    // Only continue if the poll_interval_ms has passed
+                                    let now = std::time::Instant::now();
+                                    if (now.duration_since(last_poll).as_millis() as u64) < self.config.poll_interval_ms {
+                                        tracing::debug!("Skipping block update: poll_interval_ms not elapsed");
+                                        continue;
+                                    }
+                                    last_poll = now;
+
                                     if let Ok(reference_price) = self.fetch_market_price().await {
                                         let cpds = self.prices(&targets);
                                         let identifier = self.identifier.clone();
@@ -758,12 +779,18 @@ impl IMarketMaker for MarketMaker {
                                         );
                                         if threshold {
                                             if self.config.publish_events {
-                                                let _ = crate::data::r#pub::prices(NewPricesMessage {
-                                                    identifier: identifier.clone(),
-                                                    reference_price,
-                                                    components: cpds.clone(),
-                                                    block: msg.block_number,
-                                                });
+                                                let now = std::time::Instant::now();
+                                                if now.duration_since(last_publish).as_millis() as u64 >= self.config.min_publish_timeframe_ms {
+                                                    let _ = crate::data::r#pub::prices(NewPricesMessage {
+                                                        identifier: identifier.clone(),
+                                                        reference_price,
+                                                        components: cpds.clone(),
+                                                        block: msg.block_number,
+                                                    });
+                                                    last_publish = now;
+                                                } else {
+                                                    tracing::debug!("Skipping publish: min_publish_timeframe_ms not elapsed");
+                                                }
                                             }
                                             previous_reference_price = reference_price;
                                         } else {
@@ -789,8 +816,15 @@ impl IMarketMaker for MarketMaker {
                                                             } else {
                                                                 let transactions = self.prepare(orders, context.clone(), inventory.clone(), env.clone()).await;
                                                                 // tracing::info!("Publishing trade event for {}", self.config.identifier());
-                                                                let _executed = self.execution.execute(self.config.clone(), transactions, env.clone()).await;
-                                                                tracing::info!("Elapsed from block update to execution: {} ms", elapsed);
+                                                                match self.execute(transactions, env.clone()).await {
+                                                                    Ok(results) => {
+                                                                        tracing::info!("Elapsed from block update to execution: {} ms", elapsed);
+                                                                        tracing::info!("Executed {} transactions successfully", results.len());
+                                                                    }
+                                                                    Err(e) => {
+                                                                        tracing::error!("Execution failed: {}", e);
+                                                                    }
+                                                                }
                                                             }
                                                         }
                                                         Err(e) => {

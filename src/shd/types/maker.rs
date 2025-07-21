@@ -38,9 +38,9 @@ pub trait IMarketMaker: Send + Sync {
     // Prepare the transactions for execution (format, tycho encoder, approvals, swap)
     async fn prepare(&self, order: Vec<ExecutionOrder>, context: MarketContext, inventory: Inventory, env: EnvConfig) -> Vec<PreparedTransaction>;
     // Simulate the bundles
-    async fn simulate(&self, transactions: Vec<PreparedTransaction>, env: EnvConfig) -> Vec<PreparedTransaction>;
+    async fn simulate(&self, transactions: Vec<PreparedTransaction>, env: EnvConfig) -> Result<Vec<PreparedTransaction>, String>;
     // Broadcasts the swaps to the network via bundles + bids
-    async fn execute(&self, transactions: Vec<PreparedTransaction>, env: EnvConfig);
+    async fn execute(&self, transactions: Vec<PreparedTransaction>, env: EnvConfig) -> Result<Vec<ExecutedPayload>, String>;
     // Infinite loop that monitors the Tycho stream state, looking for opportunities
     async fn run(&mut self, mtx: SharedTychoStreamState, env: EnvConfig);
 }

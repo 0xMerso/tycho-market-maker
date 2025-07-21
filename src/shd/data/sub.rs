@@ -65,5 +65,8 @@ pub async fn listen(env: MoniEnvConfig) {
                 tracing::error!("Failed to parse message: {}", e);
             }
         }
+
+        // Sleep for 100ms ?
+        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
     }
 }

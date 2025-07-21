@@ -12,7 +12,7 @@ use crate::{
     maker::tycho::get_alloy_chain,
     types::{
         config::{EnvConfig, MarketMakerConfig},
-        maker::PreparedTransaction,
+        maker::{ExecutedPayload, PreparedTransaction},
     },
 };
 
@@ -31,31 +31,27 @@ impl MainnetExec {
 
 #[async_trait]
 impl ExecStrategy for MainnetExec {
-    async fn simulate(&self, _config: MarketMakerConfig, _transactions: Vec<PreparedTransaction>, _env: EnvConfig) -> Vec<PreparedTransaction> {
+    fn name(&self) -> &'static str {
+        "MainnetExec"
+    }
+
+    async fn pre_exec_hook(&self, config: &MarketMakerConfig) {
+        tracing::info!("🔗 [{}] Pre-exec hook", self.name());
+        crate::maker::exec::pre_exec_hook(self.name(), config).await;
+    }
+
+    async fn post_exec_hook(&self, config: &MarketMakerConfig) {
+        tracing::info!("🔗 [{}] Post-exec hook", self.name());
+        crate::maker::exec::post_exec_hook(self.name(), config).await;
+    }
+
+    async fn simulate(&self, _config: MarketMakerConfig, _transactions: Vec<PreparedTransaction>, _env: EnvConfig) -> Result<Vec<PreparedTransaction>, String> {
         tracing::warn!("[{}] Simulation not implemented for mainnet strategy", self.name());
-        vec![]
+        panic!("Simulation not implemented for mainnet strategy");
+        // Ok(vec![])
     }
 
-    async fn execute(&self, config: MarketMakerConfig, transactions: Vec<PreparedTransaction>, env: EnvConfig) -> Vec<PreparedTransaction> {
-        tracing::info!("[{}] Executing {} transactions on mainnet", self.name(), transactions.len());
-
-        let simulated = if config.skip_simulation {
-            tracing::info!("🚀 Skipping simulation - direct execution enabled");
-            transactions
-        } else {
-            // Simulate transactions first
-            let simulated = self.simulate(config.clone(), transactions.clone(), env.clone()).await;
-            tracing::info!("Simulation completed, transactions passed");
-            simulated
-        };
-
-        for (i, _tx) in simulated.iter().enumerate() {
-            self.broadcast(simulated.clone(), config.clone(), env.clone()).await;
-        }
-        simulated
-    }
-
-    async fn broadcast(&self, prepared: Vec<PreparedTransaction>, mmc: MarketMakerConfig, env: EnvConfig) {
+    async fn broadcast(&self, prepared: Vec<PreparedTransaction>, mmc: MarketMakerConfig, env: EnvConfig) -> Result<Vec<ExecutedPayload>, String> {
         tracing::info!("🌐 [{}] Broadcasting {} transactions on Mainnet with Flashbots", self.name(), prepared.len());
 
         let ac = get_alloy_chain(mmc.network_name.as_str().to_string()).expect("Failed to get alloy chain");
@@ -76,6 +72,13 @@ impl ExecStrategy for MainnetExec {
             .flashbots(BundleSigner::flashbots(bsigner.clone()))
             .rsync()
             .build();
+
+        let mut results = Vec::new();
+
+        if env.testing {
+            tracing::info!("🧪 Skipping broadcast ! Testing mode enabled");
+            return Ok(results);
+        }
 
         if prepared.len() == 1 {
             let tx = prepared.first().expect("No transaction found");
@@ -98,26 +101,31 @@ impl ExecStrategy for MainnetExec {
                             ..Default::default()
                         };
                         match provider.send_mev_bundle(bundle, bsigner.clone()).await {
-                            Ok(bundle) => {
-                                tracing::info!("Bundle sent, with hash {:?}", bundle.bundle_hash);
+                            Ok(_) => {
+                                tracing::info!("🌐 [{}] Bundle sent successfully", self.name());
+                                // TODO: Add proper ExecutedPayload creation for flashbots
+                                results.push(ExecutedPayload::default());
                             }
                             Err(e) => {
-                                tracing::error!("Failed to send bundle: {}", e);
+                                tracing::error!("🌐 [{}] Failed to send bundle: {:?}", self.name(), e);
+                                return Err(format!("Failed to send bundle: {:?}", e));
                             }
                         }
                     }
                     Err(e) => {
-                        tracing::error!("Failed to build bundle item: {}", e);
+                        tracing::error!("🌐 [{}] Failed to build swap bundle item: {:?}", self.name(), e);
+                        return Err(format!("Failed to build swap bundle item: {:?}", e));
                     }
                 },
                 Err(e) => {
-                    tracing::error!("Failed to build bundle item: {}", e);
+                    tracing::error!("🌐 [{}] Failed to build approval bundle item: {:?}", self.name(), e);
+                    return Err(format!("Failed to build approval bundle item: {:?}", e));
                 }
             }
+        } else {
+            return Err("MainnetExec only supports single transaction bundles".to_string());
         }
-    }
 
-    fn name(&self) -> &'static str {
-        "MainnetExec"
+        Ok(results)
     }
 }

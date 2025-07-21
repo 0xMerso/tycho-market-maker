@@ -1,4 +1,3 @@
-# =========================================== Market Maker FuLL Configuration ===========================================
 pair_tag = ""
 base_token = ""
 base_token_address = ""
@@ -6,30 +5,24 @@ quote_token = ""
 quote_token_address = ""
 network_name = ""
 chain_id = ""
-wallet_public_key = ""
 gas_token_symbol = ""
-gas_token_chainlink_price_feed = "" # If not provided, Coingecko ETH will be used, can be risky though
-rpc_url = ""
+gas_token_chainlink_price_feed = ""
 explorer_url = ""
 tycho_api = ""
-poll_interval_ms = ""
-# === Execution ===
 target_spread_bps = ""
 min_exec_spread_bps = ""
 max_slippage_pct = ""
 profitability_check = ""
 max_inventory_ratio = ""
-broadcast_url = ""
-quote_depths = ""
+inclusion_block_delay = ""
 tx_gas_limit = ""
 block_offset = ""
 permit2_address = ""
 tycho_router_address = ""
-publish_events = false
-skip_simulation = false
-
-[price_feed_config] # ======= MM Price Feed Config ======= 
-# Expected price is base_token per quote_token => if base_token is ETH and quote_token is USDC, then price is ~2500, not 0.0004
+poll_interval_ms = ""
+publish_events = ""
+min_publish_timeframe_ms = ""
+[price_feed_config]
 type = ""
 source = ""
-reverse = false
+reverse = ""

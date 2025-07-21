@@ -125,7 +125,7 @@ async fn initialize() -> Result<()> {
     tracing::info!("Launching Tycho Market Maker | 🧪 Testing mode: {:?} | Latest block: {}", env.testing, latest);
 
     if config.publish_events {
-        tracing::info!("🏓  PublishEvent mode enabled. Publishing ping event to make sure Redis and Monitor are running");
+        tracing::info!("📕  PublishEvent mode enabled. Publishing ping event to make sure Redis and Monitor are running");
         if let Err(e) = shd::data::r#pub::ping() {
             tracing::error!("Failed to publish ping event: {}", e);
             std::process::exit(1);
