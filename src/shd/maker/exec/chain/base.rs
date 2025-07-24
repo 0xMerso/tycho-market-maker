@@ -4,7 +4,7 @@ use crate::{
     maker::exec::{default_post_exec_hook, default_pre_exec_hook, default_simulate},
     types::{
         config::{EnvConfig, MarketMakerConfig},
-        maker::{ExecutedPayload, PreparedTransaction},
+        maker::{ExecutedPayload, PreparedTrade},
     },
 };
 
@@ -44,7 +44,7 @@ impl ExecStrategy for BaseExec {
         default_post_exec_hook(self.name(), config).await;
     }
 
-    async fn execute(&self, config: MarketMakerConfig, transactions: Vec<PreparedTransaction>, env: EnvConfig, identifier: String) -> Result<Vec<ExecutedPayload>, String> {
+    async fn execute(&self, config: MarketMakerConfig, transactions: Vec<PreparedTrade>, env: EnvConfig, identifier: String) -> Result<Vec<ExecutedPayload>, String> {
         self.pre_exec_hook(&config).await;
         tracing::info!("[{}] Executing {} transactions", self.name(), transactions.len());
         let simulated = if config.skip_simulation {
@@ -64,12 +64,12 @@ impl ExecStrategy for BaseExec {
         Ok(transactions)
     }
 
-    async fn simulate(&self, config: MarketMakerConfig, transactions: Vec<PreparedTransaction>, env: EnvConfig) -> Result<Vec<PreparedTransaction>, String> {
+    async fn simulate(&self, config: MarketMakerConfig, transactions: Vec<PreparedTrade>, env: EnvConfig) -> Result<Vec<PreparedTrade>, String> {
         tracing::info!("🔵 [{}] Simulating {} transactions", self.name(), transactions.len());
         Ok(default_simulate(transactions, &config, env).await)
     }
 
-    async fn broadcast(&self, prepared: Vec<PreparedTransaction>, mmc: MarketMakerConfig, env: EnvConfig) -> Result<Vec<ExecutedPayload>, String> {
+    async fn broadcast(&self, prepared: Vec<PreparedTrade>, mmc: MarketMakerConfig, env: EnvConfig) -> Result<Vec<ExecutedPayload>, String> {
         tracing::info!("🔵 [BaseExec] Broadcasting {} transactions on Base L2 for instance {}", prepared.len(), mmc.id());
         default_broadcast(prepared, mmc, env).await
     }

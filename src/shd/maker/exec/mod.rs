@@ -14,7 +14,7 @@ use crate::{
     maker::tycho::get_alloy_chain,
     types::{
         config::{EnvConfig, MarketMakerConfig, NetworkName},
-        maker::{ExecutedPayload, PreparedTransaction},
+        maker::{ExecutedPayload, PreparedTrade},
     },
     utils::constants::HAS_EXECUTED,
 };
@@ -32,13 +32,13 @@ pub trait ExecStrategy: Send + Sync {
     async fn post_exec_hook(&self, config: &MarketMakerConfig, transactions: Vec<ExecutedPayload>, identifier: String);
 
     /// Execute the prepared transactions (orchestration)
-    async fn execute(&self, config: MarketMakerConfig, transactions: Vec<PreparedTransaction>, env: EnvConfig, identifier: String) -> Result<Vec<ExecutedPayload>, String>;
+    async fn execute(&self, config: MarketMakerConfig, transactions: Vec<PreparedTrade>, env: EnvConfig, identifier: String) -> Result<Vec<ExecutedPayload>, String>;
 
     /// Simulate transactions (validation)
-    async fn simulate(&self, config: MarketMakerConfig, transactions: Vec<PreparedTransaction>, env: EnvConfig) -> Result<Vec<PreparedTransaction>, String>;
+    async fn simulate(&self, config: MarketMakerConfig, transactions: Vec<PreparedTrade>, env: EnvConfig) -> Result<Vec<PreparedTrade>, String>;
 
     /// Broadcast transactions (execution)
-    async fn broadcast(&self, prepared: Vec<PreparedTransaction>, mmc: MarketMakerConfig, env: EnvConfig) -> Result<Vec<ExecutedPayload>, String>;
+    async fn broadcast(&self, prepared: Vec<PreparedTrade>, mmc: MarketMakerConfig, env: EnvConfig) -> Result<Vec<ExecutedPayload>, String>;
 }
 
 /// Dynamic execution strategy factory
@@ -58,7 +58,7 @@ impl ExecStrategyFactory {
 
 /// Simulate transactions to validate they will succeed before execution
 /// Pure EVM simulation, no bundle, etc.
-pub async fn default_simulate(transactions: Vec<PreparedTransaction>, config: &MarketMakerConfig, env: EnvConfig) -> Vec<PreparedTransaction> {
+pub async fn default_simulate(transactions: Vec<PreparedTrade>, config: &MarketMakerConfig, env: EnvConfig) -> Vec<PreparedTrade> {
     let initial_len = transactions.len();
     tracing::debug!("default_simulate: {} transactions", transactions.len());
     let alloy_chain = get_alloy_chain(config.network_name.as_str().to_string()).expect("Failed to get alloy chain");
@@ -69,7 +69,7 @@ pub async fn default_simulate(transactions: Vec<PreparedTransaction>, config: &M
     let signer = alloy::network::EthereumWallet::from(wallet.clone());
     let mut transactions = transactions.clone();
     transactions.retain(|t| {
-        let sender = t.approval.from.unwrap_or_default().to_string().to_lowercase();
+        let sender = t.approve.from.unwrap_or_default().to_string().to_lowercase();
         wallet.address().to_string().eq_ignore_ascii_case(sender.clone().as_str())
     });
     let removed = initial_len - transactions.len();
@@ -86,7 +86,7 @@ pub async fn default_simulate(transactions: Vec<PreparedTransaction>, config: &M
     if !transactions.is_empty() {
         let time = std::time::SystemTime::now();
         for (x, tx) in transactions.iter().enumerate() {
-            let calls = vec![tx.approval.clone(), tx.swap.clone()];
+            let calls = vec![tx.approve.clone(), tx.swap.clone()];
             let names = ["approval".to_string(), "swap".to_string()];
             let payload = SimulatePayload {
                 block_state_calls: vec![SimBlock {
@@ -127,7 +127,7 @@ pub async fn default_simulate(transactions: Vec<PreparedTransaction>, config: &M
 }
 
 /// Shared broadcasting function used by all strategies
-pub async fn default_broadcast(prepared: Vec<PreparedTransaction>, mmc: MarketMakerConfig, env: EnvConfig) -> Result<Vec<ExecutedPayload>, String> {
+pub async fn default_broadcast(prepared: Vec<PreparedTrade>, mmc: MarketMakerConfig, env: EnvConfig) -> Result<Vec<ExecutedPayload>, String> {
     tracing::debug!("default_broadcast: {} transactions", prepared.len());
     let alloy_chain = get_alloy_chain(mmc.network_name.as_str().to_string()).expect("Failed to get alloy chain");
     let rpc = mmc.rpc_url.parse::<url::Url>().unwrap().clone();
@@ -148,7 +148,7 @@ pub async fn default_broadcast(prepared: Vec<PreparedTransaction>, mmc: MarketMa
         let time = std::time::SystemTime::now();
         let mut exec = ExecutedPayload::default();
 
-        match provider.send_transaction(tx.approval.clone()).await {
+        match provider.send_transaction(tx.approve.clone()).await {
             Ok(approve) => {
                 let approval_time = time.elapsed().unwrap_or_default().as_millis();
                 tracing::debug!("Explorer: {}tx/{} | Approval shoot took {} ms", mmc.explorer_url, approve.tx_hash(), approval_time);

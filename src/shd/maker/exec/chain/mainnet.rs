@@ -10,12 +10,12 @@ use async_trait::async_trait;
 
 use crate::{
     maker::{
-        exec::{default_post_exec_hook, default_pre_exec_hook},
+        exec::{default_broadcast, default_post_exec_hook, default_pre_exec_hook},
         tycho::get_alloy_chain,
     },
     types::{
         config::{EnvConfig, MarketMakerConfig},
-        maker::{ExecutedPayload, PreparedTransaction},
+        maker::{ExecutedPayload, PreparedTrade},
     },
 };
 
@@ -48,7 +48,7 @@ impl ExecStrategy for MainnetExec {
         default_post_exec_hook(self.name(), config).await;
     }
 
-    async fn execute(&self, config: MarketMakerConfig, transactions: Vec<PreparedTransaction>, env: EnvConfig, identifier: String) -> Result<Vec<ExecutedPayload>, String> {
+    async fn execute(&self, config: MarketMakerConfig, transactions: Vec<PreparedTrade>, env: EnvConfig, identifier: String) -> Result<Vec<ExecutedPayload>, String> {
         self.pre_exec_hook(&config).await;
         tracing::info!("[{}] Executing {} transactions", self.name(), transactions.len());
         let simulated = if config.skip_simulation {
@@ -68,12 +68,12 @@ impl ExecStrategy for MainnetExec {
         Ok(transactions)
     }
 
-    async fn simulate(&self, _config: MarketMakerConfig, _transactions: Vec<PreparedTransaction>, _env: EnvConfig) -> Result<Vec<PreparedTransaction>, String> {
+    async fn simulate(&self, _config: MarketMakerConfig, _transactions: Vec<PreparedTrade>, _env: EnvConfig) -> Result<Vec<PreparedTrade>, String> {
         tracing::warn!("[{}] Simulation not implemented for mainnet strategy", self.name());
         Ok(vec![])
     }
 
-    async fn broadcast(&self, prepared: Vec<PreparedTransaction>, mmc: MarketMakerConfig, env: EnvConfig) -> Result<Vec<ExecutedPayload>, String> {
+    async fn broadcast(&self, prepared: Vec<PreparedTrade>, mmc: MarketMakerConfig, env: EnvConfig) -> Result<Vec<ExecutedPayload>, String> {
         tracing::info!("🌐 [{}] Broadcasting {} transactions on Mainnet with Flashbots for instance {}", self.name(), prepared.len(), mmc.id());
 
         let ac = get_alloy_chain(mmc.network_name.as_str().to_string()).expect("Failed to get alloy chain");
@@ -114,7 +114,7 @@ impl ExecStrategy for MainnetExec {
                 mmc.inclusion_block_delay
             );
 
-            match provider.build_bundle_item(tx.approval.clone(), false).await {
+            match provider.build_bundle_item(tx.approve.clone(), false).await {
                 Ok(approval) => match provider.build_bundle_item(tx.swap.clone(), false).await {
                     Ok(swap) => {
                         let bundle = SendBundleRequest {

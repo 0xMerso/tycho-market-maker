@@ -1,15 +1,15 @@
 use async_trait::async_trait;
 
 use crate::{
-    maker::exec::default_simulate,
+    maker::exec::{default_post_exec_hook, default_pre_exec_hook, default_simulate},
     types::{
         config::{EnvConfig, MarketMakerConfig},
-        maker::{ExecutedPayload, PreparedTransaction},
+        maker::{ExecutedPayload, PreparedTrade},
         moni::NewTradeMessage,
     },
 };
 
-use super::super::{default_broadcast, default_post_exec_hook, default_pre_exec_hook, ExecStrategy};
+use super::super::{default_broadcast, ExecStrategy};
 
 /// Unichain execution strategy - optimized for Unichain network
 /// https://docs.unichain.org/docs/technical-information/advanced-txn
@@ -55,7 +55,7 @@ impl ExecStrategy for UnichainExec {
         default_post_exec_hook(self.name(), config).await;
     }
 
-    async fn execute(&self, config: MarketMakerConfig, transactions: Vec<PreparedTransaction>, env: EnvConfig, identifier: String) -> Result<Vec<ExecutedPayload>, String> {
+    async fn execute(&self, config: MarketMakerConfig, transactions: Vec<PreparedTrade>, env: EnvConfig, identifier: String) -> Result<Vec<ExecutedPayload>, String> {
         self.pre_exec_hook(&config).await;
         tracing::info!("[{}] Executing {} transactions", self.name(), transactions.len());
         let simulated = if config.skip_simulation {
@@ -75,12 +75,12 @@ impl ExecStrategy for UnichainExec {
         Ok(results)
     }
 
-    async fn simulate(&self, config: MarketMakerConfig, transactions: Vec<PreparedTransaction>, env: EnvConfig) -> Result<Vec<PreparedTransaction>, String> {
+    async fn simulate(&self, config: MarketMakerConfig, transactions: Vec<PreparedTrade>, env: EnvConfig) -> Result<Vec<PreparedTrade>, String> {
         tracing::info!("🔵 [{}] Simulating {} transactions", self.name(), transactions.len());
         Ok(default_simulate(transactions, &config, env).await) // ToDo
     }
 
-    async fn broadcast(&self, prepared: Vec<PreparedTransaction>, mmc: MarketMakerConfig, env: EnvConfig) -> Result<Vec<ExecutedPayload>, String> {
+    async fn broadcast(&self, prepared: Vec<PreparedTrade>, mmc: MarketMakerConfig, env: EnvConfig) -> Result<Vec<ExecutedPayload>, String> {
         tracing::info!("🔗 [{}] Broadcasting {} transactions on Unichain", self.name(), prepared.len());
         default_broadcast(prepared, mmc, env).await
     }

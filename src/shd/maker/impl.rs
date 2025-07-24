@@ -6,8 +6,7 @@ use crate::{
     types::{
         config::EnvConfig,
         maker::{
-            CompReadjustment, ComponentPriceData, ExecutedPayload, ExecutionOrder, IMarketMaker, Inventory, MarketContext, MarketMaker, PreTradeData, PreparedTransaction, SwapCalculation,
-            TradeDirection,
+            CompReadjustment, ComponentPriceData, ExecutedPayload, ExecutionOrder, IMarketMaker, Inventory, MarketContext, MarketMaker, PreTradeData, PreparedTrade, SwapCalculation, TradeDirection,
         },
         moni::NewPricesMessage,
         tycho::{ProtoSimComp, PsbConfig, SharedTychoStreamState},
@@ -504,7 +503,7 @@ impl IMarketMaker for MarketMaker {
     /// @param order: Execution order containing adjustment and calculation data
     /// @param _env: Environment configuration (unused but kept for future use)
     /// @return Solution: Tycho solution struct for execution
-    async fn solution(&self, order: ExecutionOrder, _env: EnvConfig) -> Solution {
+    fn solution(&self, order: ExecutionOrder, _env: EnvConfig) -> Solution {
         let split = 0.;
         let input = order.adjustment.selling.address;
         let output = order.adjustment.buying.address;
@@ -552,7 +551,7 @@ impl IMarketMaker for MarketMaker {
     /// @param inventory: Current inventory state
     /// @param _env: Environment configuration (unused but kept for future use)
     /// @return Result<PreparedTransaction, String>: Prepared transaction with approval and swap
-    fn encode(&self, solution: Solution, tx: Transaction, context: MarketContext, inventory: Inventory, _env: EnvConfig) -> Result<PreparedTransaction, String> {
+    fn encode(&self, solution: Solution, tx: Transaction, context: MarketContext, inventory: Inventory, _env: EnvConfig) -> Result<(TransactionRequest, TransactionRequest), String> {
         let max_priority_fee_per_gas = context.max_priority_fee_per_gas; // 1 Gwei, not suited for L2s.
         let max_fee_per_gas = context.max_fee_per_gas;
 
@@ -594,11 +593,11 @@ impl IMarketMaker for MarketMaker {
             ..Default::default()
         };
 
-        Ok(PreparedTransaction { approval, swap })
+        Ok((approval, swap))
     }
 
     /// Entrypoint for executing the orders
-    async fn prepare(&self, orders: Vec<ExecutionOrder>, context: MarketContext, inventory: Inventory, env: EnvConfig) -> Vec<PreparedTransaction> {
+    async fn prepare(&self, orders: Vec<ExecutionOrder>, context: MarketContext, inventory: Inventory, env: EnvConfig) -> Vec<PreparedTrade> {
         tracing::debug!(" === Executing {} orders === ", orders.len());
         unsafe {
             std::env::set_var("RPC_URL", self.config.rpc_url.clone());
@@ -606,11 +605,8 @@ impl IMarketMaker for MarketMaker {
         let (_, _, chain) = crate::maker::tycho::chain(self.config.network_name.as_str().to_string()).unwrap();
         // --- Prepare the solutions (solutions = trades encoded with Tycho EVM Encoder) ---
         // @dev This await section has to be done outside of the EVMEncoderBuilder for some unknown reaso, compiler error
-        let mut solutions = vec![];
-        for order in orders.clone() {
-            solutions.push(self.solution(order, env.clone()).await);
-        }
-        let mut transactions = vec![];
+        let mut output = vec![];
+        let solutions = orders.iter().map(|order| self.solution(order.clone(), env.clone())).collect::<Vec<Solution>>();
         // --- Encode the solutions ---
         let encoder = EVMEncoderBuilder::new().chain(chain).initialize_tycho_router_with_permit2(env.wallet_private_key.clone());
         match encoder {
@@ -630,9 +626,8 @@ impl IMarketMaker for MarketMaker {
                                 let esolution = encoded.get(0);
                                 match (order, solution, esolution) {
                                     (Some(_order), Some(solution), Some(esolution)) => match self.encode(solution.clone(), esolution.clone(), context.clone(), inventory.clone(), env.clone()) {
-                                        Ok(prepared) => {
-                                            transactions.push(prepared);
-                                            tracing::info!("Prepared first trade only (🧪 skipping {} other opportunities for now)", orders.len() - 1);
+                                        Ok((approve, swap)) => {
+                                            output.push(PreparedTrade { approve, swap });
                                         }
                                         Err(e) => {
                                             tracing::error!("Failed to prepare transaction: {:?}", e);
@@ -658,19 +653,7 @@ impl IMarketMaker for MarketMaker {
                 tracing::error!("Failed to build EVMEncoder #1: {:?}", e);
             }
         };
-        transactions
-    }
-
-    /// Simulate the transactions, depending on the execution strategy
-    async fn simulate(&self, transactions: Vec<PreparedTransaction>, env: EnvConfig) -> Result<Vec<PreparedTransaction>, String> {
-        self.execution.simulate(self.config.clone(), transactions, env).await
-    }
-
-    /// Execute prepared transactions using the configured execution strategy
-    /// @param prepared: Vector of prepared transactions to execute
-    /// @param env: Environment configuration
-    async fn execute(&self, prepared: Vec<PreparedTransaction>, env: EnvConfig) -> Result<Vec<ExecutedPayload>, String> {
-        self.execution.execute(self.config.clone(), prepared.clone(), env.clone(), self.identifier.clone()).await
+        output
     }
 
     /// Monitor the ProtocolStreamBuilder for new pairs and updates, evaluate if MM bot has opportunities
@@ -843,9 +826,16 @@ impl IMarketMaker for MarketMaker {
                                                             if orders.is_empty() {
                                                                 // tracing::debug!("No readjustments to execute");
                                                             } else {
-                                                                let transactions = self.prepare(orders, context.clone(), inventory.clone(), env.clone()).await;
-                                                                // tracing::info!("Publishing trade event for {}", self.config.identifier());
-                                                                match self.execute(transactions, env.clone()).await {
+                                                                // pub struct FullTrade {
+                                                                // pub status: TradeStatus ✅
+                                                                // Pre-trade data ✅
+                                                                // pub pre_market_context: MarketContext,  ✅
+                                                                // pub pre_trade_data: PreTradeData ✅
+                                                                // pub swap_simulation: Option<SimulatedData> ❌
+                                                                // pub swap_broadcast: Option<BroadcastData> ❌
+
+                                                                let trades = self.prepare(orders, context.clone(), inventory.clone(), env.clone()).await;
+                                                                match self.execution.execute(self.config.clone(), trades, env.clone(), self.identifier.clone()).await {
                                                                     Ok(results) => {
                                                                         tracing::info!("Elapsed from block update to execution: {} ms", elapsed);
                                                                         tracing::info!("Executed {} transactions successfully", results.len());

@@ -35,15 +35,11 @@ pub trait IMarketMaker: Send + Sync {
     // fn post_trade_data(&self, order: &ExecutionOrder, market_context: &MarketContext) -> PreTradeData;
 
     // Functions to build Tycho solution, encode, prepare, sign transactions
-    async fn solution(&self, order: ExecutionOrder, env: EnvConfig) -> Solution;
+    fn solution(&self, order: ExecutionOrder, env: EnvConfig) -> Solution;
     // Encode the Tycho solution into a transaction
-    fn encode(&self, solution: Solution, encoded: Transaction, context: MarketContext, inventory: Inventory, env: EnvConfig) -> Result<PreparedTransaction, String>;
+    fn encode(&self, solution: Solution, encoded: Transaction, context: MarketContext, inventory: Inventory, env: EnvConfig) -> Result<(TransactionRequest, TransactionRequest), String>;
     // Prepare the transactions for execution (format, tycho encoder, approvals, swap)
-    async fn prepare(&self, order: Vec<ExecutionOrder>, context: MarketContext, inventory: Inventory, env: EnvConfig) -> Vec<PreparedTransaction>;
-    // Simulate the bundles
-    async fn simulate(&self, transactions: Vec<PreparedTransaction>, env: EnvConfig) -> Result<Vec<PreparedTransaction>, String>;
-    // Broadcasts the swaps to the network via bundles + bids
-    async fn execute(&self, transactions: Vec<PreparedTransaction>, env: EnvConfig) -> Result<Vec<ExecutedPayload>, String>;
+    async fn prepare(&self, orders: Vec<ExecutionOrder>, context: MarketContext, inventory: Inventory, env: EnvConfig) -> Vec<PreparedTrade>;
     // Infinite loop that monitors the Tycho stream state, looking for opportunities
     async fn run(&mut self, mtx: SharedTychoStreamState, env: EnvConfig);
 }
@@ -162,8 +158,8 @@ pub struct SwapCalculation {
 }
 
 #[derive(Debug, Clone)]
-pub struct PreparedTransaction {
-    pub approval: TransactionRequest,
+pub struct PreparedTrade {
+    pub approve: TransactionRequest,
     pub swap: TransactionRequest,
 }
 
@@ -182,15 +178,63 @@ pub struct ExecutedPayload {
     pub swap: ExecTxResult,
 }
 
-/// Simple trade data structure with essential fields
+// ================== Trade Status ==================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum TradeStatus {
+    Pending,
+    Simulating,
+    SimulationFailed,
+    ReadyToExecute,
+    Broadcasting,
+    BroadcastFailed,
+    Confirmed,
+    Failed,
+}
+
+/// Enhanced trade data structure optimized for UI
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FullTrade {
+    // Core trade info
+    pub status: TradeStatus,
+    pub created_at_ms: u64,
+    // Pre-trade data
     pub pre_market_context: MarketContext,
     pub pre_trade_data: PreTradeData,
-    // pub approve_simulation: Option<SimulatedData>,
+    // Execution data (all optional since steps can fail)
+    // pub approval_simulation: Option<SimulatedData>,
     pub swap_simulation: Option<SimulatedData>,
-    // pub approve_broadcast: Option<BroadcastData>,
+    // pub approval_broadcast: Option<BroadcastData>,
     pub swap_broadcast: Option<BroadcastData>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SimulatedData {
+    pub simulated_at_ms: u64,
+    pub simulated_took_ms: u64,
+    pub estimated_gas: u128,
+    pub status: bool,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BroadcastData {
+    pub broadcasted_at_ms: u64,
+    pub broadcasted_took_ms: u64,
+    pub hash: String,
+    pub broadcast_error: Option<String>,
+    pub receipt: Option<ReceiptData>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReceiptData {
+    pub status: bool,
+    pub gas_used: u128,
+    pub confirmed_at_ms: u64,
+    pub error: Option<String>,
+    pub transaction_hash: String,
+    pub transaction_index: u64,
+    pub block_number: u64,
+    pub effective_gas_price: u128,
 }
 
 /// Simple trade data structure with essential fields
@@ -219,24 +263,4 @@ pub struct PreTradeData {
     pub wallet_nonce: String,
     pub base_balance: u128,
     pub quote_balance: u128,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SimulatedData {
-    pub simulated_at_ms: u128,
-    pub simulated_took_ms: u128,
-    pub estimated_gas: u128,
-    pub status: bool,
-    pub error: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BroadcastData {
-    pub broadcasted_at_ms: u128,
-    pub broadcasted_took_ms: u128,
-    pub hash: String,
-    pub broadcast_error: Option<String>,
-    pub receipt_error: Option<String>,
-    pub receipt_status: Option<bool>,
-    pub receipt_gas_used: Option<u128>,
 }
