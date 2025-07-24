@@ -21,6 +21,8 @@ model Configuration {
   chainId           Int
   baseTokenAddress  String
   quoteTokenAddress String
+  baseTokenSymbol   String
+  quoteTokenSymbol  String
   instances         Instance[]
 }
 

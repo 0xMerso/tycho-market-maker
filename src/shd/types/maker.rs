@@ -30,6 +30,10 @@ pub trait IMarketMaker: Send + Sync {
     async fn fetch_market_price(&self) -> Result<f64, String>;
     // fn optimum(&self, context: MarketContext, inventory: Inventory, adjustment: CompReadjustment) -> OptimizationResult;
 
+    // Create trade data from execution order and market context
+    fn pre_trade_data(&self, order: &ExecutionOrder, market_context: &MarketContext, inventory: &Inventory) -> PreTradeData;
+    // fn post_trade_data(&self, order: &ExecutionOrder, market_context: &MarketContext) -> PreTradeData;
+
     // Functions to build Tycho solution, encode, prepare, sign transactions
     async fn solution(&self, order: ExecutionOrder, env: EnvConfig) -> Solution;
     // Encode the Tycho solution into a transaction
@@ -77,7 +81,7 @@ pub struct PriceFeedConfig {
     pub reverse: bool,  // true if the price is to be reversed (e.g. 1 / price), only used for chainlink
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TradeDirection {
     Buy,
     Sell,
@@ -176,4 +180,63 @@ pub struct ExecTxResult {
 pub struct ExecutedPayload {
     pub approval: ExecTxResult,
     pub swap: ExecTxResult,
+}
+
+/// Simple trade data structure with essential fields
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FullTrade {
+    pub pre_market_context: MarketContext,
+    pub pre_trade_data: PreTradeData,
+    // pub approve_simulation: Option<SimulatedData>,
+    pub swap_simulation: Option<SimulatedData>,
+    // pub approve_broadcast: Option<BroadcastData>,
+    pub swap_broadcast: Option<BroadcastData>,
+}
+
+/// Simple trade data structure with essential fields
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PreTradeData {
+    // Token information
+    pub base_token: String,
+    pub quote_token: String,
+    pub trade_direction: TradeDirection,
+    // Trade amounts
+    pub amount_in_normalized: f64,
+    pub amount_out_expected: f64,
+    // Price information
+    pub spot_price: f64,
+    pub reference_price: f64,
+    pub eth_usd_price: f64,
+    // Slippage and profitability
+    pub slippage_tolerance_bps: f64,
+    pub profit_delta_bps: f64,
+    // Gas cost
+    pub gas_cost_usd: f64,
+    // Timing
+    pub computed_at_time_ms: u64,
+    pub computed_at_block: u64,
+    // Wallet
+    pub wallet_nonce: String,
+    pub base_balance: u128,
+    pub quote_balance: u128,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SimulatedData {
+    pub simulated_at_ms: u128,
+    pub simulated_took_ms: u128,
+    pub estimated_gas: u128,
+    pub status: bool,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BroadcastData {
+    pub broadcasted_at_ms: u128,
+    pub broadcasted_took_ms: u128,
+    pub hash: String,
+    pub broadcast_error: Option<String>,
+    pub receipt_error: Option<String>,
+    pub receipt_status: Option<bool>,
+    pub receipt_gas_used: Option<u128>,
 }

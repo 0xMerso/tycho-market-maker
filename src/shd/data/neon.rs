@@ -179,8 +179,10 @@ pub mod create {
             values: Set(config),
             hash: Set(mmc.hash()),
             chain_id: Set(mmc.chain_id as i32),
-            base_token_address: Set(mmc.base_token_address),
-            quote_token_address: Set(mmc.quote_token_address),
+            base_token_address: Set(mmc.base_token_address.clone()),
+            base_token_symbol: Set(mmc.base_token.clone().to_lowercase()),
+            quote_token_address: Set(mmc.quote_token_address.clone()),
+            quote_token_symbol: Set(mmc.quote_token.clone().to_lowercase()),
             id: Set(Uuid::new_v4().to_string()),
         };
         match model.insert(db).await {

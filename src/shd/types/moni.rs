@@ -4,7 +4,7 @@ use serde_json::Value;
 
 use crate::types::{
     config::MarketMakerConfig,
-    maker::{ComponentPriceData, ExecutedPayload},
+    maker::{ComponentPriceData, ExecutedPayload, PreTradeData},
 };
 
 /// Base message structure for all Redis messages
@@ -38,6 +38,7 @@ pub struct NewTradeMessage {
     pub identifier: String,
     pub block: u64,
     pub payload: Option<ExecutedPayload>,
+    pub trade_data: Option<PreTradeData>,
 }
 
 /// Parsed message content

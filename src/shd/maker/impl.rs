@@ -5,7 +5,10 @@ use crate::{
     opti::routing,
     types::{
         config::EnvConfig,
-        maker::{CompReadjustment, ComponentPriceData, ExecutedPayload, ExecutionOrder, IMarketMaker, Inventory, MarketContext, MarketMaker, PreparedTransaction, SwapCalculation, TradeDirection},
+        maker::{
+            CompReadjustment, ComponentPriceData, ExecutedPayload, ExecutionOrder, IMarketMaker, Inventory, MarketContext, MarketMaker, PreTradeData, PreparedTransaction, SwapCalculation,
+            TradeDirection,
+        },
         moni::NewPricesMessage,
         tycho::{ProtoSimComp, PsbConfig, SharedTychoStreamState},
     },
@@ -215,6 +218,30 @@ impl IMarketMaker for MarketMaker {
                 tracing::error!("Failed to fetch EIP-1559 fees: {:?}", e);
                 return None;
             }
+        }
+    }
+
+    /// Create simple trade data from execution order and market context
+    fn pre_trade_data(&self, order: &ExecutionOrder, context: &MarketContext, inventory: &Inventory) -> PreTradeData {
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
+
+        PreTradeData {
+            base_token: order.adjustment.selling.symbol.clone(),
+            quote_token: order.adjustment.buying.symbol.clone(),
+            trade_direction: order.adjustment.direction.clone(),
+            amount_in_normalized: order.calculation.powered_selling_amount,
+            amount_out_expected: order.calculation.powered_buying_amount,
+            spot_price: order.adjustment.spot,
+            reference_price: order.adjustment.reference,
+            eth_usd_price: context.eth_to_usd,
+            slippage_tolerance_bps: self.config.max_slippage_pct * 10000.0,
+            profit_delta_bps: order.calculation.profit_delta_bps,
+            gas_cost_usd: order.calculation.gas_cost_usd,
+            computed_at_time_ms: now,
+            computed_at_block: context.block,
+            wallet_nonce: self.config.wallet_public_key.to_string(),
+            base_balance: inventory.base_balance,
+            quote_balance: inventory.quote_balance,
         }
     }
 

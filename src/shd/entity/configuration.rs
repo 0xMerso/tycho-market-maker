@@ -22,6 +22,10 @@ pub struct Model {
     pub base_token_address: String,
     #[sea_orm(column_name = "quoteTokenAddress", column_type = "Text")]
     pub quote_token_address: String,
+    #[sea_orm(column_name = "baseTokenSymbol", column_type = "Text")]
+    pub base_token_symbol: String,
+    #[sea_orm(column_name = "quoteTokenSymbol", column_type = "Text")]
+    pub quote_token_symbol: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

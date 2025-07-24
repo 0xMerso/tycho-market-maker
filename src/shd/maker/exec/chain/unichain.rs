@@ -44,6 +44,7 @@ impl ExecStrategy for UnichainExec {
                         identifier: identifier.clone(), // Use passed identifier for trade tracking
                         block,
                         payload: Some(payload.clone()),
+                        trade_data: None,
                     });
                 }
                 None => {
