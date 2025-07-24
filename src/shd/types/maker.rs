@@ -31,7 +31,7 @@ pub trait IMarketMaker: Send + Sync {
     // fn optimum(&self, context: MarketContext, inventory: Inventory, adjustment: CompReadjustment) -> OptimizationResult;
 
     // Create trade data from execution order and market context
-    fn pre_trade_data(&self, order: &ExecutionOrder, market_context: &MarketContext, inventory: &Inventory) -> PreTradeData;
+    fn pre_trade_data(&self, order: &ExecutionOrder) -> PreTradeData;
     // fn post_trade_data(&self, order: &ExecutionOrder, market_context: &MarketContext) -> PreTradeData;
 
     // Functions to build Tycho solution, encode, prepare, sign transactions
@@ -201,6 +201,7 @@ pub struct FullTrade {
     // Pre-trade data
     pub pre_market_context: MarketContext,
     pub pre_trade_data: PreTradeData,
+    pub pre_inventory: Inventory,
     // Execution data (all optional since steps can fail)
     // pub approval_simulation: Option<SimulatedData>,
     pub swap_simulation: Option<SimulatedData>,
@@ -209,8 +210,8 @@ pub struct FullTrade {
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SimulatedData {
-    pub simulated_at_ms: u64,
-    pub simulated_took_ms: u64,
+    pub simulated_at_ms: u128,
+    pub simulated_took_ms: u128,
     pub estimated_gas: u128,
     pub status: bool,
     pub error: Option<String>,
@@ -250,17 +251,9 @@ pub struct PreTradeData {
     // Price information
     pub spot_price: f64,
     pub reference_price: f64,
-    pub eth_usd_price: f64,
     // Slippage and profitability
     pub slippage_tolerance_bps: f64,
     pub profit_delta_bps: f64,
     // Gas cost
     pub gas_cost_usd: f64,
-    // Timing
-    pub computed_at_time_ms: u64,
-    pub computed_at_block: u64,
-    // Wallet
-    pub wallet_nonce: String,
-    pub base_balance: u128,
-    pub quote_balance: u128,
 }

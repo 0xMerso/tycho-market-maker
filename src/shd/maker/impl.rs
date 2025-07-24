@@ -6,7 +6,8 @@ use crate::{
     types::{
         config::EnvConfig,
         maker::{
-            CompReadjustment, ComponentPriceData, ExecutedPayload, ExecutionOrder, IMarketMaker, Inventory, MarketContext, MarketMaker, PreTradeData, PreparedTrade, SwapCalculation, TradeDirection,
+            CompReadjustment, ComponentPriceData, ExecutedPayload, ExecutionOrder, FullTrade, IMarketMaker, Inventory, MarketContext, MarketMaker, PreTradeData, PreparedTrade, SwapCalculation,
+            TradeDirection, TradeStatus,
         },
         moni::NewPricesMessage,
         tycho::{ProtoSimComp, PsbConfig, SharedTychoStreamState},
@@ -221,26 +222,18 @@ impl IMarketMaker for MarketMaker {
     }
 
     /// Create simple trade data from execution order and market context
-    fn pre_trade_data(&self, order: &ExecutionOrder, context: &MarketContext, inventory: &Inventory) -> PreTradeData {
-        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
-
+    fn pre_trade_data(&self, order: &ExecutionOrder) -> PreTradeData {
         PreTradeData {
             base_token: order.adjustment.selling.symbol.clone(),
             quote_token: order.adjustment.buying.symbol.clone(),
             trade_direction: order.adjustment.direction.clone(),
-            amount_in_normalized: order.calculation.powered_selling_amount,
-            amount_out_expected: order.calculation.powered_buying_amount,
+            amount_in_normalized: order.calculation.selling_amount,
+            amount_out_expected: order.calculation.buying_amount,
             spot_price: order.adjustment.spot,
             reference_price: order.adjustment.reference,
-            eth_usd_price: context.eth_to_usd,
-            slippage_tolerance_bps: self.config.max_slippage_pct * 10000.0,
+            slippage_tolerance_bps: self.config.max_slippage_pct * BASIS_POINT_DENO,
             profit_delta_bps: order.calculation.profit_delta_bps,
             gas_cost_usd: order.calculation.gas_cost_usd,
-            computed_at_time_ms: now,
-            computed_at_block: context.block,
-            wallet_nonce: self.config.wallet_public_key.to_string(),
-            base_balance: inventory.base_balance,
-            quote_balance: inventory.quote_balance,
         }
     }
 
@@ -612,14 +605,10 @@ impl IMarketMaker for MarketMaker {
         match encoder {
             Ok(encoder) => match encoder.build() {
                 Ok(encoder) => {
-                    // for s in solutions.iter() {
-                    // tracing::debug!("Solution: {:?}", s);
-                    // match encoder.encode_router_calldata(vec![s.clone()]) {
                     match encoder.encode_router_calldata(solutions.clone()) {
                         Ok(encoded) => {
                             // --- Prepare the transactions ---
-                            // tracing::debug!("Encoded {} solutions", encoded.len());
-                            // For now, only process the first order to avoid nonce conflicts
+                            // ! re implement full loop here
                             if !orders.is_empty() {
                                 let order = orders.get(0);
                                 let solution = solutions.get(0);
@@ -829,10 +818,25 @@ impl IMarketMaker for MarketMaker {
                                                                 // pub struct FullTrade {
                                                                 // pub status: TradeStatus ✅
                                                                 // Pre-trade data ✅
-                                                                // pub pre_market_context: MarketContext,  ✅
+                                                                // pub pre_market_context: MarketContext  ✅
+                                                                // pub pre_inventory: Inventory ✅
                                                                 // pub pre_trade_data: PreTradeData ✅
                                                                 // pub swap_simulation: Option<SimulatedData> ❌
                                                                 // pub swap_broadcast: Option<BroadcastData> ❌
+
+                                                                // ! Loop on orders
+
+                                                                for order in orders.clone() {
+                                                                    let mut full_trade = FullTrade {
+                                                                        status: TradeStatus::Pending,
+                                                                        created_at_ms: 0, // std::time::Instant::now(),
+                                                                        pre_market_context: context.clone(),
+                                                                        pre_trade_data: self.pre_trade_data(&order),
+                                                                        pre_inventory: inventory.clone(),
+                                                                        swap_simulation: None,
+                                                                        swap_broadcast: None,
+                                                                    };
+                                                                }
 
                                                                 let trades = self.prepare(orders, context.clone(), inventory.clone(), env.clone()).await;
                                                                 match self.execution.execute(self.config.clone(), trades, env.clone(), self.identifier.clone()).await {

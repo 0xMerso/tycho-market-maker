@@ -14,7 +14,7 @@ use crate::{
     maker::tycho::get_alloy_chain,
     types::{
         config::{EnvConfig, MarketMakerConfig, NetworkName},
-        maker::{ExecutedPayload, PreparedTrade},
+        maker::{ExecutedPayload, PreparedTrade, SimulatedData},
     },
     utils::constants::HAS_EXECUTED,
 };
@@ -56,6 +56,8 @@ impl ExecStrategyFactory {
     }
 }
 
+// ! Put that into default trait class ?
+
 /// Simulate transactions to validate they will succeed before execution
 /// Pure EVM simulation, no bundle, etc.
 pub async fn default_simulate(transactions: Vec<PreparedTrade>, config: &MarketMakerConfig, env: EnvConfig) -> Vec<PreparedTrade> {
@@ -84,8 +86,8 @@ pub async fn default_simulate(transactions: Vec<PreparedTrade>, config: &MarketM
     let mut succeeded = vec![];
 
     if !transactions.is_empty() {
-        let time = std::time::SystemTime::now();
         for (x, tx) in transactions.iter().enumerate() {
+            let time = std::time::Instant::now();
             let calls = vec![tx.approve.clone(), tx.swap.clone()];
             let names = ["approval".to_string(), "swap".to_string()];
             let payload = SimulatePayload {
@@ -104,8 +106,17 @@ pub async fn default_simulate(transactions: Vec<PreparedTrade>, config: &MarketM
                         tracing::trace!("Simulated 🔮 on block #{} ...", block.inner.header.number);
                         for (x, scr) in block.calls.iter().enumerate() {
                             let name = names.get(x).unwrap();
-                            let took = time.elapsed().unwrap_or_default().as_millis();
+                            let took = time.elapsed().as_millis();
                             tracing::trace!(" - SimCallResult for '{}': Gas: {} | Simulation status: {} | Took: {} ms", name, scr.gas_used, scr.status, took);
+
+                            let mut simdata = SimulatedData {
+                                simulated_at_ms: 0,
+                                simulated_took_ms: took,
+                                estimated_gas: scr.gas_used as u128,
+                                status: scr.status,
+                                error: None,
+                            };
+
                             if !scr.status {
                                 let reason = scr.error.clone().unwrap().message;
                                 tracing::error!(" - Simulation failed on SimCallResult on '{}'. No broadcast. Reason: {}", name, reason);
@@ -163,6 +174,15 @@ pub async fn default_broadcast(prepared: Vec<PreparedTrade>, mmc: MarketMakerCon
                         exec.swap.hash = swap.tx_hash().to_string();
                         //  --- Wait for receipt ---
                         let time = std::time::SystemTime::now();
+
+                        let mut broadcast_data = BroadcastData {
+                            broadcasted_at_ms: 0,
+                            broadcasted_took_ms: swap_time,
+                            hash: "".to_string(),
+                            broadcast_error: None,
+                            receipt: None,
+                        };
+
                         let approve_receipt = approve.get_receipt().await; // ! Optional ?
                         let swap_receipt = swap.get_receipt().await;
                         let total_time = time.elapsed().unwrap_or_default().as_millis();
