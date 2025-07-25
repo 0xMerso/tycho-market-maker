@@ -1,10 +1,11 @@
 use serde::{Deserialize, Serialize};
 
+use crate::types::maker::TradeData;
 use serde_json::Value;
 
 use crate::types::{
     config::MarketMakerConfig,
-    maker::{ComponentPriceData, ExecutedPayload, PreTradeData},
+    maker::{BroadcastData, ComponentPriceData, PreTradeData, Trade},
 };
 
 /// Base message structure for all Redis messages
@@ -36,9 +37,7 @@ pub struct NewPricesMessage {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct NewTradeMessage {
     pub identifier: String,
-    pub block: u64,
-    pub payload: Option<ExecutedPayload>,
-    pub trade_data: Option<PreTradeData>,
+    pub data: TradeData,
 }
 
 /// Parsed message content

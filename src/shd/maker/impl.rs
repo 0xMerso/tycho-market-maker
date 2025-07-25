@@ -6,8 +6,7 @@ use crate::{
     types::{
         config::EnvConfig,
         maker::{
-            CompReadjustment, ComponentPriceData, ExecutedPayload, ExecutionOrder, FullTrade, IMarketMaker, Inventory, MarketContext, MarketMaker, PreTradeData, PreparedTrade, SwapCalculation,
-            TradeDirection, TradeStatus,
+            CompReadjustment, ComponentPriceData, ExecutionOrder, IMarketMaker, Inventory, MarketContext, MarketMaker, PreTradeData, SwapCalculation, Trade, TradeData, TradeDirection, TradeStatus,
         },
         moni::NewPricesMessage,
         tycho::{ProtoSimComp, PsbConfig, SharedTychoStreamState},
@@ -590,15 +589,15 @@ impl IMarketMaker for MarketMaker {
     }
 
     /// Entrypoint for executing the orders
-    async fn prepare(&self, orders: Vec<ExecutionOrder>, context: MarketContext, inventory: Inventory, env: EnvConfig) -> Vec<PreparedTrade> {
+    fn prepare(&self, orders: Vec<ExecutionOrder>, tdata: Vec<TradeData>, context: MarketContext, inventory: Inventory, env: EnvConfig) -> Vec<Trade> {
         tracing::debug!(" === Executing {} orders === ", orders.len());
         unsafe {
             std::env::set_var("RPC_URL", self.config.rpc_url.clone());
         }
         let (_, _, chain) = crate::maker::tycho::chain(self.config.network_name.as_str().to_string()).unwrap();
-        // --- Prepare the solutions (solutions = trades encoded with Tycho EVM Encoder) ---
+        // --- Prepare the solutions (with Tycho EVM Encoder) ---
         // @dev This await section has to be done outside of the EVMEncoderBuilder for some unknown reaso, compiler error
-        let mut output = vec![];
+        let mut output: Vec<Trade> = vec![];
         let solutions = orders.iter().map(|order| self.solution(order.clone(), env.clone())).collect::<Vec<Solution>>();
         // --- Encode the solutions ---
         let encoder = EVMEncoderBuilder::new().chain(chain).initialize_tycho_router_with_permit2(env.wallet_private_key.clone());
@@ -606,24 +605,18 @@ impl IMarketMaker for MarketMaker {
             Ok(encoder) => match encoder.build() {
                 Ok(encoder) => {
                     match encoder.encode_router_calldata(solutions.clone()) {
-                        Ok(encoded) => {
-                            // --- Prepare the transactions ---
-                            // ! re implement full loop here
-                            if !orders.is_empty() {
-                                let order = orders.get(0);
-                                let solution = solutions.get(0);
-                                let esolution = encoded.get(0);
-                                match (order, solution, esolution) {
-                                    (Some(_order), Some(solution), Some(esolution)) => match self.encode(solution.clone(), esolution.clone(), context.clone(), inventory.clone(), env.clone()) {
-                                        Ok((approve, swap)) => {
-                                            output.push(PreparedTrade { approve, swap });
-                                        }
-                                        Err(e) => {
-                                            tracing::error!("Failed to prepare transaction: {:?}", e);
-                                        }
-                                    },
-                                    _ => {
-                                        tracing::warn!("Order, solution or encoded_solution is None");
+                        Ok(transactions) => {
+                            for i in 0..orders.len() {
+                                let _order = &orders[i];
+                                let solution = &solutions[i];
+                                let transaction = &transactions[i];
+                                let metadata = tdata[i].clone();
+                                match self.encode(solution.clone(), transaction.clone(), context.clone(), inventory.clone(), env.clone()) {
+                                    Ok((approve, swap)) => {
+                                        output.push(Trade { approve, swap, metadata });
+                                    }
+                                    Err(e) => {
+                                        tracing::error!("Failed to prepare transaction: {:?}", e);
                                     }
                                 }
                             }
@@ -800,68 +793,64 @@ impl IMarketMaker for MarketMaker {
                                         // --- Evaluate ---
                                         let spot_prices = cpds.iter().map(|x| x.price).collect::<Vec<f64>>();
                                         let readjusments = self.evaluate(&targets.clone(), spot_prices.clone(), reference_price);
-                                        if !readjusments.is_empty() {
-                                            // --- Market context --- Need ALL components and thus all the protosims too
-                                            match self.fetch_market_context(components.clone(), &protosims, atks.clone()).await {
-                                                Some(context) => {
-                                                    context.print();
-                                                    // This async block should be optimised as much as possible
-                                                    match self.fetch_inventory(env.clone()).await {
-                                                        Ok(inventory) => {
-                                                            // let context = self.market_context().await;
-                                                            let elapsed = time.elapsed().unwrap_or_default().as_millis();
-                                                            let orders = self.readjust(context.clone(), inventory.clone(), readjusments, env.clone()).await;
-                                                            tracing::info!("Elapsed from block_update to readjustments: {} ms", elapsed);
-                                                            if orders.is_empty() {
-                                                                // tracing::debug!("No readjustments to execute");
-                                                            } else {
-                                                                // pub struct FullTrade {
-                                                                // pub status: TradeStatus ✅
-                                                                // Pre-trade data ✅
-                                                                // pub pre_market_context: MarketContext  ✅
-                                                                // pub pre_inventory: Inventory ✅
-                                                                // pub pre_trade_data: PreTradeData ✅
-                                                                // pub swap_simulation: Option<SimulatedData> ❌
-                                                                // pub swap_broadcast: Option<BroadcastData> ❌
+                                        if readjusments.is_empty() {
+                                            // tracing::debug!("No readjustments to execute");
+                                            continue;
+                                        }
+                                        // --- Market context --- Need ALL components and thus all the protosims too
+                                        match self.fetch_market_context(components.clone(), &protosims, atks.clone()).await {
+                                            Some(context) => {
+                                                context.print();
+                                                // ! This async block should be optimised as much as possible
+                                                match self.fetch_inventory(env.clone()).await {
+                                                    Ok(inventory) => {
+                                                        // let context = self.market_context().await;
+                                                        let elapsed = time.elapsed().unwrap_or_default().as_millis();
+                                                        let mut orders = self.readjust(context.clone(), inventory.clone(), readjusments, env.clone()).await;
+                                                        tracing::info!("Elapsed from block_update to readjustments: {} ms", elapsed);
 
-                                                                // ! Loop on orders
-
-                                                                for order in orders.clone() {
-                                                                    let mut full_trade = FullTrade {
-                                                                        status: TradeStatus::Pending,
-                                                                        created_at_ms: 0, // std::time::Instant::now(),
-                                                                        pre_market_context: context.clone(),
-                                                                        pre_trade_data: self.pre_trade_data(&order),
-                                                                        pre_inventory: inventory.clone(),
-                                                                        swap_simulation: None,
-                                                                        swap_broadcast: None,
-                                                                    };
-                                                                }
-
-                                                                let trades = self.prepare(orders, context.clone(), inventory.clone(), env.clone()).await;
-                                                                match self.execution.execute(self.config.clone(), trades, env.clone(), self.identifier.clone()).await {
-                                                                    Ok(results) => {
-                                                                        tracing::info!("Elapsed from block update to execution: {} ms", elapsed);
-                                                                        tracing::info!("Executed {} transactions successfully", results.len());
-                                                                    }
-                                                                    Err(e) => {
-                                                                        tracing::error!("Execution failed: {}", e);
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-                                                        Err(e) => {
-                                                            tracing::warn!("Failed to get inventory: {:?}", e);
+                                                        // ! Tmp. Take only the first order, if any
+                                                        if orders.is_empty() {
+                                                            tracing::debug!("No orders to execute");
                                                             continue;
                                                         }
+                                                        // Sort orders by potential_profit_delta_spread_bps (highest first)
+                                                        orders.sort_by(|a, b| b.calculation.profit_delta_bps.partial_cmp(&a.calculation.profit_delta_bps).unwrap_or(std::cmp::Ordering::Equal));
+                                                        let orders = vec![orders.first().unwrap().clone()];
+
+                                                        let now = std::time::Instant::now().elapsed().as_millis();
+                                                        let tdata = orders
+                                                            .iter()
+                                                            .map(|order| TradeData {
+                                                                status: TradeStatus::Pending,
+                                                                timestamp: now,
+                                                                context: context.clone(),
+                                                                metadata: self.pre_trade_data(&order),
+                                                                inventory: inventory.clone(),
+                                                                simulation: None,
+                                                                broadcast: None,
+                                                            })
+                                                            .collect::<Vec<TradeData>>();
+                                                        let trades = self.prepare(orders.clone(), tdata.clone(), context.clone(), inventory.clone(), env.clone());
+                                                        match self.execution.execute(self.config.clone(), trades.clone(), env.clone(), self.identifier.clone()).await {
+                                                            Ok(results) => {
+                                                                tracing::info!("Elapsed from block update to execution: {} ms", elapsed);
+                                                                tracing::info!("Executed {} transactions successfully", results.len());
+                                                            }
+                                                            Err(e) => {
+                                                                tracing::error!("Execution failed: {}", e);
+                                                            }
+                                                        }
+                                                    }
+                                                    Err(e) => {
+                                                        tracing::warn!("Failed to get inventory: {:?}", e);
+                                                        continue;
                                                     }
                                                 }
-                                                None => {
-                                                    tracing::warn!("Failed to get market context");
-                                                }
                                             }
-                                        } else {
-                                            tracing::debug!("   - No readjustments found");
+                                            None => {
+                                                tracing::warn!("Failed to get market context");
+                                            }
                                         }
                                     } else {
                                         tracing::error!("Failed to fetch market price");

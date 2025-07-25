@@ -15,7 +15,7 @@ use crate::{
     },
     types::{
         config::{EnvConfig, MarketMakerConfig},
-        maker::{ExecutedPayload, PreparedTrade},
+        maker::{BroadcastData, SimulatedData, Trade},
     },
 };
 
@@ -43,37 +43,38 @@ impl ExecStrategy for MainnetExec {
         default_pre_exec_hook(self.name(), config).await;
     }
 
-    async fn post_exec_hook(&self, config: &MarketMakerConfig, _transactions: Vec<ExecutedPayload>, _identifier: String) {
+    async fn post_exec_hook(&self, config: &MarketMakerConfig, _trades: Vec<Trade>, _identifier: String) {
         tracing::info!("🔗 [{}] Post-exec hook", self.name());
         default_post_exec_hook(self.name(), config).await;
     }
 
-    async fn execute(&self, config: MarketMakerConfig, transactions: Vec<PreparedTrade>, env: EnvConfig, identifier: String) -> Result<Vec<ExecutedPayload>, String> {
+    async fn execute(&self, config: MarketMakerConfig, transactions: Vec<Trade>, env: EnvConfig, identifier: String) -> Result<Vec<Trade>, String> {
         self.pre_exec_hook(&config).await;
-        tracing::info!("[{}] Executing {} transactions", self.name(), transactions.len());
-        let simulated = if config.skip_simulation {
-            tracing::info!("🚀 Skipping simulation - direct execution enabled");
-            transactions
-        } else {
-            let simulated = self.simulate(config.clone(), transactions.clone(), env.clone()).await?;
-            tracing::info!("Simulation completed, {} transactions passed", simulated.len());
-            simulated
-        };
-        let transactions = if !simulated.is_empty() {
-            self.broadcast(simulated.clone(), config.clone(), env).await?
-        } else {
-            vec![]
-        };
-        self.post_exec_hook(&config, transactions.clone(), identifier).await;
+        panic!("Not implemented");
+        // tracing::info!("[{}] Executing {} transactions", self.name(), transactions.len());
+        // let simulated = if config.skip_simulation {
+        //     tracing::info!("🚀 Skipping simulation - direct execution enabled");
+        //     transactions
+        // } else {
+        //     let simulated = self.simulate(config.clone(), transactions.clone(), env.clone()).await?;
+        //     tracing::info!("Simulation completed, {} transactions passed", simulated.len());
+        //     simulated
+        // };
+        // let transactions = if !simulated.is_empty() {
+        //     self.broadcast(simulated.clone(), config.clone(), env).await?
+        // } else {
+        //     vec![]
+        // };
+        // self.post_exec_hook(&config, transactions.clone(), identifier).await;
         Ok(transactions)
     }
 
-    async fn simulate(&self, _config: MarketMakerConfig, _transactions: Vec<PreparedTrade>, _env: EnvConfig) -> Result<Vec<PreparedTrade>, String> {
+    async fn simulate(&self, _config: MarketMakerConfig, _transactions: Vec<Trade>, _env: EnvConfig) -> Result<Vec<SimulatedData>, String> {
         tracing::warn!("[{}] Simulation not implemented for mainnet strategy", self.name());
         Ok(vec![])
     }
 
-    async fn broadcast(&self, prepared: Vec<PreparedTrade>, mmc: MarketMakerConfig, env: EnvConfig) -> Result<Vec<ExecutedPayload>, String> {
+    async fn broadcast(&self, prepared: Vec<Trade>, mmc: MarketMakerConfig, env: EnvConfig) -> Result<Vec<BroadcastData>, String> {
         tracing::info!("🌐 [{}] Broadcasting {} transactions on Mainnet with Flashbots for instance {}", self.name(), prepared.len(), mmc.id());
 
         let ac = get_alloy_chain(mmc.network_name.as_str().to_string()).expect("Failed to get alloy chain");
@@ -125,8 +126,7 @@ impl ExecStrategy for MainnetExec {
                         match provider.send_mev_bundle(bundle, bsigner.clone()).await {
                             Ok(_) => {
                                 tracing::info!("🌐 [{}] Bundle sent successfully", self.name());
-                                // TODO: Add proper ExecutedPayload creation for flashbots
-                                results.push(ExecutedPayload::default());
+                                // results.push(BroadcastData::default());
                             }
                             Err(e) => {
                                 tracing::error!("🌐 [{}] Failed to send bundle: {:?}", self.name(), e);

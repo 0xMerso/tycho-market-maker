@@ -39,7 +39,7 @@ pub trait IMarketMaker: Send + Sync {
     // Encode the Tycho solution into a transaction
     fn encode(&self, solution: Solution, encoded: Transaction, context: MarketContext, inventory: Inventory, env: EnvConfig) -> Result<(TransactionRequest, TransactionRequest), String>;
     // Prepare the transactions for execution (format, tycho encoder, approvals, swap)
-    async fn prepare(&self, orders: Vec<ExecutionOrder>, context: MarketContext, inventory: Inventory, env: EnvConfig) -> Vec<PreparedTrade>;
+    fn prepare(&self, orders: Vec<ExecutionOrder>, tdata: Vec<TradeData>, context: MarketContext, inventory: Inventory, env: EnvConfig) -> Vec<Trade>;
     // Infinite loop that monitors the Tycho stream state, looking for opportunities
     async fn run(&mut self, mtx: SharedTychoStreamState, env: EnvConfig);
 }
@@ -158,35 +158,21 @@ pub struct SwapCalculation {
 }
 
 #[derive(Debug, Clone)]
-pub struct PreparedTrade {
+pub struct Trade {
     pub approve: TransactionRequest,
     pub swap: TransactionRequest,
-}
-
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
-pub struct ExecTxResult {
-    pub sent: bool,
-    pub status: bool,
-    pub hash: String,
-    pub error: Option<String>,
-    pub receipt: Option<TransactionReceipt>,
-}
-
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
-pub struct ExecutedPayload {
-    pub approval: ExecTxResult,
-    pub swap: ExecTxResult,
+    pub metadata: TradeData,
 }
 
 // ================== Trade Status ==================
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum TradeStatus {
     Pending,
-    Simulating,
+    SimulationSucceeded,
     SimulationFailed,
     ReadyToExecute,
-    Broadcasting,
+    BroadcastSucceeded,
     BroadcastFailed,
     Confirmed,
     Failed,
@@ -194,21 +180,20 @@ pub enum TradeStatus {
 
 /// Enhanced trade data structure optimized for UI
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FullTrade {
+pub struct TradeData {
     // Core trade info
     pub status: TradeStatus,
-    pub created_at_ms: u64,
+    pub timestamp: u128,
     // Pre-trade data
-    pub pre_market_context: MarketContext,
-    pub pre_trade_data: PreTradeData,
-    pub pre_inventory: Inventory,
-    // Execution data (all optional since steps can fail)
-    // pub approval_simulation: Option<SimulatedData>,
-    pub swap_simulation: Option<SimulatedData>,
-    // pub approval_broadcast: Option<BroadcastData>,
-    pub swap_broadcast: Option<BroadcastData>,
+    pub context: MarketContext,
+    pub metadata: PreTradeData,
+    pub inventory: Inventory,
+    // Sim/Exec
+    pub simulation: Option<SimulatedData>,
+    pub broadcast: Option<BroadcastData>,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct SimulatedData {
     pub simulated_at_ms: u128,
     pub simulated_took_ms: u128,
@@ -217,20 +202,19 @@ pub struct SimulatedData {
     pub error: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct BroadcastData {
-    pub broadcasted_at_ms: u64,
-    pub broadcasted_took_ms: u64,
+    pub broadcasted_at_ms: u128,
+    pub broadcasted_took_ms: u128,
     pub hash: String,
     pub broadcast_error: Option<String>,
     pub receipt: Option<ReceiptData>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct ReceiptData {
     pub status: bool,
     pub gas_used: u128,
-    pub confirmed_at_ms: u64,
     pub error: Option<String>,
     pub transaction_hash: String,
     pub transaction_index: u64,
