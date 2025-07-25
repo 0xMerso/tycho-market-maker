@@ -14,32 +14,29 @@ use crate::{
     maker::tycho::get_alloy_chain,
     types::{
         config::{EnvConfig, MarketMakerConfig, NetworkName},
-        maker::{BroadcastData, ReceiptData, SimulatedData, Trade},
+        maker::{BroadcastData, ReceiptData, SimulatedData, Trade, TradeStatus},
+        moni::NewTradeMessage,
     },
 };
 
 pub mod chain;
 
-/// Execution strategy trait for handling different execution methods
-#[async_trait]
-pub trait ExecStrategy: Send + Sync {
-    /// Get the strategy name for logging
-    fn name(&self) -> &'static str;
+/// Execution strategy names
+#[derive(Debug, Clone, PartialEq)]
+pub enum ExecStrategyName {
+    MainnetStrategy,
+    BaseStrategy,
+    UnichainStrategy,
+}
 
-    /// Pre-execution hook
-    async fn pre_exec_hook(&self, config: &MarketMakerConfig);
-
-    /// Post-execution hook
-    async fn post_exec_hook(&self, config: &MarketMakerConfig, trades: Vec<Trade>, identifier: String);
-
-    /// Execute the prepared transactions (orchestration)
-    async fn execute(&self, config: MarketMakerConfig, trades: Vec<Trade>, env: EnvConfig, identifier: String) -> Result<Vec<Trade>, String>;
-
-    /// Simulate transactions (validation)
-    async fn simulate(&self, config: MarketMakerConfig, trades: Vec<Trade>, env: EnvConfig) -> Result<Vec<SimulatedData>, String>;
-
-    /// Broadcast transactions (execution)
-    async fn broadcast(&self, prepared: Vec<Trade>, mmc: MarketMakerConfig, env: EnvConfig) -> Result<Vec<BroadcastData>, String>;
+impl ExecStrategyName {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ExecStrategyName::MainnetStrategy => "Mainnet_Strategy",
+            ExecStrategyName::BaseStrategy => "Base_Strategy",
+            ExecStrategyName::UnichainStrategy => "Unichain_Strategy",
+        }
+    }
 }
 
 /// Dynamic execution strategy factory
@@ -57,176 +54,254 @@ impl ExecStrategyFactory {
     }
 }
 
-// ! Put that into default trait class ?
-// ! if not implement, it's default, implement that in the trait !
+/// Execution strategy trait for handling different execution methods
+#[async_trait]
+pub trait ExecStrategy: Send + Sync {
+    /// Get the strategy name for logging
+    fn name(&self) -> String;
 
-/// Simulate transactions to validate they will succeed before execution
-/// Pure EVM simulation, no bundle, etc.
-pub async fn default_simulate(transactions: Vec<Trade>, config: &MarketMakerConfig, env: EnvConfig) -> Vec<SimulatedData> {
-    let initial = transactions.len();
-    // tracing::debug!("default_simulate: {} transactions", transactions.len());
-    let alloy_chain = get_alloy_chain(config.network_name.as_str().to_string()).expect("Failed to get alloy chain");
-    let rpc = config.rpc_url.parse::<url::Url>().unwrap().clone(); // ! Custom per network
-    let pk = env.wallet_private_key.clone();
-    let wallet = PrivateKeySigner::from_bytes(&B256::from_str(&pk).expect("Failed to convert swapper pk to B256")).expect("Failed to private key signer");
-    tracing::debug!("Wallet configured: {:?}", wallet.address().to_string().to_lowercase());
-    let signer = alloy::network::EthereumWallet::from(wallet.clone());
-
-    // --- Filtering transactions ---
-    let mut transactions = transactions.clone();
-    transactions.retain(|t| {
-        let sender = t.approve.from.unwrap_or_default().to_string().to_lowercase();
-        wallet.address().to_string().eq_ignore_ascii_case(sender.clone().as_str())
-    });
-    let removed = initial - transactions.len();
-    if removed > 0 {
-        tracing::debug!("Removed {} transactions (criterias: not owned by the wallet)", removed);
+    /// Pre-execution hook
+    async fn pre_hook(&self, config: &MarketMakerConfig) {
+        tracing::info!("[{}] default_pre_exec_hook", self.name());
     }
-    let mut simulations = HashMap::new();
-    for i in 0..transactions.len() {
-        simulations.insert(i, false);
-    }
-    let provider = ProviderBuilder::new().with_chain(alloy_chain).wallet(signer.clone()).on_http(rpc.clone());
-    let mut output = vec![];
 
-    for (_x, tx) in transactions.iter().enumerate() {
-        let time = std::time::Instant::now();
-        let calls = vec![tx.approve.clone(), tx.swap.clone()];
-        let names = ["approval".to_string(), "swap".to_string()];
-        let payload = SimulatePayload {
-            block_state_calls: vec![SimBlock {
-                block_overrides: None,
-                state_overrides: None,
-                calls,
-            }],
-            trace_transfers: true,
-            validation: true,
-            return_full_transactions: true, // Faster without ?
-        };
-        let mut smd = SimulatedData::default();
-        match provider.simulate(&payload).await {
-            Ok(output) => {
-                for block in output.iter() {
-                    tracing::trace!("🔮 Simulated on block #{} ...", block.inner.header.number);
-                    // ! No Loop, split approve/swap
-                    if block.calls.len() == 2 {
-                        for (x, scr) in block.calls.iter().enumerate() {
-                            if x == 0 {
-                                tracing::trace!(" - Approval simulation call skipped");
-                                continue;
-                            }
-                            let name = names.get(x).unwrap();
-                            let took = time.elapsed().as_millis();
-                            tracing::trace!(" - SimCallResult for '{}': Gas: {} | Simulation status: {} | Took: {} ms", name, scr.gas_used, scr.status, took);
-                            let now = std::time::Instant::now().elapsed().as_millis();
-                            smd.simulated_at_ms = now;
-                            smd.simulated_took_ms = took;
-                            smd.estimated_gas = scr.gas_used as u128;
-                            smd.status = scr.status;
-                            smd.error = None;
-                            if !scr.status {
-                                let reason = scr.error.clone().unwrap().message;
-                                tracing::error!(" - Simulation failed on SimCallResult on '{}'. No broadcast. Reason: {}", name, reason);
-                                smd.error = Some(reason);
-                            }
-                        }
-                    } else {
-                        tracing::error!("Simulated invalid number of calls: {}", block.calls.len());
-                    }
+    /// Post-execution hook
+    async fn post_hook(&self, config: &MarketMakerConfig, trades: Vec<Trade>, identifier: String) {
+        tracing::info!("{}: default_post_exec_hook", self.name());
+        tracing::info!("Saving trades for instance identifier: {}", identifier);
+        if config.publish_events {
+            for trade in trades {
+                if trade.metadata.status != TradeStatus::BroadcastSucceeded {
+                    tracing::error!("Trade not broadcasted, skipping post-exec hook");
+                    continue;
+                } else {
+                    let _ = crate::data::r#pub::trade(NewTradeMessage {
+                        identifier: identifier.clone(), // Use passed identifier for trade tracking
+                        data: trade.metadata.clone(),
+                    });
                 }
             }
-            Err(e) => {
-                tracing::error!("Failed to simulate: {:?}", e);
-            }
-        };
-        output.push(smd);
-    }
-    output
-}
-
-/// Shared broadcasting function used by all strategies
-pub async fn default_broadcast(prepared: Vec<Trade>, mmc: MarketMakerConfig, env: EnvConfig) -> Result<Vec<BroadcastData>, String> {
-    tracing::debug!("default_broadcast: {} transactions", prepared.len());
-    let alloy_chain = get_alloy_chain(mmc.network_name.as_str().to_string()).expect("Failed to get alloy chain");
-    let rpc = mmc.rpc_url.parse::<url::Url>().unwrap().clone();
-    let pk = env.wallet_private_key.clone();
-    let wallet = PrivateKeySigner::from_bytes(&B256::from_str(&pk).expect("Failed to convert swapper pk to B256")).expect("Failed to private key signer");
-    let signer = alloy::network::EthereumWallet::from(wallet.clone());
-    let provider = ProviderBuilder::new().with_chain(alloy_chain).wallet(signer.clone()).on_http(rpc.clone());
-
-    if env.testing {
-        tracing::info!("🧪 Skipping broadcast ! Testing mode enabled");
-        return Ok(Vec::new());
-    }
-
-    let mut output = Vec::new();
-    for (x, tx) in prepared.iter().enumerate() {
-        tracing::debug!("Tx: #{} | Broadcasting on {}", x, mmc.network_name.as_str().to_string());
-        if tx.metadata.simulation.is_some() && tx.metadata.simulation.as_ref().unwrap().status == false {
-            tracing::error!("Simulation failed for tx: #{}, no broadcast", x);
-            continue;
         }
-        let time = std::time::SystemTime::now();
-        let mut bd = BroadcastData::default();
-        match provider.send_transaction(tx.approve.clone()).await {
-            Ok(approve) => {
-                let took = time.elapsed().unwrap_or_default().as_millis() as u128;
-                tracing::debug!("Explorer: {}tx/{} | Approval shoot took {} ms", mmc.explorer_url, approve.tx_hash(), took);
-                let broadcasted = std::time::Instant::now().elapsed().as_millis();
-                match provider.send_transaction(tx.swap.clone()).await {
-                    Ok(swap) => {
-                        let took = time.elapsed().unwrap_or_default().as_millis() as u128;
-                        tracing::debug!("Explorer: {}tx/{} | Swap (+ approval) shoot took {} ms", mmc.explorer_url, swap.tx_hash(), took);
-                        bd.broadcasted_at_ms = broadcasted;
-                        bd.broadcasted_took_ms = took;
-                        bd.hash = swap.tx_hash().to_string();
-                        let approve_receipt = approve.get_receipt().await;
-                        let swap_receipt = swap.get_receipt().await;
-                        let total_time = time.elapsed().unwrap_or_default().as_millis();
-                        tracing::debug!("Approval get_receipt + Swap get_receipt took {} ms", total_time);
-                        match (approve_receipt, swap_receipt) {
-                            (Ok(approval_receipt), Ok(swap_receipt)) => {
-                                tracing::debug!("Approval receipt: status: {:?}", approval_receipt.status());
-                                // let confirmed_at_ms = std::time::Instant::now().elapsed().as_millis();
-                                let swap_receipt = swap_receipt.clone();
-                                let swap_receipt_data = ReceiptData {
-                                    status: swap_receipt.status().clone(),
-                                    gas_used: swap_receipt.gas_used,
-                                    effective_gas_price: swap_receipt.effective_gas_price,
-                                    error: None,
-                                    transaction_hash: swap_receipt.transaction_hash.to_string(),
-                                    transaction_index: swap_receipt.transaction_index.unwrap_or_default(),
-                                    block_number: swap_receipt.block_number.clone().unwrap_or_default(),
-                                };
-                                bd.receipt = Some(swap_receipt_data);
+    }
+
+    /// Execute the prepared transactions (orchestration)
+    async fn execute(&self, config: MarketMakerConfig, _trades: Vec<Trade>, env: EnvConfig, identifier: String) -> Result<Vec<Trade>, String> {
+        self.pre_hook(&config).await;
+        tracing::info!("[{}] Executing {} trades", self.name(), _trades.len());
+        let mut trades = _trades.clone();
+        let mut trades_with_simu = if config.skip_simulation {
+            tracing::info!("🚀 Skipping simulation - direct execution enabled");
+            _trades
+        } else {
+            let smd = self.simulate(config.clone(), _trades.clone(), env.clone()).await?;
+            for (x, smd) in smd.iter().enumerate() {
+                trades[x].metadata.simulation = Some(smd.clone());
+            }
+            trades
+        };
+
+        // Set status to SimulationSucceeded for all trades
+        for trade in trades_with_simu.iter_mut() {
+            trade.metadata.status = TradeStatus::SimulationSucceeded;
+        }
+
+        let bd = self.broadcast(trades_with_simu.clone(), config.clone(), env).await?;
+        for (x, bd) in bd.iter().enumerate() {
+            trades_with_simu[x].metadata.broadcast = Some(bd.clone());
+        }
+
+        // Set status to SimulationSucceeded for all trades
+        for trade in trades_with_simu.iter_mut() {
+            trade.metadata.status = TradeStatus::BroadcastSucceeded;
+        }
+
+        self.post_hook(&config, trades_with_simu.clone(), identifier).await;
+        Ok(trades_with_simu)
+    }
+
+    /// Simulate transactions to validate they will succeed before execution
+    /// Pure EVM simulation, no bundle, etc.
+    async fn simulate(&self, config: MarketMakerConfig, trades: Vec<Trade>, env: EnvConfig) -> Result<Vec<SimulatedData>, String> {
+        tracing::info!("{}: Simulating {} trades", self.name(), trades.len());
+        let initial = trades.len();
+        // tracing::debug!("default_simulate: {} trades", trades.len());
+        let alloy_chain = get_alloy_chain(config.network_name.as_str().to_string()).expect("Failed to get alloy chain");
+        let rpc = config.rpc_url.parse::<url::Url>().unwrap().clone(); // ! Custom per network
+        let pk = env.wallet_private_key.clone();
+        let wallet = PrivateKeySigner::from_bytes(&B256::from_str(&pk).expect("Failed to convert swapper pk to B256")).expect("Failed to private key signer");
+        tracing::debug!("Wallet configured: {:?}", wallet.address().to_string().to_lowercase());
+        let signer = alloy::network::EthereumWallet::from(wallet.clone());
+
+        // --- Filtering trades ---
+        let mut trades = trades.clone();
+        trades.retain(|t| {
+            let sender = t.approve.from.unwrap_or_default().to_string().to_lowercase();
+            wallet.address().to_string().eq_ignore_ascii_case(sender.clone().as_str())
+        });
+        let removed = initial - trades.len();
+        if removed > 0 {
+            tracing::debug!("Removed {} trades (criterias: not owned by the wallet)", removed);
+        }
+        let mut simulations = HashMap::new();
+        for i in 0..trades.len() {
+            simulations.insert(i, false);
+        }
+        let provider = ProviderBuilder::new().with_chain(alloy_chain).wallet(signer.clone()).on_http(rpc.clone());
+        let mut output = vec![];
+
+        for (_x, tx) in trades.iter().enumerate() {
+            let time = std::time::Instant::now();
+            let calls = vec![tx.approve.clone(), tx.swap.clone()];
+            let payload = SimulatePayload {
+                block_state_calls: vec![SimBlock {
+                    block_overrides: None,
+                    state_overrides: None,
+                    calls,
+                }],
+                trace_transfers: true,
+                validation: true,
+                return_full_transactions: true,
+            };
+            let mut smd = SimulatedData::default();
+            match provider.simulate(&payload).await {
+                Ok(output) => {
+                    for block in output.iter() {
+                        tracing::trace!("🔮 Simulated on block #{} ...", block.inner.header.number);
+
+                        match block.calls.len() {
+                            1 => {
+                                // No approval needed, only swap
+                                let swap = &block.calls[0];
+                                let took = time.elapsed().as_millis();
+                                let now = std::time::Instant::now().elapsed().as_millis();
+                                smd.simulated_at_ms = now;
+                                smd.simulated_took_ms = took;
+                                smd.estimated_gas = swap.gas_used as u128;
+                                smd.status = swap.status;
+                                smd.error = None;
+
+                                if !swap.status {
+                                    let reason = swap.error.clone().unwrap().message;
+                                    tracing::error!(" - Simulation failed on swap call. No broadcast. Reason: {}", reason);
+                                    smd.error = Some(reason);
+                                }
                             }
-                            (_, Err(e)) => {
-                                tracing::error!("Failed to get receipt for swap transaction: {:?}", e.to_string());
-                                bd.broadcast_error = Some(e.to_string());
+                            2 => {
+                                // First call is approval, second is swap
+                                let approval = &block.calls[0];
+                                let swap = &block.calls[1];
+
+                                tracing::trace!(" - Approval simulation: Gas: {} | Status: {}", approval.gas_used, approval.status);
+
+                                let took = time.elapsed().as_millis();
+                                let now = std::time::Instant::now().elapsed().as_millis();
+                                smd.simulated_at_ms = now;
+                                smd.simulated_took_ms = took;
+                                smd.estimated_gas = swap.gas_used as u128;
+                                smd.status = swap.status;
+                                smd.error = None;
+
+                                if !swap.status {
+                                    let reason = swap.error.clone().unwrap().message;
+                                    tracing::error!(" - Simulation failed on swap call. No broadcast. Reason: {}", reason);
+                                    smd.error = Some(reason);
+                                }
                             }
                             _ => {
-                                tracing::error!("Failed to get receipts, unhandled error");
+                                tracing::error!("Invalid number of calls in simulation: {}", block.calls.len());
+                                smd.status = false;
+                                smd.error = Some(format!("Invalid number of calls: {}", block.calls.len()));
                             }
                         }
                     }
-                    Err(e) => {
-                        tracing::error!("Failed to send swap transaction: {:?}", e);
+                }
+                Err(e) => {
+                    tracing::error!("Failed to simulate: {:?}", e);
+                    smd.status = false;
+                    smd.error = Some(format!("Simulation error: {:?}", e));
+                }
+            };
+            output.push(smd);
+        }
+        Ok(output)
+    }
+
+    /// Broadcast transactions (execution)
+    async fn broadcast(&self, prepared: Vec<Trade>, mmc: MarketMakerConfig, env: EnvConfig) -> Result<Vec<BroadcastData>, String> {
+        tracing::info!("{}: Broadcasting {} trades", self.name(), prepared.len());
+        let alloy_chain = get_alloy_chain(mmc.network_name.as_str().to_string()).expect("Failed to get alloy chain");
+        let rpc = mmc.rpc_url.parse::<url::Url>().unwrap().clone();
+        let pk = env.wallet_private_key.clone();
+        let wallet = PrivateKeySigner::from_bytes(&B256::from_str(&pk).expect("Failed to convert swapper pk to B256")).expect("Failed to private key signer");
+        let signer = alloy::network::EthereumWallet::from(wallet.clone());
+        let provider = ProviderBuilder::new().with_chain(alloy_chain).wallet(signer.clone()).on_http(rpc.clone());
+
+        if env.testing {
+            tracing::info!("Skipping broadcast ! Testing mode enabled");
+            return Ok(Vec::new());
+        }
+
+        let mut output = Vec::new();
+        for (x, tx) in prepared.iter().enumerate() {
+            tracing::debug!(" - Tx: #{} | Broadcasting on {}", x, mmc.network_name.as_str().to_string());
+            if tx.metadata.simulation.is_some() && tx.metadata.simulation.as_ref().unwrap().status == false {
+                tracing::error!("Simulation failed for tx: #{}, no broadcast", x);
+                continue;
+            }
+            let time = std::time::SystemTime::now();
+            let mut bd = BroadcastData::default();
+            match provider.send_transaction(tx.approve.clone()).await {
+                Ok(approve) => {
+                    let took = time.elapsed().unwrap_or_default().as_millis() as u128;
+                    tracing::debug!("   - Explorer: {}tx/{} | Approval shoot took {} ms", mmc.explorer_url, approve.tx_hash(), took);
+                    let broadcasted = std::time::Instant::now().elapsed().as_millis();
+                    match provider.send_transaction(tx.swap.clone()).await {
+                        Ok(swap) => {
+                            let took = time.elapsed().unwrap_or_default().as_millis() as u128;
+                            tracing::debug!("   - Explorer: {}tx/{} | Swap (+ approval) shoot took {} ms", mmc.explorer_url, swap.tx_hash(), took);
+                            bd.broadcasted_at_ms = broadcasted;
+                            bd.broadcasted_took_ms = took;
+                            bd.hash = swap.tx_hash().to_string();
+                            let approve_receipt = approve.get_receipt().await;
+                            let swap_receipt = swap.get_receipt().await;
+                            let total_time = time.elapsed().unwrap_or_default().as_millis();
+                            tracing::debug!(" - Approval get_receipt + Swap get_receipt took {} ms", total_time);
+                            match (approve_receipt, swap_receipt) {
+                                (Ok(approval_receipt), Ok(swap_receipt)) => {
+                                    tracing::debug!("   - Approval receipt: status: {:?}", approval_receipt.status());
+                                    // let confirmed_at_ms = std::time::Instant::now().elapsed().as_millis();
+                                    let swap_receipt = swap_receipt.clone();
+                                    let swap_receipt_data = ReceiptData {
+                                        status: swap_receipt.status().clone(),
+                                        gas_used: swap_receipt.gas_used,
+                                        effective_gas_price: swap_receipt.effective_gas_price,
+                                        error: None,
+                                        transaction_hash: swap_receipt.transaction_hash.to_string(),
+                                        transaction_index: swap_receipt.transaction_index.unwrap_or_default(),
+                                        block_number: swap_receipt.block_number.clone().unwrap_or_default(),
+                                    };
+                                    bd.receipt = Some(swap_receipt_data);
+                                }
+                                (_, Err(e)) => {
+                                    tracing::error!("Failed to get receipt for swap transaction: {:?}", e.to_string());
+                                    bd.broadcast_error = Some(e.to_string());
+                                }
+                                _ => {
+                                    tracing::error!("Failed to get receipts, unhandled error");
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to send swap transaction: {:?}", e);
+                        }
                     }
                 }
+                Err(e) => {
+                    tracing::error!("Failed to send approval transaction: {:?}", e);
+                }
             }
-            Err(e) => {
-                tracing::error!("Failed to send approval transaction: {:?}", e);
-            }
+            output.push(bd);
         }
-        output.push(bd);
+        Ok(output)
     }
-    Ok(output)
-}
-
-pub async fn default_pre_exec_hook(exec_name: &str, _config: &crate::types::config::MarketMakerConfig) {
-    tracing::info!("[{}] default_pre_exec_hook", exec_name);
-}
-
-pub async fn default_post_exec_hook(exec_name: &str, _config: &crate::types::config::MarketMakerConfig) {
-    tracing::info!("[{}] default_post_exec_hook", exec_name);
 }

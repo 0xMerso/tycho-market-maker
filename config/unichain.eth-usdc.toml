@@ -34,7 +34,7 @@ skip_simulation = false # ! Very important parameter
 
 # === Misc ===
 poll_interval_ms = 250 # 250 ms for Unichain
-publish_events = true 
+publish_events = false 
 min_publish_timeframe_ms = 12000
 
 [price_feed_config]

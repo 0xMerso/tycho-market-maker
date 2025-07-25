@@ -225,6 +225,7 @@ pub struct ReceiptData {
 /// Simple trade data structure with essential fields
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PreTradeData {
+    // pub pool: String,
     // Token information
     pub base_token: String,
     pub quote_token: String,

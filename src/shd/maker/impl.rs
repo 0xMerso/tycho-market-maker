@@ -123,7 +123,7 @@ impl IMarketMaker for MarketMaker {
                         // tracing::debug!(" - Inventory: Got {} of {}", divided, tk.symbol);
                         msgs.push(format!("{:.3} of {}", divided, tk.symbol));
                     }
-                    tracing::debug!("Inventory evaluation: Nonce {} | Wallet {} | 💵 Holding {}", nonce, self.config.wallet_public_key, msgs.join(" and "));
+                    tracing::debug!(" 💵  Inventory evaluation: Nonce {} | Wallet {} | Holding {}", nonce, self.config.wallet_public_key, msgs.join(" and "));
                     Ok(Inventory {
                         base_balance: balances[0],
                         quote_balance: balances[1],
@@ -408,7 +408,7 @@ impl IMarketMaker for MarketMaker {
                     let gas_cost_usd = gas_cost_eth * context.eth_to_usd;
                     let gas_cost_in_output = if base_to_quote { gas_cost_eth / context.quote_to_eth } else { gas_cost_eth / context.base_to_eth };
                     tracing::info!(
-                        " - Swap: {:.5} {} for {:.5} {} | Gas cost : {:.5} $ | Gas cost in output: {:.2} %",
+                        "   - Swap: {:.5} {} for {:.5} {} | Gas cost : {:.5} $ | Gas cost in output: {:.2} %",
                         selling_amount,
                         selling.symbol,
                         amount_out_normalized,
@@ -438,7 +438,7 @@ impl IMarketMaker for MarketMaker {
                     let potential_profit_delta_spread_bps = potential_profit_delta / adjustment.reference * BASIS_POINT_DENO;
                     let profitable = potential_profit_delta_spread_bps > self.config.min_exec_spread_bps;
                     tracing::info!(
-                        " ---> Profit: {}  with average_sell_price_net_gas: {:.4} vs reference_price: {:.4} | potential_profit_delta: {:.5} | 👀  potential_profit_delta_spread_bps: {:.2}",
+                        "   ---> Profit: {}  with average_sell_price_net_gas: {:.4} vs reference_price: {:.4} | potential_profit_delta: {:.5} | 👀  potential_profit_delta_spread_bps: {:.2}",
                         if potential_profit_delta > 0. { "🟩" } else { "🟧" },
                         average_sell_price_net_gas,
                         adjustment.reference,
@@ -590,7 +590,7 @@ impl IMarketMaker for MarketMaker {
 
     /// Entrypoint for executing the orders
     fn prepare(&self, orders: Vec<ExecutionOrder>, tdata: Vec<TradeData>, context: MarketContext, inventory: Inventory, env: EnvConfig) -> Vec<Trade> {
-        tracing::debug!(" === Executing {} orders === ", orders.len());
+        tracing::debug!("=== Executing {} orders ===", orders.len());
         unsafe {
             std::env::set_var("RPC_URL", self.config.rpc_url.clone());
         }

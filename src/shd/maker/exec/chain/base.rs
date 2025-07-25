@@ -1,14 +1,14 @@
 use async_trait::async_trait;
 
 use crate::{
-    maker::exec::{default_post_exec_hook, default_pre_exec_hook, default_simulate},
+    maker::exec::ExecStrategyName,
     types::{
         config::{EnvConfig, MarketMakerConfig},
         maker::{BroadcastData, SimulatedData, Trade},
     },
 };
 
-use super::super::{default_broadcast, ExecStrategy};
+use super::super::ExecStrategy;
 
 /// Base L2 execution strategy - optimized for Base network
 /// The flashblock concept was developed by the Flashbots team. Flashblocks is one of two extensions provided in the launch of Rollup-Boost. Rollup-Boost is a platform built for Optimism-based (layer 2) rollup chains that allows chain operators to upgrade the sequencer1 with additional features.
@@ -30,48 +30,7 @@ impl BaseExec {
 
 #[async_trait]
 impl ExecStrategy for BaseExec {
-    fn name(&self) -> &'static str {
-        "BaseExec"
-    }
-
-    async fn pre_exec_hook(&self, config: &MarketMakerConfig) {
-        tracing::info!("🔗 [{}] Pre-exec hook", self.name());
-        default_pre_exec_hook(self.name(), config).await;
-    }
-
-    async fn post_exec_hook(&self, config: &MarketMakerConfig, _trades: Vec<Trade>, _identifier: String) {
-        tracing::info!("🔗 [{}] Post-exec hook", self.name());
-        default_post_exec_hook(self.name(), config).await;
-    }
-
-    async fn execute(&self, config: MarketMakerConfig, transactions: Vec<Trade>, env: EnvConfig, identifier: String) -> Result<Vec<Trade>, String> {
-        self.pre_exec_hook(&config).await;
-        panic!("Not implemented");
-        // tracing::info!("[{}] Executing {} transactions", self.name(), transactions.len());
-        // let simulated = if config.skip_simulation {
-        //     tracing::info!("🚀 Skipping simulation - direct execution enabled");
-        //     transactions
-        // } else {
-        //     let simulated = self.simulate(config.clone(), transactions.clone(), env.clone()).await?;
-        //     tracing::info!("Simulation completed, {} transactions passed", simulated.len());
-        //     simulated
-        // };
-        // let transactions = if !simulated.is_empty() {
-        //     self.broadcast(simulated.clone(), config.clone(), env).await?
-        // } else {
-        //     vec![]
-        // };
-        // self.post_exec_hook(&config, transactions.clone(), identifier).await;
-        Ok(transactions)
-    }
-
-    async fn simulate(&self, config: MarketMakerConfig, trades: Vec<Trade>, env: EnvConfig) -> Result<Vec<SimulatedData>, String> {
-        tracing::info!("🔵 [{}] Simulating {} transactions", self.name(), trades.len());
-        Ok(default_simulate(trades, &config, env).await)
-    }
-
-    async fn broadcast(&self, prepared: Vec<Trade>, mmc: MarketMakerConfig, env: EnvConfig) -> Result<Vec<BroadcastData>, String> {
-        tracing::info!("🔵 [BaseExec] Broadcasting {} transactions on Base L2 for instance {}", prepared.len(), mmc.id());
-        default_broadcast(prepared, mmc, env).await
+    fn name(&self) -> String {
+        ExecStrategyName::BaseStrategy.as_str().to_string()
     }
 }
