@@ -188,7 +188,7 @@ pub trait ExecStrategy: Send + Sync {
                             }
                             2 => {
                                 // First call is approval, second is swap
-                                let approval = &block.calls[0];
+                                let approval = &block.calls[0]; // Approval is ignored for now
                                 let swap = &block.calls[1];
 
                                 tracing::trace!(" - Approval simulation: Gas: {} | Status: {}", approval.gas_used, approval.status);

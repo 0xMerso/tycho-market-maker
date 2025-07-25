@@ -34,6 +34,7 @@ tycho_router_address = "0xea3207778e39EB02D72C9D3c4Eac7E224ac5d369"
 poll_interval_ms = 1000
 publish_events = false
 skip_simulation = false # ! Very important parameter
+infinite_approval = false
 min_publish_timeframe_ms = 12000
 
 [price_feed_config]

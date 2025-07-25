@@ -15,6 +15,73 @@ use tracing_subscriber::EnvFilter;
 use tycho_simulation::models::Token;
 
 /// =============================================================================
+/// @function: handle_allowance
+/// @description: Handle allowance for base and quote tokens
+/// If skip_approval is true, we skip the allowance check
+/// If skip_approval is false, we check the allowance and approve if needed, u128::MAX
+/// @param config: Market maker configuration
+/// @param env: Environment configuration
+/// =============================================================================
+async fn handle_allowance(config: MarketMakerConfig, env: EnvConfig) {
+    tracing::info!("config.infinite_approval: {:?}", config.infinite_approval);
+
+    // Skip allowance check if skip_approval is enabled
+    if !config.infinite_approval {
+        tracing::info!("infinite_approval is false, skipping allowance check, and approving at each trade");
+        return;
+    }
+
+    tracing::info!(
+        "Checking allowance for {} on Tycho Router {} | For {} and {}",
+        config.wallet_public_key.clone(),
+        config.tycho_router_address.clone(),
+        config.base_token.clone(),
+        config.quote_token.clone()
+    );
+
+    // Allowance
+    let base_allowance = shd::utils::evm::allowance(
+        config.rpc_url.clone(),
+        config.wallet_public_key.clone(),
+        config.tycho_router_address.clone(),
+        config.base_token_address.clone(),
+    )
+    .await;
+
+    let quote_allowance = shd::utils::evm::allowance(
+        config.rpc_url.clone(),
+        config.wallet_public_key.clone(),
+        config.tycho_router_address.clone(),
+        config.quote_token_address.clone(),
+    )
+    .await;
+
+    match (base_allowance, quote_allowance) {
+        (Ok(base_allowance), Ok(quote_allowance)) => {
+            tracing::info!("Allowance: {:?} | {:?}", base_allowance, quote_allowance);
+            // Check if allowance is enough (half max u128)
+            let target = u128::MAX / 2;
+            let amount = u128::MAX;
+            if base_allowance < target {
+                tracing::warn!("Base allowance is not enough: {} < {}", base_allowance, target);
+                let _ = shd::utils::evm::approve(config.clone(), env.clone(), config.tycho_router_address.clone(), config.base_token_address.clone(), amount).await;
+            } else {
+                tracing::info!("Base allowance is enough: {} >= {}", base_allowance, target);
+            }
+            if quote_allowance < target {
+                tracing::warn!("Quote allowance is not enough: {} < {}", quote_allowance, target);
+                let _ = shd::utils::evm::approve(config.clone(), env.clone(), config.tycho_router_address.clone(), config.quote_token_address.clone(), amount).await;
+            } else {
+                tracing::info!("Quote allowance is enough: {} >= {}", quote_allowance, target);
+            }
+        }
+        _ => {
+            tracing::error!("Failed to get allowance");
+        }
+    }
+}
+
+/// =============================================================================
 /// Main Market Maker Runtime Loop
 /// =============================================================================
 ///
@@ -42,13 +109,6 @@ async fn run<M: IMarketMaker>(mut mk: M, identifier: String, config: MarketMaker
             identifier: identifier.clone(),
             commit: commit.clone(),
         });
-    }
-
-    // Fetch initial market price for validation
-    if let Ok(price) = mk.fetch_market_price().await {
-        tracing::info!("First market price: {:?} ({})", price, config.price_feed_config.r#type);
-    } else {
-        tracing::error!("Failed to fetch the first market price");
     }
 
     // ! ToDo: Add a check to see if the price is valid (not 0) and if both prices (reference and Tycho) are close to each other (within x% ?) at launch
@@ -158,6 +218,16 @@ async fn initialize() -> Result<()> {
 
     // Build market maker instance with all components
     let mk = MarketMakerBuilder::create(config.clone(), feed, execution, base.clone(), quote.clone()).map_err(|e| MarketMakerError::Config(format!("Failed to build Market Maker: {}", e)))?;
+
+    let _ = handle_allowance(config.clone(), env.clone()).await;
+    return Ok(());
+
+    // Fetch initial market price for validation
+    if let Ok(price) = mk.fetch_market_price().await {
+        tracing::info!("First market price: {:?} ({})", price, config.price_feed_config.r#type);
+    } else {
+        tracing::error!("Failed to fetch the first market price");
+    }
 
     let identifier = mk.identifier.clone();
     let _ = run(mk, identifier, config, env, tokens).await;

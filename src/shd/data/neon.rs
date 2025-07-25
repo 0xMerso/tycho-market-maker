@@ -137,6 +137,8 @@ pub async fn handle(msg: &ParsedMessage, env: MoniEnvConfig) {
         ParsedMessage::NewTrade(msg) => {
             tracing::trace!("NewTrade received, with instance identifier: {}", msg.identifier);
 
+            // ! Fetch Receipt ?
+
             let instances = match pull::instances(&db).await {
                 Ok(instances) => instances,
                 Err(err) => {

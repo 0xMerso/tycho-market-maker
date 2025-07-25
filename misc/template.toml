@@ -20,6 +20,8 @@ block_offset = ""
 permit2_address = ""
 tycho_router_address = ""
 poll_interval_ms = ""
+skip_simulation = ""
+skip_approval = ""
 publish_events = ""
 min_publish_timeframe_ms = ""
 [price_feed_config]

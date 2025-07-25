@@ -1,12 +1,17 @@
-use std::sync::Arc;
+use crate::types::config::{EnvConfig, MarketMakerConfig};
+use std::{str::FromStr, sync::Arc};
 
 use alloy::{
     providers::{utils::Eip1559Estimation, Provider, ProviderBuilder, RootProvider},
+    rpc::types::TransactionReceipt,
+    signers::local::PrivateKeySigner,
     transports::http::Http,
 };
+use alloy_primitives::{B256, U256};
 use reqwest::Client;
+use url;
 
-use crate::types::sol::IERC20;
+use crate::{maker::tycho::get_alloy_chain, types::sol::IERC20};
 
 /// =============================================================================
 /// EVM Blockchain Utilities
@@ -95,7 +100,8 @@ pub async fn balances(provider: &RootProvider<Http<Client>>, owner: String, toke
 /// @param token: Token contract address
 /// @return Result<u128, String>: Allowance amount in wei or error
 /// =============================================================================
-pub async fn allowance(provider: &RootProvider<Http<Client>>, owner: String, spender: String, token: String) -> Result<u128, String> {
+pub async fn allowance(rpc: String, owner: String, spender: String, token: String) -> Result<u128, String> {
+    let provider = ProviderBuilder::new().on_http(rpc.clone().parse().expect("Failed to parse RPC_URL"));
     let client = Arc::new(provider);
     let contract = IERC20::new(token.parse().unwrap(), client.clone());
     match contract.allowance(owner.parse().unwrap(), spender.parse().unwrap()).call().await {
@@ -107,7 +113,60 @@ pub async fn allowance(provider: &RootProvider<Http<Client>>, owner: String, spe
     }
 }
 
-use crate::types::config::{EnvConfig, MarketMakerConfig};
+/// =============================================================================
+/// @function: approve
+/// @description: Approve a spender to spend a specific amount of tokens
+/// @param mmc: Market maker configuration
+/// @param env: Environment configuration
+/// @param spender: Spender address
+/// @param token: Token contract address
+pub async fn approve(mmc: MarketMakerConfig, env: EnvConfig, spender: String, token: String, amount: u128) -> Result<TransactionReceipt, String> {
+    let rpc = mmc.rpc_url.parse::<url::Url>().unwrap().clone();
+    let pk = env.wallet_private_key.clone();
+    let wallet = PrivateKeySigner::from_bytes(&B256::from_str(&pk).expect("Failed to convert swapper pk to B256")).expect("Failed to private key signer");
+    let signer = alloy::network::EthereumWallet::from(wallet.clone());
+    let provider = ProviderBuilder::new().with_chain_id(mmc.chain_id).wallet(signer.clone()).on_http(rpc.clone());
+    let client = Arc::new(provider);
+    let contract = IERC20::new(token.parse().unwrap(), client.clone());
+    let symbol = contract.symbol().call().await.expect("Failed to get symbol")._0.to_string();
+    let amount = U256::from(amount);
+    tracing::info!(
+        "Approval: {} at address {}: Amount: {:?} for spender {} and owner {}",
+        symbol,
+        token,
+        amount,
+        spender,
+        wallet.address().to_string()
+    );
+    let native_gas_price = crate::utils::evm::eip1559_fees(mmc.rpc_url).await.expect("Failed to get native gas price");
+    let nonce = client.get_transaction_count(wallet.address()).await.expect("Failed to get nonce");
+    let call = contract
+        .approve(spender.parse().unwrap(), amount)
+        .nonce(nonce)
+        .gas(100_000)
+        .max_priority_fee_per_gas(native_gas_price.max_priority_fee_per_gas)
+        .max_fee_per_gas(native_gas_price.max_fee_per_gas);
+
+    match call.send().await {
+        Ok(pending) => {
+            tracing::info!("Approval pending ... Explorer: {}tx/{}", mmc.explorer_url, pending.tx_hash());
+            match pending.get_receipt().await {
+                Ok(receipt) => {
+                    tracing::info!("Approval status: {:?} at block {:?}", receipt.status(), receipt.block_number);
+                    Ok(receipt)
+                }
+                Err(e) => {
+                    tracing::error!("Failed to confirm approval: {:?}", e);
+                    Err(format!("Failed to confirm approval: {:?}", e))
+                }
+            }
+        }
+        Err(e) => {
+            tracing::error!("Failed to approve {}: {:?}", token, e);
+            Err(format!("Failed to approve {}: {:?}", token, e))
+        }
+    }
+}
 
 /// =============================================================================
 /// @function: wallet
@@ -121,17 +180,14 @@ use crate::types::config::{EnvConfig, MarketMakerConfig};
 /// - Gets current nonce for transaction ordering
 /// - Logs wallet state for debugging
 /// =============================================================================
-pub async fn wallet(config: MarketMakerConfig, _env: EnvConfig) {
+pub async fn fetch_wallet_state(config: MarketMakerConfig, _env: EnvConfig) {
     let provider = ProviderBuilder::new().on_http(config.rpc_url.clone().parse().expect("Failed to parse RPC_URL"));
-
     let tokens = vec![config.base_token_address.clone(), config.quote_token_address.clone()];
-
     if let Ok(balances) = balances(&provider, config.wallet_public_key.clone(), tokens.clone()).await {
         tracing::debug!("Balances of sender {}: {:?}", config.wallet_public_key.clone(), balances);
     } else {
         tracing::error!("Failed to get balances of sender");
     }
-
     let nonce = provider.get_transaction_count(config.wallet_public_key.to_string().parse().unwrap()).await.unwrap();
     tracing::debug!("Nonce of sender {}: {}", config.wallet_public_key.clone(), nonce);
 }

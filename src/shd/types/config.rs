@@ -154,6 +154,7 @@ pub struct MarketMakerConfig {
     pub tycho_router_address: String,
     pub publish_events: bool,
     pub skip_simulation: bool,
+    pub infinite_approval: bool,
     pub price_feed_config: PriceFeedConfig,
     pub min_publish_timeframe_ms: u64,
 }
@@ -212,6 +213,7 @@ impl MarketMakerConfig {
         tracing::debug!("  Publish Events:        {}", self.publish_events);
         tracing::debug!("  Min Publish Timeframe (ms): {}", self.min_publish_timeframe_ms);
         tracing::debug!("  Skip Simulation:       {}", self.skip_simulation);
+        tracing::debug!("  Skip Approval:      {}", self.infinite_approval);
         tracing::debug!("  Price Feed Config:     {:?}", self.price_feed_config);
     }
 

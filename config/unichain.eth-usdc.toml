@@ -29,12 +29,12 @@ inclusion_block_delay = 0
 permit2_address = "0x000000000022D473030F116dDEE9F6B43aC78BA3"
 tycho_router_address = "0xFfA5ec2e444e4285108e4a17b82dA495c178427B"
 skip_simulation = false # ! Very important parameter
+infinite_approval = true
 
-#! fetch receipt boolean ?
 
 # === Misc ===
 poll_interval_ms = 250 # 250 ms for Unichain
-publish_events = false 
+publish_events = false
 min_publish_timeframe_ms = 12000
 
 [price_feed_config]

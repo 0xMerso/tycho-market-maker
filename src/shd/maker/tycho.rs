@@ -44,7 +44,6 @@ pub fn get_alloy_chain(network: String) -> Result<NamedChain, String> {
         "ethereum" => Ok(NamedChain::Mainnet),
         "base" => Ok(NamedChain::Base),
         "unichain" => Ok(NamedChain::Unichain),
-        "arbitrum" => Ok(NamedChain::Arbitrum),
         _ => {
             tracing::error!("Unsupported network: {}", network);
             Err("Unsupported network".to_string())
