@@ -27,11 +27,11 @@ block_offset = 1
 inclusion_block_delay = 1
 permit2_address = "0x000000000022D473030F116dDEE9F6B43aC78BA3"
 tycho_router_address = "0xfD0b31d2E955fA55e3fa641Fe90e08b677188d35"
-skip_simulation = false # ! Very important parameter
 
 # === Misc ===
 poll_interval_ms = 12000
 publish_events = false 
+skip_simulation = false # ! Very important parameter
 infinite_approval = false
 min_publish_timeframe_ms = 12000
 

@@ -1,13 +1,11 @@
-use shd::{types::config::MoniEnvConfig, utils::constants::CHANNEL_REDIS};
-use tracing::Level;
-use tracing_subscriber::EnvFilter;
-
 /// =============================================================================
 /// Market Maker Monitoring Service
 /// =============================================================================
 ///
 /// @description: Standalone monitoring service that listens to market maker events
-/// and stores them in the database for analysis and tracking
+/// and stores them in the database for analysis and tracking. This service provides
+/// real-time monitoring capabilities for market maker performance and trade execution.
+/// =============================================================================
 ///
 /// @features:
 /// - Connects to Neon PostgreSQL database
@@ -19,6 +17,20 @@ use tracing_subscriber::EnvFilter;
 /// - Neon PostgreSQL database connection
 /// - Redis pub/sub channel (CHANNEL_REDIS)
 /// - Environment configuration (.env.monitor.global)
+/// =============================================================================
+use shd::{types::config::MoniEnvConfig, utils::constants::CHANNEL_REDIS};
+use tracing::Level;
+use tracing_subscriber::EnvFilter;
+
+/// =============================================================================
+/// @function: main
+/// @description: Main entry point for the monitoring service
+/// @behavior:
+/// - Initializes logging and tracing
+/// - Loads monitor-specific environment configuration
+/// - Establishes database connection
+/// - Validates database connectivity
+/// - Starts Redis pub/sub listening loop
 /// =============================================================================
 #[tokio::main]
 async fn main() {

@@ -1,3 +1,11 @@
+/// =============================================================================
+/// Execution Strategy Module
+/// =============================================================================
+///
+/// @description: Execution strategies for different blockchain networks. This module
+/// provides network-specific execution logic including simulation, broadcasting,
+/// and transaction management for Ethereum, Base, and Unichain networks.
+/// =============================================================================
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::result::Result;
@@ -21,7 +29,14 @@ use crate::{
 
 pub mod chain;
 
-/// Execution strategy names
+/// =============================================================================
+/// @enum: ExecStrategyName
+/// @description: Enumeration of available execution strategy names
+/// @variants:
+/// - MainnetStrategy: Ethereum mainnet execution strategy
+/// - BaseStrategy: Base L2 execution strategy
+/// - UnichainStrategy: Unichain execution strategy
+/// =============================================================================
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExecStrategyName {
     MainnetStrategy,
@@ -29,6 +44,11 @@ pub enum ExecStrategyName {
     UnichainStrategy,
 }
 
+/// =============================================================================
+/// @function: as_str
+/// @description: Convert execution strategy name to string representation
+/// @return &'static str: String representation of the strategy name
+/// =============================================================================
 impl ExecStrategyName {
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -39,11 +59,20 @@ impl ExecStrategyName {
     }
 }
 
-/// Dynamic execution strategy factory
+/// =============================================================================
+/// @struct: ExecStrategyFactory
+/// @description: Factory for creating execution strategies based on network configuration
+/// =============================================================================
 pub struct ExecStrategyFactory;
 
+/// =============================================================================
+/// @function: create
+/// @description: Create the appropriate execution strategy based on network name
+/// @param network: Network name as string (e.g., "ethereum", "base", "unichain")
+/// @return Box<dyn ExecStrategy>: Boxed execution strategy instance
+/// @behavior: Panics if network name is not recognized
+/// =============================================================================
 impl ExecStrategyFactory {
-    /// Create the appropriate execution strategy based on broadcast URL configuration
     pub fn create(network: &str) -> Box<dyn ExecStrategy> {
         match NetworkName::from_str(network) {
             Some(NetworkName::Ethereum) => Box::new(chain::mainnet::MainnetExec::new()),
@@ -54,18 +83,44 @@ impl ExecStrategyFactory {
     }
 }
 
-/// Execution strategy trait for handling different execution methods
+/// =============================================================================
+/// @trait: ExecStrategy
+/// @description: Trait defining the interface for execution strategies
+/// @methods:
+/// - name: Get strategy name for logging
+/// - pre_hook: Pre-execution hook
+/// - post_hook: Post-execution hook
+/// - execute: Main execution orchestration
+/// - simulate: Transaction simulation
+/// - broadcast: Transaction broadcasting
+/// =============================================================================
 #[async_trait]
 pub trait ExecStrategy: Send + Sync {
-    /// Get the strategy name for logging
+    /// =============================================================================
+    /// @function: name
+    /// @description: Get the strategy name for logging purposes
+    /// @return String: Strategy name as string
+    /// =============================================================================
     fn name(&self) -> String;
 
-    /// Pre-execution hook
+    /// =============================================================================
+    /// @function: pre_hook
+    /// @description: Pre-execution hook called before transaction execution
+    /// @param _config: Market maker configuration (unused parameter)
+    /// @behavior: Logs default pre-execution message
+    /// =============================================================================
     async fn pre_hook(&self, _config: &MarketMakerConfig) {
         tracing::info!("[{}] default_pre_exec_hook", self.name());
     }
 
-    /// Post-execution hook
+    /// =============================================================================
+    /// @function: post_hook
+    /// @description: Post-execution hook called after transaction execution
+    /// @param config: Market maker configuration
+    /// @param trades: Vector of executed trades
+    /// @param identifier: Instance identifier for trade tracking
+    /// @behavior: Publishes trade events if configured and trades were successful
+    /// =============================================================================
     async fn post_hook(&self, config: &MarketMakerConfig, trades: Vec<Trade>, identifier: String) {
         tracing::info!("{}: default_post_exec_hook", self.name());
         tracing::info!("Saving trades for instance identifier: {}", identifier);
@@ -84,42 +139,60 @@ pub trait ExecStrategy: Send + Sync {
         }
     }
 
-    /// Execute the prepared transactions (orchestration)
-    async fn execute(&self, config: MarketMakerConfig, _trades: Vec<Trade>, env: EnvConfig, identifier: String) -> Result<Vec<Trade>, String> {
+    /// =============================================================================
+    /// @function: execute
+    /// @description: Execute the prepared transactions with full orchestration
+    /// @param config: Market maker configuration
+    /// @param prepared: Vector of trades to execute
+    /// @param env: Environment configuration
+    /// @param identifier: Instance identifier
+    /// @return Result<Vec<Trade>, String>: Executed trades or error
+    /// @behavior: Orchestrates simulation, broadcasting, and status updates
+    /// =============================================================================
+    async fn execute(&self, config: MarketMakerConfig, prepared: Vec<Trade>, env: EnvConfig, identifier: String) -> Result<Vec<Trade>, String> {
         self.pre_hook(&config).await;
-        tracing::info!("[{}] Executing {} trades", self.name(), _trades.len());
-        let mut trades = _trades.clone();
-        let mut trades_with_simu = if config.skip_simulation {
+
+        tracing::info!("[{}] Executing {} trades", self.name(), prepared.len());
+        let mut trades = if config.skip_simulation {
             tracing::info!("🚀 Skipping simulation - direct execution enabled");
-            _trades
+            prepared.clone()
         } else {
-            let smd = self.simulate(config.clone(), _trades.clone(), env.clone()).await?;
+            let mut updated = prepared.clone();
+            let smd = self.simulate(config.clone(), updated.clone(), env.clone()).await?;
             for (x, smd) in smd.iter().enumerate() {
-                trades[x].metadata.simulation = Some(smd.clone());
+                updated[x].metadata.simulation = Some(smd.clone());
+                if smd.status == false {
+                    updated[x].metadata.status = TradeStatus::SimulationFailed;
+                } else {
+                    updated[x].metadata.status = TradeStatus::SimulationSucceeded;
+                }
             }
-            trades
+            updated
         };
 
-        // Set status to SimulationSucceeded for all trades
-        for trade in trades_with_simu.iter_mut() {
-            trade.metadata.status = TradeStatus::SimulationSucceeded;
-        }
-
-        let bd = self.broadcast(trades_with_simu.clone(), config.clone(), env).await?;
+        let bd = self.broadcast(trades.clone(), config.clone(), env).await?;
         for (x, bd) in bd.iter().enumerate() {
-            trades_with_simu[x].metadata.broadcast = Some(bd.clone());
+            trades[x].metadata.broadcast = Some(bd.clone());
+            if bd.broadcast_error.is_some() {
+                trades[x].metadata.status = TradeStatus::BroadcastFailed;
+            } else {
+                trades[x].metadata.status = TradeStatus::BroadcastSucceeded;
+            }
         }
 
-        // Set status to SimulationSucceeded for all trades
-        for trade in trades_with_simu.iter_mut() {
-            trade.metadata.status = TradeStatus::BroadcastSucceeded;
-        }
-
-        self.post_hook(&config, trades_with_simu.clone(), identifier).await;
-        Ok(trades_with_simu)
+        self.post_hook(&config, trades.clone(), identifier).await;
+        Ok(trades)
     }
 
-    /// Simulate transactions to validate they will succeed before execution
+    /// =============================================================================
+    /// @function: simulate
+    /// @description: Simulate transactions to validate they will succeed before execution
+    /// @param config: Market maker configuration
+    /// @param trades: Vector of trades to simulate
+    /// @param env: Environment configuration
+    /// @return Result<Vec<SimulatedData>, String>: Simulated results or error (for swap, not for approval)
+    /// @behavior: Performs EVM simulation for each trade
+    /// =============================================================================
     /// Pure EVM simulation, no bundle, etc.
     async fn simulate(&self, config: MarketMakerConfig, trades: Vec<Trade>, env: EnvConfig) -> Result<Vec<SimulatedData>, String> {
         tracing::info!("{}: Simulating {} trades", self.name(), trades.len());
@@ -234,7 +307,15 @@ pub trait ExecStrategy: Send + Sync {
         Ok(output)
     }
 
-    /// Broadcast transactions (execution)
+    /// =============================================================================
+    /// @function: broadcast
+    /// @description: Broadcast transactions (execution)
+    /// @param prepared: Vector of trades to broadcast
+    /// @param mmc: Market maker configuration
+    /// @param env: Environment configuration
+    /// @return Result<Vec<BroadcastData>, String>: Broadcast results or error
+    /// @behavior: Sends approval and swap transactions for each trade (unless infinite_approval is true)
+    /// =============================================================================
     async fn broadcast(&self, prepared: Vec<Trade>, mmc: MarketMakerConfig, env: EnvConfig) -> Result<Vec<BroadcastData>, String> {
         tracing::info!("{}: Broadcasting {} trades", self.name(), prepared.len());
         let alloy_chain = get_alloy_chain(mmc.network_name.as_str().to_string()).expect("Failed to get alloy chain");
@@ -256,10 +337,9 @@ pub trait ExecStrategy: Send + Sync {
                 tracing::error!("Simulation failed for tx: #{}, no broadcast", x);
                 continue;
             }
-            let time = std::time::SystemTime::now();
-            let mut bd = BroadcastData::default();
 
             // Handle optional approval transaction
+            let time = std::time::SystemTime::now();
             let _approval_result = if let Some(approval_tx) = &tx.approve {
                 match provider.send_transaction(approval_tx.clone()).await {
                     Ok(approve) => {
@@ -277,6 +357,9 @@ pub trait ExecStrategy: Send + Sync {
                 None
             };
 
+            let time = std::time::SystemTime::now();
+            let mut bd = BroadcastData::default();
+
             // Send swap transaction
             let broadcasted = std::time::Instant::now().elapsed().as_millis();
             match provider.send_transaction(tx.swap.clone()).await {
@@ -290,6 +373,7 @@ pub trait ExecStrategy: Send + Sync {
                 }
                 Err(e) => {
                     tracing::error!("Failed to send swap transaction: {:?}", e);
+                    bd.broadcast_error = Some(format!("Failed to send swap transaction: {:?}", e));
                 }
             }
             output.push(bd);

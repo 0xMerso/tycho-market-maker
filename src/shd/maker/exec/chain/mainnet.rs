@@ -1,12 +1,20 @@
+/// =============================================================================
+/// Mainnet Execution Strategy
+/// =============================================================================
+///
+/// @description: Mainnet execution strategy optimized for Ethereum mainnet with
+/// Flashbots support. This strategy provides MEV protection and bundle submission
+/// capabilities for secure and efficient transaction execution on Ethereum mainnet.
+/// =============================================================================
+use async_trait::async_trait;
 use std::str::FromStr;
 
 use alloy::{
     providers::{Provider, ProviderBuilder},
-    rpc::types::mev::{Inclusion, SendBundleRequest},
     signers::local::PrivateKeySigner,
 };
+use alloy_mev::{BundleSigner, EthMevProviderExt, MevShareProviderExt};
 use alloy_primitives::B256;
-use async_trait::async_trait;
 
 use crate::{
     maker::{exec::ExecStrategyName, tycho::get_alloy_chain},
@@ -16,25 +24,46 @@ use crate::{
     },
 };
 
-use alloy_mev::{BundleSigner, EthMevProviderExt, MevShareProviderExt};
-
 use super::super::ExecStrategy;
 
-/// Mainnet execution strategy - optimized for mainnet with flashbots
+/// =============================================================================
+/// @struct: MainnetExec
+/// @description: Mainnet execution strategy implementation
+/// @behavior: Optimized for Ethereum mainnet with Flashbots MEV protection
+/// =============================================================================
 pub struct MainnetExec;
 
+/// =============================================================================
+/// @function: new
+/// @description: Create a new Mainnet execution strategy instance
+/// @return Self: New MainnetExec instance
+/// =============================================================================
 impl MainnetExec {
     pub fn new() -> Self {
         Self
     }
 }
 
+/// =============================================================================
+/// @function: name
+/// @description: Get the strategy name for logging purposes
+/// @return String: Strategy name as string
+/// =============================================================================
 #[async_trait]
 impl ExecStrategy for MainnetExec {
     fn name(&self) -> String {
         ExecStrategyName::MainnetStrategy.as_str().to_string()
     }
 
+    /// =============================================================================
+    /// @function: broadcast
+    /// @description: Broadcast transactions using Flashbots bundle submission
+    /// @param prepared: Vector of trades to broadcast
+    /// @param mmc: Market maker configuration
+    /// @param env: Environment configuration
+    /// @return Result<Vec<BroadcastData>, String>: Broadcast results or error
+    /// @behavior: Submits transactions as bundles to Flashbots for MEV protection
+    /// =============================================================================
     async fn broadcast(&self, prepared: Vec<Trade>, mmc: MarketMakerConfig, env: EnvConfig) -> Result<Vec<BroadcastData>, String> {
         tracing::info!("🌐 [{}] Broadcasting {} transactions on Mainnet with Flashbots for instance {}", self.name(), prepared.len(), mmc.id());
 
@@ -95,9 +124,9 @@ impl ExecStrategy for MainnetExec {
             match provider.build_bundle_item(tx.swap.clone(), false).await {
                 Ok(swap) => {
                     bundle_items.push(swap);
-                    let bundle = SendBundleRequest {
+                    let bundle = alloy::rpc::types::mev::SendBundleRequest {
                         bundle_body: bundle_items,
-                        inclusion: Inclusion::at_block(target_block),
+                        inclusion: alloy::rpc::types::mev::Inclusion::at_block(target_block),
                         ..Default::default()
                     };
                     match provider.send_mev_bundle(bundle, bsigner.clone()).await {

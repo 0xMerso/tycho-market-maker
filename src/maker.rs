@@ -1,3 +1,11 @@
+/// =============================================================================
+/// Market Maker Binary Entry Point
+/// =============================================================================
+///
+/// @description: Main binary executable for the Tycho Market Maker. This module contains
+/// the application entry point, initialization logic, and the main runtime loop that
+/// orchestrates the market making operations across different blockchain networks.
+/// =============================================================================
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -17,9 +25,9 @@ use tycho_simulation::models::Token;
 /// =============================================================================
 /// @function: init_allowance
 /// @description: Handle allowance for base and quote tokens
-/// If infinite_approval is true, we approve u128::MAX for both base and quote tokens
-/// @param config: Market maker configuration
-/// @param env: Environment configuration
+/// @param config: Market maker configuration containing token addresses and router
+/// @param env: Environment configuration with wallet credentials
+/// @behavior: If infinite_approval is true, approves u128::MAX for both base and quote tokens
 /// =============================================================================
 async fn init_allowance(config: MarketMakerConfig, env: EnvConfig) {
     tracing::info!("config.infinite_approval: {:?}", config.infinite_approval);
