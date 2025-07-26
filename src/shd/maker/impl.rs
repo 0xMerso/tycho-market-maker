@@ -7,6 +7,7 @@ use crate::{
         config::EnvConfig,
         maker::{
             CompReadjustment, ComponentPriceData, ExecutionOrder, IMarketMaker, Inventory, MarketContext, MarketMaker, PreTradeData, SwapCalculation, Trade, TradeData, TradeDirection, TradeStatus,
+            TradeTxRequest,
         },
         moni::NewPricesMessage,
         tycho::{ProtoSimComp, PsbConfig, SharedTychoStreamState},
@@ -535,37 +536,40 @@ impl IMarketMaker for MarketMaker {
     }
 
     /// Convert a solution to a transaction payload
-    /// Also build the approval transaction, presumed needed (never infinite approval)
-    /// We assume the bot always need to approve the router, so we don't need to check if it's already approved. Execution might be done in bundle
+    /// Build approval transaction only if infinite_approval is false
     /// @param solution: Tycho solution struct
     /// @param tx: Transaction data
     /// @param context: Market context with gas prices and block info
     /// @param inventory: Current inventory state
     /// @param _env: Environment configuration (unused but kept for future use)
-    /// @return Result<PreparedTransaction, String>: Prepared transaction with approval and swap
-    fn encode(&self, solution: Solution, tx: Transaction, context: MarketContext, inventory: Inventory, _env: EnvConfig) -> Result<(TransactionRequest, TransactionRequest), String> {
+    /// @return Result<EncodedTx, String>: Prepared transaction with optional approval and swap
+    fn trade_tx_request(&self, solution: Solution, tx: Transaction, context: MarketContext, inventory: Inventory, _env: EnvConfig) -> Result<TradeTxRequest, String> {
         let max_priority_fee_per_gas = context.max_priority_fee_per_gas; // 1 Gwei, not suited for L2s.
         let max_fee_per_gas = context.max_fee_per_gas;
 
-        // 1. Approvals (Tycho router) with Permit2
-        let amount: u128 = solution.given_amount.clone().to_string().parse().expect("Couldn't convert given_amount to u128"); // ?
-        let args = (Address::from_str(&self.config.permit2_address).expect("Couldn't convert permit2 to address"), amount);
-        let data = tycho_execution::encoding::evm::utils::encode_input(APPROVE_FN_SIGNATURE, args.abi_encode());
-        let sender = solution.sender.clone().to_string().parse().expect("Failed to parse sender");
-        let approval = TransactionRequest {
-            to: Some(alloy::primitives::TxKind::Call(solution.given_token.clone().to_string().parse().expect("Failed to parse given_token"))),
-            from: Some(sender),
-            value: None,
-            input: TransactionInput {
-                input: Some(AlloyBytes::from(data)),
-                data: None,
-            },
-            gas: Some(DEFAULT_APPROVE_GAS),
-            chain_id: Some(self.config.chain_id),
-            max_fee_per_gas: Some(max_fee_per_gas),
-            max_priority_fee_per_gas: Some(max_priority_fee_per_gas),
-            nonce: Some(inventory.nonce),
-            ..Default::default()
+        // 1. Approvals (Tycho router) with Permit2 - only if infinite_approval is false
+        let approval = if !self.config.infinite_approval {
+            let amount: u128 = solution.given_amount.clone().to_string().parse().expect("Couldn't convert given_amount to u128"); // ?
+            let args = (Address::from_str(&self.config.permit2_address).expect("Couldn't convert permit2 to address"), amount);
+            let data = tycho_execution::encoding::evm::utils::encode_input(APPROVE_FN_SIGNATURE, args.abi_encode());
+            let sender = solution.sender.clone().to_string().parse().expect("Failed to parse sender");
+            Some(TransactionRequest {
+                to: Some(alloy::primitives::TxKind::Call(solution.given_token.clone().to_string().parse().expect("Failed to parse given_token"))),
+                from: Some(sender),
+                value: None,
+                input: TransactionInput {
+                    input: Some(AlloyBytes::from(data)),
+                    data: None,
+                },
+                gas: Some(DEFAULT_APPROVE_GAS),
+                chain_id: Some(self.config.chain_id),
+                max_fee_per_gas: Some(max_fee_per_gas),
+                max_priority_fee_per_gas: Some(max_priority_fee_per_gas),
+                nonce: Some(inventory.nonce),
+                ..Default::default()
+            })
+        } else {
+            None
         };
 
         // 2. Swap --- No bribe for now ---
@@ -581,11 +585,11 @@ impl IMarketMaker for MarketMaker {
             chain_id: Some(self.config.chain_id),
             max_fee_per_gas: Some(max_fee_per_gas),
             max_priority_fee_per_gas: Some(max_priority_fee_per_gas),
-            nonce: Some(inventory.nonce + 1),
+            nonce: Some(inventory.nonce + if approval.is_some() { 1 } else { 0 }),
             ..Default::default()
         };
 
-        Ok((approval, swap))
+        Ok(TradeTxRequest { approve: approval, swap })
     }
 
     /// Entrypoint for executing the orders
@@ -611,9 +615,13 @@ impl IMarketMaker for MarketMaker {
                                 let solution = &solutions[i];
                                 let transaction = &transactions[i];
                                 let metadata = tdata[i].clone();
-                                match self.encode(solution.clone(), transaction.clone(), context.clone(), inventory.clone(), env.clone()) {
-                                    Ok((approve, swap)) => {
-                                        output.push(Trade { approve, swap, metadata });
+                                match self.trade_tx_request(solution.clone(), transaction.clone(), context.clone(), inventory.clone(), env.clone()) {
+                                    Ok(encoded_tx) => {
+                                        output.push(Trade {
+                                            approve: encoded_tx.approve,
+                                            swap: encoded_tx.swap,
+                                            metadata,
+                                        });
                                     }
                                     Err(e) => {
                                         tracing::error!("Failed to prepare transaction: {:?}", e);

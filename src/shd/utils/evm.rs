@@ -191,3 +191,66 @@ pub async fn fetch_wallet_state(config: MarketMakerConfig, _env: EnvConfig) {
     let nonce = provider.get_transaction_count(config.wallet_public_key.to_string().parse().unwrap()).await.unwrap();
     tracing::debug!("Nonce of sender {}: {}", config.wallet_public_key.clone(), nonce);
 }
+
+/// =============================================================================
+/// @function: fetch_receipt
+/// @description: Fetch the receipt for a specific transaction hash
+/// @param rpc: RPC endpoint URL as string
+/// @param hash: Transaction hash as string
+/// @return Result<TransactionReceipt, String>: Receipt or error
+/// =============================================================================
+pub async fn fetch_receipt(rpc: String, hash: String) -> Result<TransactionReceipt, String> {
+    let provider = ProviderBuilder::new().on_http(rpc.clone().parse().expect("Failed to parse RPC_URL"));
+    match provider.get_transaction_receipt(hash.parse().unwrap()).await {
+        Ok(receipt) => match receipt {
+            Some(receipt) => Ok(receipt),
+            None => Err(format!("No receipt found for transaction {}", hash)),
+        },
+        Err(e) => {
+            tracing::error!("Failed to get receipt for transaction {}: {:?}", hash, e);
+            Err(format!("Failed to get receipt for transaction {}: {:?}", hash, e))
+        }
+    }
+}
+
+// let approve_receipt = if let Some(approve) = approval_result {
+//     match approve.get_receipt().await {
+//         Ok(receipt) => Some(receipt),
+//         Err(e) => {
+//             tracing::error!("Failed to get receipt for approval transaction: {:?}", e.to_string());
+//             None
+//         }
+//     }
+// } else {
+//     None
+// };
+
+// let swap_receipt = swap.get_receipt().await;
+// let total_time = time.elapsed().unwrap_or_default().as_millis();
+// tracing::debug!(" - Receipt processing took {} ms", total_time);
+
+// match (approve_receipt, swap_receipt) {
+//     (Ok(approval_receipt), Ok(swap_receipt)) => {
+//         if let Some(approval_receipt) = approve_receipt.unwrap() {
+//             tracing::debug!("   - Approval receipt: status: {:?}", approval_receipt.status());
+//         }
+//         let swap_receipt = swap_receipt.clone();
+//         let swap_receipt_data = ReceiptData {
+//             status: swap_receipt.status().clone(),
+//             gas_used: swap_receipt.gas_used,
+//             effective_gas_price: swap_receipt.effective_gas_price,
+//             error: None,
+//             transaction_hash: swap_receipt.transaction_hash.to_string(),
+//             transaction_index: swap_receipt.transaction_index.unwrap_or_default(),
+//             block_number: swap_receipt.block_number.clone().unwrap_or_default(),
+//         };
+//         bd.receipt = Some(swap_receipt_data);
+//     }
+//     (_, Err(e)) => {
+//         tracing::error!("Failed to get receipt for swap transaction: {:?}", e.to_string());
+//         bd.broadcast_error = Some(e.to_string());
+//     }
+//     _ => {
+//         tracing::error!("Failed to get receipts, unhandled error");
+//     }
+// }

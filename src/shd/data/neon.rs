@@ -7,8 +7,10 @@ use crate::{
     entity::instance,
     types::{
         config::{MarketMakerConfig, MoniEnvConfig},
+        maker::ReceiptData,
         moni::ParsedMessage,
     },
+    utils::evm::fetch_receipt,
 };
 use sea_orm::prelude::Uuid;
 
@@ -137,8 +139,6 @@ pub async fn handle(msg: &ParsedMessage, env: MoniEnvConfig) {
         ParsedMessage::NewTrade(msg) => {
             tracing::trace!("NewTrade received, with instance identifier: {}", msg.identifier);
 
-            // ! Fetch Receipt ?
-
             let instances = match pull::instances(&db).await {
                 Ok(instances) => instances,
                 Err(err) => {
@@ -148,6 +148,41 @@ pub async fn handle(msg: &ParsedMessage, env: MoniEnvConfig) {
             };
 
             if let Some(instance) = instances.into_iter().find(|inst| inst.identifier == msg.identifier) {
+                let config: MarketMakerConfig = match serde_json::from_value(instance.config.clone()) {
+                    Ok(config) => config,
+                    Err(err) => {
+                        tracing::error!("Failed to find instance configuration: {}", err.to_string());
+                        return;
+                    }
+                };
+
+                let mut updated = msg.clone();
+                match updated.data.broadcast {
+                    Some(mut broadcast) => {
+                        let hash = broadcast.hash.clone();
+                        if !hash.is_empty() {
+                            tracing::info!("Fetching receipt on network {} for transaction {}", config.network_name, hash);
+                            let swap_receipt = fetch_receipt(config.rpc_url.clone(), hash.clone()).await;
+                            if let Ok(swap_receipt) = swap_receipt {
+                                let swap_receipt_data = ReceiptData {
+                                    status: swap_receipt.status().clone(),
+                                    gas_used: swap_receipt.gas_used,
+                                    effective_gas_price: swap_receipt.effective_gas_price,
+                                    error: None,
+                                    transaction_hash: swap_receipt.transaction_hash.to_string(),
+                                    transaction_index: swap_receipt.transaction_index.unwrap_or_default(),
+                                    block_number: swap_receipt.block_number.clone().unwrap_or_default(),
+                                };
+                                broadcast.receipt = Some(swap_receipt_data);
+                                updated.data.broadcast = Some(broadcast);
+                            }
+                        }
+                    }
+                    None => {
+                        tracing::error!("No broadcast struct found for trade on instance: {}", instance.id);
+                    }
+                }
+
                 if let Err(err) = create::trade(&db, &instance, msg).await {
                     tracing::error!("Error storing trade data: {}", err);
                 }

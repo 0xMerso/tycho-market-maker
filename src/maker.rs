@@ -15,14 +15,13 @@ use tracing_subscriber::EnvFilter;
 use tycho_simulation::models::Token;
 
 /// =============================================================================
-/// @function: handle_allowance
+/// @function: init_allowance
 /// @description: Handle allowance for base and quote tokens
-/// If skip_approval is true, we skip the allowance check
-/// If skip_approval is false, we check the allowance and approve if needed, u128::MAX
+/// If infinite_approval is true, we approve u128::MAX for both base and quote tokens
 /// @param config: Market maker configuration
 /// @param env: Environment configuration
 /// =============================================================================
-async fn handle_allowance(config: MarketMakerConfig, env: EnvConfig) {
+async fn init_allowance(config: MarketMakerConfig, env: EnvConfig) {
     tracing::info!("config.infinite_approval: {:?}", config.infinite_approval);
 
     // Skip allowance check if skip_approval is enabled
@@ -219,7 +218,7 @@ async fn initialize() -> Result<()> {
     // Build market maker instance with all components
     let mk = MarketMakerBuilder::create(config.clone(), feed, execution, base.clone(), quote.clone()).map_err(|e| MarketMakerError::Config(format!("Failed to build Market Maker: {}", e)))?;
 
-    let _ = handle_allowance(config.clone(), env.clone()).await;
+    let _ = init_allowance(config.clone(), env.clone()).await;
     return Ok(());
 
     // Fetch initial market price for validation

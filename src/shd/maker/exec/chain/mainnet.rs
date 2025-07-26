@@ -77,33 +77,45 @@ impl ExecStrategy for MainnetExec {
                 mmc.inclusion_block_delay
             );
 
-            match provider.build_bundle_item(tx.approve.clone(), false).await {
-                Ok(approval) => match provider.build_bundle_item(tx.swap.clone(), false).await {
-                    Ok(swap) => {
-                        let bundle = SendBundleRequest {
-                            bundle_body: vec![approval, swap],
-                            inclusion: Inclusion::at_block(target_block),
-                            ..Default::default()
-                        };
-                        match provider.send_mev_bundle(bundle, bsigner.clone()).await {
-                            Ok(_) => {
-                                tracing::info!("🌐 [{}] Bundle sent successfully", self.name());
-                                // results.push(BroadcastData::default());
-                            }
-                            Err(e) => {
-                                tracing::error!("🌐 [{}] Failed to send bundle: {:?}", self.name(), e);
-                                return Err(format!("Failed to send bundle: {:?}", e));
-                            }
-                        }
+            let mut bundle_items = vec![];
+
+            // Add approval to bundle if it exists
+            if let Some(approval_tx) = &tx.approve {
+                match provider.build_bundle_item(approval_tx.clone(), false).await {
+                    Ok(approval) => {
+                        bundle_items.push(approval);
                     }
                     Err(e) => {
-                        tracing::error!("🌐 [{}] Failed to build swap bundle item: {:?}", self.name(), e);
-                        return Err(format!("Failed to build swap bundle item: {:?}", e));
+                        tracing::error!("🌐 [{}] Failed to build approval bundle item: {:?}", self.name(), e);
+                        return Err(format!("Failed to build approval bundle item: {:?}", e));
                     }
-                },
+                }
+            }
+
+            // Add swap to bundle
+            match provider.build_bundle_item(tx.swap.clone(), false).await {
+                Ok(swap) => {
+                    bundle_items.push(swap);
+                    let bundle = SendBundleRequest {
+                        bundle_body: bundle_items,
+                        inclusion: Inclusion::at_block(target_block),
+                        ..Default::default()
+                    };
+                    match provider.send_mev_bundle(bundle, bsigner.clone()).await {
+                        Ok(_) => {
+                            let bundle_description = if tx.approve.is_some() { "approval + swap" } else { "swap only" };
+                            tracing::info!("🌐 [{}] Bundle sent successfully ({})", self.name(), bundle_description);
+                            // results.push(BroadcastData::default());
+                        }
+                        Err(e) => {
+                            tracing::error!("🌐 [{}] Failed to send bundle: {:?}", self.name(), e);
+                            return Err(format!("Failed to send bundle: {:?}", e));
+                        }
+                    }
+                }
                 Err(e) => {
-                    tracing::error!("🌐 [{}] Failed to build approval bundle item: {:?}", self.name(), e);
-                    return Err(format!("Failed to build approval bundle item: {:?}", e));
+                    tracing::error!("🌐 [{}] Failed to build swap bundle item: {:?}", self.name(), e);
+                    return Err(format!("Failed to build swap bundle item: {:?}", e));
                 }
             }
         } else {

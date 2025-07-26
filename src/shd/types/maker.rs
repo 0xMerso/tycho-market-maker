@@ -37,7 +37,7 @@ pub trait IMarketMaker: Send + Sync {
     // Functions to build Tycho solution, encode, prepare, sign transactions
     fn solution(&self, order: ExecutionOrder, env: EnvConfig) -> Solution;
     // Encode the Tycho solution into a transaction
-    fn encode(&self, solution: Solution, encoded: Transaction, context: MarketContext, inventory: Inventory, env: EnvConfig) -> Result<(TransactionRequest, TransactionRequest), String>;
+    fn trade_tx_request(&self, solution: Solution, encoded: Transaction, context: MarketContext, inventory: Inventory, env: EnvConfig) -> Result<TradeTxRequest, String>;
     // Prepare the transactions for execution (format, tycho encoder, approvals, swap)
     fn prepare(&self, orders: Vec<ExecutionOrder>, tdata: Vec<TradeData>, context: MarketContext, inventory: Inventory, env: EnvConfig) -> Vec<Trade>;
     // Infinite loop that monitors the Tycho stream state, looking for opportunities
@@ -158,8 +158,14 @@ pub struct SwapCalculation {
 }
 
 #[derive(Debug, Clone)]
+pub struct TradeTxRequest {
+    pub approve: Option<TransactionRequest>,
+    pub swap: TransactionRequest,
+}
+
+#[derive(Debug, Clone)]
 pub struct Trade {
-    pub approve: TransactionRequest,
+    pub approve: Option<TransactionRequest>,
     pub swap: TransactionRequest,
     pub metadata: TradeData,
 }
@@ -208,7 +214,7 @@ pub struct BroadcastData {
     pub broadcasted_took_ms: u128,
     pub hash: String,
     pub broadcast_error: Option<String>,
-    pub receipt: Option<ReceiptData>,
+    pub receipt: Option<ReceiptData>, // Fetched in monitor program
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]

@@ -14,7 +14,7 @@ use crate::{
     maker::tycho::get_alloy_chain,
     types::{
         config::{EnvConfig, MarketMakerConfig, NetworkName},
-        maker::{BroadcastData, ReceiptData, SimulatedData, Trade, TradeStatus},
+        maker::{BroadcastData, SimulatedData, Trade, TradeStatus},
         moni::NewTradeMessage,
     },
 };
@@ -135,7 +135,11 @@ pub trait ExecStrategy: Send + Sync {
         // --- Filtering trades ---
         let mut trades = trades.clone();
         trades.retain(|t| {
-            let sender = t.approve.from.unwrap_or_default().to_string().to_lowercase();
+            let sender = if let Some(approve) = &t.approve {
+                approve.from.unwrap_or_default().to_string().to_lowercase()
+            } else {
+                t.swap.from.unwrap_or_default().to_string().to_lowercase()
+            };
             wallet.address().to_string().eq_ignore_ascii_case(sender.clone().as_str())
         });
         let removed = initial - trades.len();
@@ -151,7 +155,11 @@ pub trait ExecStrategy: Send + Sync {
 
         for (_x, tx) in trades.iter().enumerate() {
             let time = std::time::Instant::now();
-            let calls = vec![tx.approve.clone(), tx.swap.clone()];
+            let mut calls = vec![];
+            if let Some(approval) = &tx.approve {
+                calls.push(approval.clone());
+            }
+            calls.push(tx.swap.clone());
             let payload = SimulatePayload {
                 block_state_calls: vec![SimBlock {
                     block_overrides: None,
@@ -250,54 +258,38 @@ pub trait ExecStrategy: Send + Sync {
             }
             let time = std::time::SystemTime::now();
             let mut bd = BroadcastData::default();
-            match provider.send_transaction(tx.approve.clone()).await {
-                Ok(approve) => {
-                    let took = time.elapsed().unwrap_or_default().as_millis() as u128;
-                    tracing::debug!("   - Explorer: {}tx/{} | Approval shoot took {} ms", mmc.explorer_url, approve.tx_hash(), took);
-                    let broadcasted = std::time::Instant::now().elapsed().as_millis();
-                    match provider.send_transaction(tx.swap.clone()).await {
-                        Ok(swap) => {
-                            let took = time.elapsed().unwrap_or_default().as_millis() as u128;
-                            tracing::debug!("   - Explorer: {}tx/{} | Swap (+ approval) shoot took {} ms", mmc.explorer_url, swap.tx_hash(), took);
-                            bd.broadcasted_at_ms = broadcasted;
-                            bd.broadcasted_took_ms = took;
-                            bd.hash = swap.tx_hash().to_string();
-                            let approve_receipt = approve.get_receipt().await;
-                            let swap_receipt = swap.get_receipt().await;
-                            let total_time = time.elapsed().unwrap_or_default().as_millis();
-                            tracing::debug!(" - Approval get_receipt + Swap get_receipt took {} ms", total_time);
-                            match (approve_receipt, swap_receipt) {
-                                (Ok(approval_receipt), Ok(swap_receipt)) => {
-                                    tracing::debug!("   - Approval receipt: status: {:?}", approval_receipt.status());
-                                    // let confirmed_at_ms = std::time::Instant::now().elapsed().as_millis();
-                                    let swap_receipt = swap_receipt.clone();
-                                    let swap_receipt_data = ReceiptData {
-                                        status: swap_receipt.status().clone(),
-                                        gas_used: swap_receipt.gas_used,
-                                        effective_gas_price: swap_receipt.effective_gas_price,
-                                        error: None,
-                                        transaction_hash: swap_receipt.transaction_hash.to_string(),
-                                        transaction_index: swap_receipt.transaction_index.unwrap_or_default(),
-                                        block_number: swap_receipt.block_number.clone().unwrap_or_default(),
-                                    };
-                                    bd.receipt = Some(swap_receipt_data);
-                                }
-                                (_, Err(e)) => {
-                                    tracing::error!("Failed to get receipt for swap transaction: {:?}", e.to_string());
-                                    bd.broadcast_error = Some(e.to_string());
-                                }
-                                _ => {
-                                    tracing::error!("Failed to get receipts, unhandled error");
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            tracing::error!("Failed to send swap transaction: {:?}", e);
-                        }
+
+            // Handle optional approval transaction
+            let approval_result = if let Some(approval_tx) = &tx.approve {
+                match provider.send_transaction(approval_tx.clone()).await {
+                    Ok(approve) => {
+                        let took = time.elapsed().unwrap_or_default().as_millis() as u128;
+                        tracing::debug!("   - Explorer: {}tx/{} | Approval shoot took {} ms", mmc.explorer_url, approve.tx_hash(), took);
+                        Some(approve)
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to send approval transaction: {:?}", e);
+                        None
                     }
                 }
+            } else {
+                tracing::debug!("   - Skipping approval transaction (infinite_approval enabled)");
+                None
+            };
+
+            // Send swap transaction
+            let broadcasted = std::time::Instant::now().elapsed().as_millis();
+            match provider.send_transaction(tx.swap.clone()).await {
+                Ok(swap) => {
+                    let took = time.elapsed().unwrap_or_default().as_millis() as u128;
+                    let tx_description = if tx.approve.is_some() { "Swap (+ approval)" } else { "Swap only" };
+                    tracing::debug!("   - Explorer: {}tx/{} | {} shoot took {} ms", mmc.explorer_url, swap.tx_hash(), tx_description, took);
+                    bd.broadcasted_at_ms = broadcasted;
+                    bd.broadcasted_took_ms = took;
+                    bd.hash = swap.tx_hash().to_string();
+                }
                 Err(e) => {
-                    tracing::error!("Failed to send approval transaction: {:?}", e);
+                    tracing::error!("Failed to send swap transaction: {:?}", e);
                 }
             }
             output.push(bd);
