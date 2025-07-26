@@ -3,10 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::types::maker::TradeData;
 use serde_json::Value;
 
-use crate::types::{
-    config::MarketMakerConfig,
-    maker::{BroadcastData, ComponentPriceData, PreTradeData, Trade},
-};
+use crate::types::{config::MarketMakerConfig, maker::ComponentPriceData};
 
 /// Base message structure for all Redis messages
 #[derive(Debug, Serialize, Deserialize, Clone)]

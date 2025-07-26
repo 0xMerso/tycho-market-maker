@@ -11,7 +11,7 @@ use alloy_primitives::{B256, U256};
 use reqwest::Client;
 use url;
 
-use crate::{maker::tycho::get_alloy_chain, types::sol::IERC20};
+use crate::types::sol::IERC20;
 
 /// =============================================================================
 /// EVM Blockchain Utilities

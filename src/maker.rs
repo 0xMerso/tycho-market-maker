@@ -216,20 +216,20 @@ async fn initialize() -> Result<()> {
     let execution = ExecStrategyFactory::create(config.network_name.as_str());
 
     // Build market maker instance with all components
-    let mk = MarketMakerBuilder::create(config.clone(), feed, execution, base.clone(), quote.clone()).map_err(|e| MarketMakerError::Config(format!("Failed to build Market Maker: {}", e)))?;
+    let _mk = MarketMakerBuilder::create(config.clone(), feed, execution, base.clone(), quote.clone()).map_err(|e| MarketMakerError::Config(format!("Failed to build Market Maker: {}", e)))?;
 
+    // Initialize allowance for base and quote tokens, if infinite_approval is true, we approve u128::MAX for both base and quote tokens
     let _ = init_allowance(config.clone(), env.clone()).await;
-    return Ok(());
 
     // Fetch initial market price for validation
-    if let Ok(price) = mk.fetch_market_price().await {
+    if let Ok(price) = _mk.fetch_market_price().await {
         tracing::info!("First market price: {:?} ({})", price, config.price_feed_config.r#type);
     } else {
         tracing::error!("Failed to fetch the first market price");
     }
 
-    let identifier = mk.identifier.clone();
-    let _ = run(mk, identifier, config, env, tokens).await;
+    let identifier = _mk.identifier.clone();
+    let _ = run(_mk, identifier, config, env, tokens).await;
 
     Ok(())
 }

@@ -1,12 +1,6 @@
 use async_trait::async_trait;
 
-use crate::{
-    maker::exec::ExecStrategyName,
-    types::{
-        config::{EnvConfig, MarketMakerConfig},
-        maker::{BroadcastData, SimulatedData, Trade},
-    },
-};
+use crate::maker::exec::ExecStrategyName;
 
 use super::super::ExecStrategy;
 

@@ -12,8 +12,7 @@ use crate::{
     maker::{exec::ExecStrategyName, tycho::get_alloy_chain},
     types::{
         config::{EnvConfig, MarketMakerConfig},
-        maker::{BroadcastData, SimulatedData, Trade, TradeStatus},
-        moni::NewTradeMessage,
+        maker::{BroadcastData, Trade},
     },
 };
 
@@ -58,7 +57,7 @@ impl ExecStrategy for MainnetExec {
             .rsync()
             .build();
 
-        let mut results = Vec::new();
+        let results = Vec::new();
 
         if env.testing {
             tracing::info!("🧪 Skipping broadcast ! Testing mode enabled");
@@ -106,6 +105,7 @@ impl ExecStrategy for MainnetExec {
                             let bundle_description = if tx.approve.is_some() { "approval + swap" } else { "swap only" };
                             tracing::info!("🌐 [{}] Bundle sent successfully ({})", self.name(), bundle_description);
                             // results.push(BroadcastData::default());
+                            // ! Error here need to push
                         }
                         Err(e) => {
                             tracing::error!("🌐 [{}] Failed to send bundle: {:?}", self.name(), e);

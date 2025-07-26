@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use alloy::rpc::types::{TransactionReceipt, TransactionRequest};
+use alloy::rpc::types::TransactionRequest;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use tycho_execution::encoding::models::{Solution, Transaction};

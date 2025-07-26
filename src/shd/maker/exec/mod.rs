@@ -61,7 +61,7 @@ pub trait ExecStrategy: Send + Sync {
     fn name(&self) -> String;
 
     /// Pre-execution hook
-    async fn pre_hook(&self, config: &MarketMakerConfig) {
+    async fn pre_hook(&self, _config: &MarketMakerConfig) {
         tracing::info!("[{}] default_pre_exec_hook", self.name());
     }
 
@@ -260,7 +260,7 @@ pub trait ExecStrategy: Send + Sync {
             let mut bd = BroadcastData::default();
 
             // Handle optional approval transaction
-            let approval_result = if let Some(approval_tx) = &tx.approve {
+            let _approval_result = if let Some(approval_tx) = &tx.approve {
                 match provider.send_transaction(approval_tx.clone()).await {
                     Ok(approve) => {
                         let took = time.elapsed().unwrap_or_default().as_millis() as u128;
