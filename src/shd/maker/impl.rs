@@ -124,7 +124,7 @@ impl IMarketMaker for MarketMaker {
                         // tracing::debug!(" - Inventory: Got {} of {}", divided, tk.symbol);
                         msgs.push(format!("{:.3} of {}", divided, tk.symbol));
                     }
-                    tracing::debug!(" 💵  Inventory evaluation: Nonce {} | Wallet {} | Holding {}", nonce, self.config.wallet_public_key, msgs.join(" and "));
+                    tracing::debug!("💵  Inventory evaluation: Nonce {} | Wallet {} | Holding {}", nonce, self.config.wallet_public_key, msgs.join(" and "));
                     Ok(Inventory {
                         base_balance: balances[0],
                         quote_balance: balances[1],
@@ -224,6 +224,7 @@ impl IMarketMaker for MarketMaker {
     /// Create simple trade data from execution order and market context
     fn pre_trade_data(&self, order: &ExecutionOrder) -> PreTradeData {
         PreTradeData {
+            pool: order.adjustment.psc.component.id.to_string(),
             base_token: order.adjustment.selling.symbol.clone(),
             quote_token: order.adjustment.buying.symbol.clone(),
             trade_direction: order.adjustment.direction.clone(),
@@ -241,12 +242,10 @@ impl IMarketMaker for MarketMaker {
     // Targets are the pools to monitor, nothing more
     fn evaluate(&self, targets: &Vec<ProtoSimComp>, sps: Vec<f64>, reference: f64) -> Vec<CompReadjustment> {
         let mut orders = vec![];
-        // let mut snapshots = vec![];
         if sps.is_empty() || (targets.len() != sps.len()) {
             tracing::warn!("Components targets and spot prices length mismatch ({} != {})", targets.len(), sps.len());
             return vec![];
         }
-        // tracing::debug!("Evaluating {} pools...", targets.len());
         for (i, psc) in targets.iter().enumerate() {
             let spot = sps[i];
             let spread = spot - reference;
@@ -254,7 +253,7 @@ impl IMarketMaker for MarketMaker {
             // Check if the spread is above the threshold
             let symbol = if spread_bps < 0_f64 { "buy 📈" } else { "sell 📉" };
             tracing::debug!(
-                "   - Evaluating pool {}: Spot: {:.5} | Reference: {:.5} | Spread: {:.5} | Spread BPS: {:<3.2} | Should {}",
+                "   => Evaluating pool {}: Spot: {:.5} | Reference: {:.5} | Spread: {:.5} | Spread BPS: {:<3.2} | Should {}",
                 cpname(psc.component.clone()),
                 spot,
                 reference,
@@ -262,7 +261,9 @@ impl IMarketMaker for MarketMaker {
                 spread_bps,
                 symbol
             );
-            if spread_bps.abs() > self.config.target_spread_bps as f64 {
+            // If the absolute value of the spread in bps is greater than the configured threshold (min_watch_spread_bps), then a readjustment order is created
+            if spread_bps.abs() > self.config.min_watch_spread_bps {
+                // To know in which direction to readjust
                 match spread_bps > 0. {
                     true => {
                         // pool's 'quote' token is above the reference price, sell on pool
@@ -393,7 +394,7 @@ impl IMarketMaker for MarketMaker {
             //     MIN_AMOUNT_WORTH_USD
             // );
 
-            if is_amount_worth_usd_enough == false {
+            if !is_amount_worth_usd_enough {
                 continue;
             }
 
@@ -409,7 +410,7 @@ impl IMarketMaker for MarketMaker {
                     let gas_cost_usd = gas_cost_eth * context.eth_to_usd;
                     let gas_cost_in_output = if base_to_quote { gas_cost_eth / context.quote_to_eth } else { gas_cost_eth / context.base_to_eth };
                     tracing::info!(
-                        "   - Swap: {:.5} {} for {:.5} {} | Gas cost : {:.5} $ | Gas cost in output: {:.2} %",
+                        "   => Swap: {:.5} {} for {:.5} {} | Gas cost : {:.5} $ | Gas cost in output: {:.2} %",
                         selling_amount,
                         selling.symbol,
                         amount_out_normalized,
@@ -437,16 +438,16 @@ impl IMarketMaker for MarketMaker {
                         adjustment.reference - average_sell_price_net_gas
                     };
                     let potential_profit_delta_spread_bps = potential_profit_delta / adjustment.reference * BASIS_POINT_DENO;
-                    let profitable = potential_profit_delta_spread_bps > self.config.min_exec_spread_bps;
+                    let is_opportunity_valid = potential_profit_delta_spread_bps > self.config.min_executable_spread_bps;
                     tracing::info!(
-                        "   ---> Profit: {}  with average_sell_price_net_gas: {:.4} vs reference_price: {:.4} | potential_profit_delta: {:.5} | 👀  potential_profit_delta_spread_bps: {:.2}",
+                        "   => Profit: {}  with average_sell_price_net_gas: {:.4} vs reference_price: {:.4} | potential_profit_delta: {:.5} | 👀  potential_profit_delta_spread_bps: {:.2}",
                         if potential_profit_delta > 0. { "🟩" } else { "🟧" },
                         average_sell_price_net_gas,
                         adjustment.reference,
                         potential_profit_delta,
                         potential_profit_delta_spread_bps
                     );
-                    if profitable {
+                    if is_opportunity_valid {
                         let calculation = SwapCalculation {
                             base_to_quote,
                             selling_amount,
@@ -466,21 +467,19 @@ impl IMarketMaker for MarketMaker {
                             selling_worth_usd: selling_amount_worth_usd,
                             buying_worth_usd: buying_amount_worth_usd,
                             profit_delta_bps: potential_profit_delta_spread_bps,
-                            profitable,
+                            profitable: is_opportunity_valid,
                         };
                         let order = ExecutionOrder {
                             adjustment: adjustment.clone(),
                             calculation,
                         };
                         orders.push(order);
-                    } else {
-                        if potential_profit_delta_spread_bps > 0. {
-                            tracing::info!(
-                                " ---> Potential profit but not enough to reach min_exec_spread_bps (of {:.2}) ! Missing {:.2} bps",
-                                self.config.min_exec_spread_bps,
-                                self.config.min_exec_spread_bps - potential_profit_delta_spread_bps
-                            );
-                        }
+                    } else if potential_profit_delta_spread_bps > 0. {
+                        tracing::info!(
+                            "   => 🔸 Potential profit but not enough to reach min_executable_spread_bps (of {:.2}) ! Missing {:.2} bps",
+                            self.config.min_executable_spread_bps,
+                            self.config.min_executable_spread_bps - potential_profit_delta_spread_bps
+                        );
                     }
                 }
                 Err(e) => {
@@ -496,7 +495,7 @@ impl IMarketMaker for MarketMaker {
     /// @param order: Execution order containing adjustment and calculation data
     /// @param _env: Environment configuration (unused but kept for future use)
     /// @return Solution: Tycho solution struct for execution
-    fn solution(&self, order: ExecutionOrder, _env: EnvConfig) -> Solution {
+    fn build_tycho_solution(&self, order: ExecutionOrder, _env: EnvConfig) -> Solution {
         let split = 0.;
         let input = order.adjustment.selling.address;
         let output = order.adjustment.buying.address;
@@ -594,7 +593,7 @@ impl IMarketMaker for MarketMaker {
 
     /// Entrypoint for executing the orders
     fn prepare(&self, orders: Vec<ExecutionOrder>, tdata: Vec<TradeData>, context: MarketContext, inventory: Inventory, env: EnvConfig) -> Vec<Trade> {
-        tracing::debug!("=== Executing {} orders ===", orders.len());
+        tracing::debug!(">>>>>>> Preparing the execution of {} trades <<<<<<<", orders.len());
         unsafe {
             std::env::set_var("RPC_URL", self.config.rpc_url.clone());
         }
@@ -602,7 +601,7 @@ impl IMarketMaker for MarketMaker {
         // --- Prepare the solutions (with Tycho EVM Encoder) ---
         // @dev This await section has to be done outside of the EVMEncoderBuilder for some unknown reaso, compiler error
         let mut output: Vec<Trade> = vec![];
-        let solutions = orders.iter().map(|order| self.solution(order.clone(), env.clone())).collect::<Vec<Solution>>();
+        let solutions = orders.iter().map(|order| self.build_tycho_solution(order.clone(), env.clone())).collect::<Vec<Solution>>();
         // --- Encode the solutions ---
         let encoder = EVMEncoderBuilder::new().chain(chain).initialize_tycho_router_with_permit2(env.wallet_private_key.clone());
         match encoder {
@@ -669,17 +668,16 @@ impl IMarketMaker for MarketMaker {
                         Some(msg) => match msg {
                             Ok(msg) => {
                                 let time = std::time::SystemTime::now();
-
-                                tracing::info!(
-                                    "{} '{}' stream: block # {} with {:<2} states updates | Min exec spread: {}", // , + {} pairs, - {} pairs",
+                                let intro = format!(
+                                    "{} {} stream: b#{} with {} states", // , + {} pairs, - {} pairs",
                                     self.config.pair_tag,
                                     self.config.network_name.as_str().to_string(),
                                     msg.block_number,
-                                    msg.states.len(),
-                                    self.config.min_exec_spread_bps,
+                                    msg.states.len()
                                 );
 
                                 if !self.ready {
+                                    tracing::info!("{}", intro);
                                     // --- First stream ---
                                     protosims = msg.states.clone();
                                     let mut keys = vec![];
@@ -752,7 +750,7 @@ impl IMarketMaker for MarketMaker {
                                     // Only continue if the poll_interval_ms has passed
                                     let now = std::time::Instant::now();
                                     if (now.duration_since(last_poll).as_millis() as u64) < self.config.poll_interval_ms {
-                                        tracing::debug!("Skipping block update: poll_interval_ms not elapsed");
+                                        tracing::debug!("{} | ⏩  Skipping block update: poll_interval_ms not elapsed", intro);
                                         continue;
                                     }
                                     last_poll = now;
@@ -768,17 +766,9 @@ impl IMarketMaker for MarketMaker {
                                             tracing::info!("First run - always push to DB since we have no previous price");
                                             PRICE_MOVE_THRESHOLD + 1.0
                                         };
-                                        let threshold = price_move_bps > PRICE_MOVE_THRESHOLD;
-                                        tracing::info!(
-                                            "Price movement {} threshold ({} bps), of {:.2} bps, from {} to {}",
-                                            if threshold { "above" } else { "below" },
-                                            PRICE_MOVE_THRESHOLD,
-                                            price_move_bps,
-                                            previous_reference_price,
-                                            reference_price
-                                        );
 
                                         // ===== Publish Price event =====
+                                        let threshold = price_move_bps > PRICE_MOVE_THRESHOLD;
                                         if threshold {
                                             if self.config.publish_events {
                                                 let now = std::time::Instant::now();
@@ -791,13 +781,24 @@ impl IMarketMaker for MarketMaker {
                                                     });
                                                     last_publish = now;
                                                 } else {
-                                                    tracing::debug!("Skipping publish: min_publish_timeframe_ms not elapsed");
+                                                    tracing::debug!("{} | Skipping publish: min_publish_timeframe_ms not elapsed", intro);
                                                 }
                                             }
                                             previous_reference_price = reference_price;
                                         } else {
                                             continue;
                                         }
+
+                                        tracing::info!(
+                                            "{} | Price movement {} threshold ({} bps), of {:.2} bps, from {} to {}",
+                                            intro,
+                                            if threshold { "above" } else { "below" },
+                                            PRICE_MOVE_THRESHOLD,
+                                            price_move_bps,
+                                            previous_reference_price,
+                                            reference_price
+                                        );
+
                                         // --- Evaluate ---
                                         let spot_prices = cpds.iter().map(|x| x.price).collect::<Vec<f64>>();
                                         let readjusments = self.evaluate(&targets.clone(), spot_prices.clone(), reference_price);
@@ -817,23 +818,20 @@ impl IMarketMaker for MarketMaker {
                                                         let mut orders = self.readjust(context.clone(), inventory.clone(), readjusments, env.clone()).await;
                                                         tracing::info!("Elapsed from block_update to readjustments: {} ms", elapsed);
 
-                                                        // ! Tmp. Take only the first order, if any
                                                         if orders.is_empty() {
-                                                            tracing::debug!("No orders to execute");
                                                             continue;
                                                         }
                                                         // Sort orders by potential_profit_delta_spread_bps (highest first)
                                                         orders.sort_by(|a, b| b.calculation.profit_delta_bps.partial_cmp(&a.calculation.profit_delta_bps).unwrap_or(std::cmp::Ordering::Equal));
                                                         let orders = vec![orders.first().unwrap().clone()];
-
-                                                        let now = std::time::Instant::now().elapsed().as_millis();
+                                                        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis();
                                                         let tdata = orders
                                                             .iter()
                                                             .map(|order| TradeData {
                                                                 status: TradeStatus::Pending,
                                                                 timestamp: now,
                                                                 context: context.clone(),
-                                                                metadata: self.pre_trade_data(&order),
+                                                                metadata: self.pre_trade_data(order),
                                                                 inventory: inventory.clone(),
                                                                 simulation: None,
                                                                 broadcast: None,

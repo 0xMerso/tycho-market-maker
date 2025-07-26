@@ -27,7 +27,7 @@ use tycho_simulation::models::Token;
 /// @description: Handle allowance for base and quote tokens
 /// @param config: Market maker configuration containing token addresses and router
 /// @param env: Environment configuration with wallet credentials
-/// @behavior: If infinite_approval is true, approves u128::MAX for both base and quote tokens
+/// @behavior: If infinite_approval is true, approves u128::MAX for both base and quote tokens on permit2_address
 /// =============================================================================
 async fn init_allowance(config: MarketMakerConfig, env: EnvConfig) {
     tracing::info!("config.infinite_approval: {:?}", config.infinite_approval);
@@ -50,7 +50,7 @@ async fn init_allowance(config: MarketMakerConfig, env: EnvConfig) {
     let base_allowance = shd::utils::evm::allowance(
         config.rpc_url.clone(),
         config.wallet_public_key.clone(),
-        config.tycho_router_address.clone(),
+        config.permit2_address.clone(),
         config.base_token_address.clone(),
     )
     .await;
@@ -58,7 +58,7 @@ async fn init_allowance(config: MarketMakerConfig, env: EnvConfig) {
     let quote_allowance = shd::utils::evm::allowance(
         config.rpc_url.clone(),
         config.wallet_public_key.clone(),
-        config.tycho_router_address.clone(),
+        config.permit2_address.clone(),
         config.quote_token_address.clone(),
     )
     .await;
@@ -71,13 +71,13 @@ async fn init_allowance(config: MarketMakerConfig, env: EnvConfig) {
             let amount = u128::MAX;
             if base_allowance < target {
                 tracing::warn!("Base allowance is not enough: {} < {}", base_allowance, target);
-                let _ = shd::utils::evm::approve(config.clone(), env.clone(), config.tycho_router_address.clone(), config.base_token_address.clone(), amount).await;
+                let _ = shd::utils::evm::approve(config.clone(), env.clone(), config.permit2_address.clone(), config.base_token_address.clone(), amount).await;
             } else {
                 tracing::info!("Base allowance is enough: {} >= {}", base_allowance, target);
             }
             if quote_allowance < target {
                 tracing::warn!("Quote allowance is not enough: {} < {}", quote_allowance, target);
-                let _ = shd::utils::evm::approve(config.clone(), env.clone(), config.tycho_router_address.clone(), config.quote_token_address.clone(), amount).await;
+                let _ = shd::utils::evm::approve(config.clone(), env.clone(), config.permit2_address.clone(), config.quote_token_address.clone(), amount).await;
             } else {
                 tracing::info!("Quote allowance is enough: {} >= {}", quote_allowance, target);
             }
@@ -187,10 +187,6 @@ async fn initialize() -> Result<()> {
     config.print();
     tracing::debug!("🤖 MarketMaker Config Identifier: '{}'", config.id());
 
-    // Validate network connectivity and get latest block
-    let latest = shd::utils::evm::latest(config.rpc_url.clone()).await;
-    tracing::info!("Launching Tycho Market Maker | 🧪 Testing mode: {:?} | Latest block: {}", env.testing, latest);
-
     if config.publish_events {
         tracing::info!("📕  PublishEvent mode enabled. Publishing ping event to make sure Redis and Monitor are running");
         if let Err(e) = shd::data::r#pub::ping() {
@@ -200,6 +196,10 @@ async fn initialize() -> Result<()> {
             tracing::info!("Ping event published successfully");
         }
     }
+
+    // Validate network connectivity and get latest block
+    let latest = shd::utils::evm::latest(config.rpc_url.clone()).await;
+    tracing::info!("Launching Tycho Market Maker | 🧪 Testing mode: {:?} | Latest block: {}", env.testing, latest);
 
     // Fetch available tokens from Tycho API
     let tokens = shd::maker::tycho::tokens(config.clone(), Some(env.tycho_api_key.as_str()))

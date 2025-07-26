@@ -12,7 +12,7 @@ pub const RESTART: u64 = 60;
 pub const BASIS_POINT_DENO: f64 = 10_000.0;
 
 /// Price move threshold
-pub const PRICE_MOVE_THRESHOLD: f64 = 1.0;
+pub const PRICE_MOVE_THRESHOLD: f64 = 0.5;
 
 /// Add TVL threshold (minimum TVL for components to be monitored)
 pub const ADD_TVL_THRESHOLD: f64 = 100.0;

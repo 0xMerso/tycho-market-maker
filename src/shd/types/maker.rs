@@ -45,6 +45,14 @@ use super::{
 #[async_trait]
 pub trait IMarketMaker: Send + Sync {
     /// =============================================================================
+    /// @function: prices
+    /// @description: Retrieve prices for protocol simulation components
+    /// @param psc: Vector of protocol simulation components
+    /// @return Vec<ComponentPriceData>: Vector of component price data
+    /// =============================================================================
+    fn prices(&self, psc: &Vec<ProtoSimComp>) -> Vec<ComponentPriceData>;
+
+    /// =============================================================================
     /// @function: evaluate
     /// @description: Look for pools having a spread higher than the configured threshold
     /// @param psc: Vector of protocol simulation components
@@ -64,14 +72,6 @@ pub trait IMarketMaker: Send + Sync {
     /// @return Vec<ExecutionOrder>: Vector of execution orders
     /// =============================================================================
     async fn readjust(&self, context: MarketContext, inventory: Inventory, crs: Vec<CompReadjustment>, env: EnvConfig) -> Vec<ExecutionOrder>;
-
-    /// =============================================================================
-    /// @function: prices
-    /// @description: Retrieve prices for protocol simulation components
-    /// @param psc: Vector of protocol simulation components
-    /// @return Vec<ComponentPriceData>: Vector of component price data
-    /// =============================================================================
-    fn prices(&self, psc: &Vec<ProtoSimComp>) -> Vec<ComponentPriceData>;
 
     /// =============================================================================
     /// @function: fetch_inventory
@@ -120,7 +120,7 @@ pub trait IMarketMaker: Send + Sync {
     /// @param env: Environment configuration
     /// @return Solution: Tycho solution
     /// =============================================================================
-    fn solution(&self, order: ExecutionOrder, env: EnvConfig) -> Solution;
+    fn build_tycho_solution(&self, order: ExecutionOrder, env: EnvConfig) -> Solution;
 
     /// =============================================================================
     /// @function: trade_tx_request
@@ -326,7 +326,7 @@ pub struct ExecutionOrder {
 /// - buying_amount: Amount being bought
 /// - powered_selling_amount: Selling amount with power adjustments
 /// - powered_buying_amount: Buying amount with power adjustments
-/// - amount_out_normalized: Expected output amount (normalized)
+/// - amount_out_normalized: Expected output amount (normalized = divided by 10^decimals)
 /// - amount_out_powered: Expected output amount (powered)
 /// - amount_out_min_normalized: Minimum output amount (normalized)
 /// - amount_out_min_powered: Minimum output amount (powered)
@@ -524,7 +524,7 @@ pub struct ReceiptData {
 /// =============================================================================
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PreTradeData {
-    // pub pool: String,
+    pub pool: String,
     // Token information
     pub base_token: String,
     pub quote_token: String,

@@ -25,6 +25,12 @@ pub struct UnichainExec;
 /// @description: Create a new Unichain execution strategy instance
 /// @return Self: New UnichainExec instance
 /// =============================================================================
+impl Default for UnichainExec {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl UnichainExec {
     pub fn new() -> Self {
         Self

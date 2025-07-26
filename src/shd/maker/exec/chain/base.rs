@@ -33,6 +33,12 @@ pub struct BaseExec;
 /// @description: Create a new Base execution strategy instance
 /// @return Self: New BaseExec instance
 /// =============================================================================
+impl Default for BaseExec {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BaseExec {
     pub fn new() -> Self {
         Self

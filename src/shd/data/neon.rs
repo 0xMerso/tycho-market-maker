@@ -44,17 +44,17 @@ pub async fn handle(msg: &ParsedMessage, env: MoniEnvConfig) {
 
     match msg {
         ParsedMessage::Ping => {
-            tracing::trace!("Ping received !");
+            tracing::info!("Ping received !");
         }
         ParsedMessage::NewInstance(msg) => {
-            tracing::trace!("NewInstance received with config identifier: {}", msg.config.id());
+            tracing::info!("NewInstance received with config identifier: {}", msg.config.id());
             let config_hash = msg.config.hash();
-            tracing::trace!("Config Keccak256: {}", config_hash);
+            tracing::info!("Config Keccak256: {}", config_hash);
 
             let cfgs = match pull::configurations(&db).await {
                 Ok(cfgs) => cfgs,
                 Err(err) => {
-                    tracing::error!("Failed to pull configurations: {}", err);
+                    tracing::error!("   => Failed to pull configurations: {}", err);
                     return;
                 }
             };
@@ -66,11 +66,11 @@ pub async fn handle(msg: &ParsedMessage, env: MoniEnvConfig) {
                 let mmc: MarketMakerConfig = match serde_json::from_value(cfg.values.clone()) {
                     Ok(mmc) => mmc,
                     Err(err) => {
-                        tracing::error!("Failed to deserialize configuration: {}", err);
+                        tracing::error!("   => Failed to deserialize configuration: {}", err);
                         return;
                     }
                 };
-                tracing::trace!("    - Configuration: {}: Keccak256: {}", mmc.id(), cfg.hash);
+                tracing::info!("    => Configuration: {}: Keccak256: {}", mmc.id(), cfg.hash);
 
                 let instances = match pull::instances(&db).await {
                     Ok(instances) => instances,
@@ -80,27 +80,28 @@ pub async fn handle(msg: &ParsedMessage, env: MoniEnvConfig) {
                     }
                 };
 
-                tracing::trace!("    - Got {} instances for this configuration", instances.len());
+                tracing::info!("    => Got {} instances for this configuration", instances.len());
 
                 // Closing the last instance, if any
                 if let Some(instance) = instances.last() {
                     tracing::info!(
-                        "    - Closing last instance (with id: {}) | Initially started at: {}  ⚠️   Make sure to stop the container associated with this instance !",
+                        "    => Closing last instance (with id: {}) | Initially started at: {}  ⚠️   Make sure to stop the container associated with this instance !",
                         instance.id,
                         instance.started_at
                     );
                     let mut instance: instance::ActiveModel = instance.clone().into();
+                    // ! Incorrect because when new config is created, the instance is not closed because it's not attached to the new config
                     instance.ended_at = Set(Some(chrono::Utc::now().naive_utc()));
 
                     if let Err(err) = instance.update(&db).await {
-                        tracing::error!("    - Error closing last instance: {}", err);
+                        tracing::error!("    => Error closing last instance: {}", err);
                     }
                 } else {
-                    tracing::trace!("    - No instances found for this configuration");
+                    tracing::info!("    => No instances found for this configuration");
                 }
 
                 if let Err(err) = create::instance(&db, cfg, msg.config.clone(), msg.identifier.clone(), msg.commit.clone()).await {
-                    tracing::error!("   - Error attaching instance to configuration: {}", err);
+                    tracing::error!("    => Error attaching instance to configuration: {}", err);
                 }
             } else {
                 tracing::info!("Configuration hash not found in DB. Creating it, and the instance with it ...");
@@ -108,41 +109,41 @@ pub async fn handle(msg: &ParsedMessage, env: MoniEnvConfig) {
                 match create::configuration(&db, msg.config.clone()).await {
                     Ok(cfg) => {
                         if let Err(err) = create::instance(&db, &cfg, msg.config.clone(), msg.identifier.clone(), msg.commit.clone()).await {
-                            tracing::error!("   - Error attaching instance to configuration: {}", err);
+                            tracing::error!("    => Error attaching instance to configuration: {}", err);
                         }
                     }
                     Err(err) => {
-                        tracing::error!("   - Error creating configuration: {}", err);
+                        tracing::error!("    => Error creating configuration: {}", err);
                     }
                 }
             }
         }
         ParsedMessage::NewPrices(msg) => {
-            tracing::trace!("NewPrices received, with reference_price: {} and instance identifier: {}", msg.reference_price, msg.identifier);
+            tracing::info!("NewPrices received, with reference_price: {} and instance identifier: {}", msg.reference_price, msg.identifier);
 
             let instances = match pull::instances(&db).await {
                 Ok(instances) => instances,
                 Err(err) => {
-                    tracing::error!("Error finding instance by hash: {}", err);
+                    tracing::error!("   => Error finding instance by hash: {}", err);
                     return;
                 }
             };
 
             if let Some(instance) = instances.into_iter().find(|inst| inst.identifier == msg.identifier) {
                 if let Err(err) = create::price(&db, &instance, msg).await {
-                    tracing::error!("Error storing price data: {}", err);
+                    tracing::error!("   => Error storing price data: {}", err);
                 }
             } else {
-                tracing::warn!("Instance not found for hash: {}", msg.identifier);
+                tracing::warn!("   => Instance not found for hash: {}", msg.identifier);
             }
         }
         ParsedMessage::NewTrade(msg) => {
-            tracing::trace!("NewTrade received, with instance identifier: {}", msg.identifier);
+            tracing::info!("NewTrade received, with instance identifier: {}", msg.identifier);
 
             let instances = match pull::instances(&db).await {
                 Ok(instances) => instances,
                 Err(err) => {
-                    tracing::error!("Error finding instance by hash: {}", err);
+                    tracing::error!("   => Error finding instance by hash: {}", err);
                     return;
                 }
             };
@@ -151,30 +152,31 @@ pub async fn handle(msg: &ParsedMessage, env: MoniEnvConfig) {
                 let config: MarketMakerConfig = match serde_json::from_value(instance.config.clone()) {
                     Ok(config) => config,
                     Err(err) => {
-                        tracing::error!("Failed to find instance configuration: {}", err.to_string());
+                        tracing::error!("   => Failed to find instance configuration: {}", err.to_string());
                         return;
                     }
                 };
 
                 let mut updated = msg.clone();
-                match updated.data.broadcast {
-                    Some(mut broadcast) => {
+                match updated.data.broadcast.clone() {
+                    Some(broadcast) => {
                         let hash = broadcast.hash.clone();
                         if !hash.is_empty() {
                             tracing::info!("Fetching receipt on network {} for transaction {}", config.network_name, hash);
                             let swap_receipt = fetch_receipt(config.rpc_url.clone(), hash.clone()).await;
                             if let Ok(swap_receipt) = swap_receipt {
                                 let swap_receipt_data = ReceiptData {
-                                    status: swap_receipt.status().clone(),
+                                    status: swap_receipt.status(),
                                     gas_used: swap_receipt.gas_used,
                                     effective_gas_price: swap_receipt.effective_gas_price,
                                     error: None,
                                     transaction_hash: swap_receipt.transaction_hash.to_string(),
                                     transaction_index: swap_receipt.transaction_index.unwrap_or_default(),
-                                    block_number: swap_receipt.block_number.clone().unwrap_or_default(),
+                                    block_number: swap_receipt.block_number.unwrap_or_default(),
                                 };
+                                let mut broadcast = broadcast.clone();
                                 broadcast.receipt = Some(swap_receipt_data);
-                                updated.data.broadcast = Some(broadcast);
+                                updated.data.broadcast = Some(broadcast.clone());
                             }
                         }
                     }
@@ -183,7 +185,7 @@ pub async fn handle(msg: &ParsedMessage, env: MoniEnvConfig) {
                     }
                 }
 
-                if let Err(err) = create::trade(&db, &instance, msg).await {
+                if let Err(err) = create::trade(&db, &instance, &updated).await {
                     tracing::error!("Error storing trade data: {}", err);
                 }
                 tracing::info!("Trade data stored successfully");

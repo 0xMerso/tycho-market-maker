@@ -140,10 +140,9 @@ pub struct MarketMakerConfig {
     pub gas_token_chainlink_price_feed: String,
     pub rpc_url: String,
     pub explorer_url: String,
-    pub target_spread_bps: f64,
-    pub min_exec_spread_bps: f64,
+    pub min_watch_spread_bps: f64,
+    pub min_executable_spread_bps: f64,
     pub max_slippage_pct: f64,
-    pub profitability_check: bool,
     pub max_inventory_ratio: f64,
     pub tx_gas_limit: u64,
     pub block_offset: u64,
@@ -175,16 +174,16 @@ impl MarketMakerConfig {
 
     pub fn print(&self) {
         // Ultra warnings for negative spreads
-        if self.target_spread_bps < 0.0 {
+        if self.min_watch_spread_bps < 0.0 {
             tracing::warn!(
                 "🚨 Target spread is NEGATIVE: {} bps! This will cause unprofitable execution (and drain the inventory) ! 🚨",
-                self.target_spread_bps
+                self.min_watch_spread_bps
             );
         }
-        if self.min_exec_spread_bps < 0.0 {
+        if self.min_executable_spread_bps < 0.0 {
             tracing::warn!(
                 "🚨 Min exec spread is NEGATIVE: {} bps! This will cause unprofitable execution (and drain the inventory) ! 🚨",
-                self.min_exec_spread_bps
+                self.min_executable_spread_bps
             );
         }
 
@@ -198,10 +197,9 @@ impl MarketMakerConfig {
         tracing::debug!("  Explorer:              {}", self.explorer_url);
         tracing::debug!("  Gas token:             {}", self.gas_token_symbol);
         tracing::debug!("  Gas Oracle Feed:       {}", self.gas_token_chainlink_price_feed);
-        tracing::debug!("  Spread (bps):          {}", self.target_spread_bps);
-        tracing::debug!("  🔸 Min exec spread (bps): {}", self.min_exec_spread_bps);
+        tracing::debug!("  Spread (bps):          {}", self.min_watch_spread_bps);
+        tracing::debug!("  🔸 Min exec spread (bps): {}", self.min_executable_spread_bps);
         tracing::debug!("  🔸 Max Slippage (%):      {}", self.max_slippage_pct);
-        tracing::debug!("  🔸 Profitability Check:   {}", self.profitability_check);
         tracing::debug!("  Max Inventory Ratio:   {}", self.max_inventory_ratio);
         tracing::debug!("  Gas Limit:             {}", self.tx_gas_limit);
         tracing::debug!("  Block Offset:          {}", self.block_offset);
@@ -223,8 +221,8 @@ impl MarketMakerConfig {
     }
 
     pub fn validate(&self) -> Result<()> {
-        if self.target_spread_bps > BASIS_POINT_DENO as f64 {
-            return Err(ConfigError::Config("target_spread_bps must be ≤ 10000 BPS (100%)".into()));
+        if self.min_watch_spread_bps > BASIS_POINT_DENO {
+            return Err(ConfigError::Config("min_watch_spread_bps must be ≤ 10000 BPS (100%)".into()));
         }
         if self.max_slippage_pct > 1. {
             return Err(ConfigError::Config("max_slippage_pct must be ≤ 1.0 (100%)".into()));
@@ -232,6 +230,14 @@ impl MarketMakerConfig {
         if !(0.0..=1.0).contains(&self.max_inventory_ratio) {
             return Err(ConfigError::Config("max_inventory_ratio must be between 0.0 and 1.0".into()));
         }
+
+        // Check if using preconfirmation on Base network
+        if let NetworkName::Base = NetworkName::from_str(&self.network_name).unwrap() {
+            if self.rpc_url.to_lowercase().contains("preconf") && !self.skip_simulation {
+                return Err(ConfigError::Config("skip_simulation must be true when using preconfirmation RPC on Base network".into()));
+            }
+        }
+
         Ok(())
     }
 

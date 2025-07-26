@@ -38,6 +38,12 @@ pub struct MainnetExec;
 /// @description: Create a new Mainnet execution strategy instance
 /// @return Self: New MainnetExec instance
 /// =============================================================================
+impl Default for MainnetExec {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MainnetExec {
     pub fn new() -> Self {
         Self
@@ -65,7 +71,7 @@ impl ExecStrategy for MainnetExec {
     /// @behavior: Submits transactions as bundles to Flashbots for MEV protection
     /// =============================================================================
     async fn broadcast(&self, prepared: Vec<Trade>, mmc: MarketMakerConfig, env: EnvConfig) -> Result<Vec<BroadcastData>, String> {
-        tracing::info!("🌐 [{}] Broadcasting {} transactions on Mainnet with Flashbots for instance {}", self.name(), prepared.len(), mmc.id());
+        tracing::info!("{}: broadcasting {} transactions on Mainnet via bundle", self.name(), prepared.len());
 
         let ac = get_alloy_chain(mmc.network_name.as_str().to_string()).expect("Failed to get alloy chain");
         let rpc = mmc.rpc_url.parse::<url::Url>().unwrap().clone();
@@ -77,7 +83,7 @@ impl ExecStrategy for MainnetExec {
         // Added to alloy-mev because it's not supported yet
         let buildernet = "https://direct-us.buildernet.org:443".to_string();
         let bsigner = PrivateKeySigner::random(); // For now bundle signer is random
-        let _brpc = provider
+        let endpoints = provider
             .endpoints_builder()
             .authenticated_endpoint(buildernet.parse::<url::Url>().unwrap(), BundleSigner::flashbots(bsigner.clone()))
             .titan(BundleSigner::flashbots(bsigner.clone()))
@@ -86,69 +92,85 @@ impl ExecStrategy for MainnetExec {
             .rsync()
             .build();
 
-        let results = Vec::new();
+        let mut results = Vec::new();
 
         if env.testing {
             tracing::info!("🧪 Skipping broadcast ! Testing mode enabled");
             return Ok(results);
         }
 
-        if prepared.len() == 1 {
-            let tx = prepared.first().expect("No transaction found");
+        for (x, tx) in prepared.iter().enumerate() {
+            if x > 0 {
+                tracing::info!("Executing only one transaction for now");
+                break;
+            }
+
             let bnum = provider.get_block_number().await.expect("Failed to get block number");
             let target_block = bnum + mmc.inclusion_block_delay;
             tracing::info!(
-                "🌐 [{}] Current block: {}, target inclusion block: {} (delay: {})",
+                "{}: Current block: {}, target inclusion block: {} (inclusion_block_delay: {})",
                 self.name(),
                 bnum,
                 target_block,
                 mmc.inclusion_block_delay
             );
 
-            let mut bundle_items = vec![];
+            let mut breq = vec![];
 
             // Add approval to bundle if it exists
-            if let Some(approval_tx) = &tx.approve {
-                match provider.build_bundle_item(approval_tx.clone(), false).await {
+            if let Some(approval) = &tx.approve {
+                match provider.build_bundle_item(approval.clone(), false).await {
                     Ok(approval) => {
-                        bundle_items.push(approval);
+                        breq.push(approval);
                     }
                     Err(e) => {
-                        tracing::error!("🌐 [{}] Failed to build approval bundle item: {:?}", self.name(), e);
-                        return Err(format!("Failed to build approval bundle item: {:?}", e));
+                        tracing::error!("{}: Failed to build approval bundle item: {:?}", self.name(), e.to_string());
+                        return Err(format!("Failed to build approval bundle item: {:?}", e.to_string()));
                     }
                 }
             }
 
             // Add swap to bundle
-            match provider.build_bundle_item(tx.swap.clone(), false).await {
+            let revertability = false;
+            let mut bd = BroadcastData::default();
+            let time = std::time::SystemTime::now();
+
+            let now = std::time::SystemTime::now();
+            let broadcasted_at_ms = now.duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis();
+            bd.broadcasted_at_ms = broadcasted_at_ms;
+
+            match provider.build_bundle_item(tx.swap.clone(), revertability).await {
                 Ok(swap) => {
-                    bundle_items.push(swap);
+                    breq.push(swap);
                     let bundle = alloy::rpc::types::mev::SendBundleRequest {
-                        bundle_body: bundle_items,
+                        bundle_body: breq,
                         inclusion: alloy::rpc::types::mev::Inclusion::at_block(target_block),
                         ..Default::default()
                     };
                     match provider.send_mev_bundle(bundle, bsigner.clone()).await {
-                        Ok(_) => {
-                            let bundle_description = if tx.approve.is_some() { "approval + swap" } else { "swap only" };
-                            tracing::info!("🌐 [{}] Bundle sent successfully ({})", self.name(), bundle_description);
-                            // results.push(BroadcastData::default());
-                            // ! Error here need to push
+                        Ok(bundle) => {
+                            tracing::info!("{}: Bundle sent successfully ({})", self.name(), bundle.bundle_hash);
+                            let took = time.elapsed().unwrap_or_default().as_millis();
+                            bd.broadcasted_took_ms = took;
+                            bd.hash = bundle.bundle_hash.to_string();
                         }
                         Err(e) => {
-                            tracing::error!("🌐 [{}] Failed to send bundle: {:?}", self.name(), e);
-                            return Err(format!("Failed to send bundle: {:?}", e));
+                            tracing::error!("{}: Failed to send bundle: {:?}", self.name(), e);
+                            let took = time.elapsed().unwrap_or_default().as_millis();
+                            bd.broadcasted_took_ms = took;
+                            bd.broadcast_error = Some(format!("Failed to send bundle: {:?}", e));
                         }
                     }
+
+                    // Get receipt of bundle hash
+
+                    results.push(bd);
                 }
                 Err(e) => {
-                    tracing::error!("🌐 [{}] Failed to build swap bundle item: {:?}", self.name(), e);
+                    tracing::error!("{}: Failed to build swap bundle item: {:?}", self.name(), e);
                     return Err(format!("Failed to build swap bundle item: {:?}", e));
                 }
             }
-        } else {
-            return Err("MainnetExec only supports single transaction bundles".to_string());
         }
 
         Ok(results)
