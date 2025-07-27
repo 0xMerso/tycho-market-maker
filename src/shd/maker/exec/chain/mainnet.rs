@@ -82,9 +82,8 @@ impl ExecStrategy for MainnetExec {
         let signer = alloy::network::EthereumWallet::from(wallet.clone());
         let provider = ProviderBuilder::new().with_chain(ac).wallet(signer.clone()).on_http(rpc.clone());
 
-        // Added to alloy-mev because it's not supported yet
         let buildernet = "https://direct-us.buildernet.org:443".to_string();
-        let bsigner = PrivateKeySigner::random(); // For now bundle signer is random
+        let bsigner = PrivateKeySigner::random();
         let endpoints = provider
             .endpoints_builder()
             .authenticated_endpoint(buildernet.parse::<url::Url>().unwrap(), BundleSigner::flashbots(bsigner.clone()))
@@ -112,14 +111,13 @@ impl ExecStrategy for MainnetExec {
                 mmc.inclusion_block_delay
             );
 
-            // Add swap to bundle
             let mut bd = BroadcastData::default();
             let time = std::time::SystemTime::now();
+
             let now = std::time::SystemTime::now();
             let broadcasted_at_ms = now.duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis();
             bd.broadcasted_at_ms = broadcasted_at_ms;
 
-            // --- NEW ---
             match trade.swap.clone().build(&signer).await {
                 Ok(tx) => {
                     let hash = tx.tx_hash().to_string();
@@ -167,7 +165,6 @@ impl ExecStrategy for MainnetExec {
                 )
                 .await;
 
-            // let endpoints = endpoints.iter().map(|e| e.clone()).collect::<Vec<_>>();
             tracing::info!("Bundle sent successfully. Got {} responses", responses.len());
             for response in responses.iter() {
                 let took = time.elapsed().unwrap_or_default().as_millis();
@@ -175,11 +172,9 @@ impl ExecStrategy for MainnetExec {
                 match response {
                     Ok(response) => {
                         tracing::info!("    =>  Bundle sent successfully ({})", response.bundle_hash);
-                        // bd.hash = response.bundle_hash.to_string();
                     }
                     Err(e) => {
                         tracing::warn!("    =>  Failed to send bundle: {:?}", e);
-                        // bd.broadcast_error = Some(format!("Failed to send bundle: {:?}", e));
                     }
                 }
             }
