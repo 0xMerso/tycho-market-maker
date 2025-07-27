@@ -7,7 +7,6 @@
 /// and transaction management for Ethereum, Base, and Unichain networks.
 /// =============================================================================
 use async_trait::async_trait;
-use std::collections::HashMap;
 use std::result::Result;
 use std::str::FromStr;
 

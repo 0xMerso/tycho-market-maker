@@ -10,12 +10,12 @@ use async_trait::async_trait;
 use std::str::FromStr;
 
 use alloy::{
-    network::{NetworkWallet, TransactionBuilder, TxSignerSync},
+    network::TransactionBuilder,
     providers::{Provider, ProviderBuilder},
     rpc::types::mev::EthSendBundle,
     signers::local::PrivateKeySigner,
 };
-use alloy_mev::{BundleSigner, EthMevProviderExt, MevShareProviderExt};
+use alloy_mev::{BundleSigner, EthMevProviderExt};
 use alloy_primitives::B256;
 
 use crate::{
@@ -101,7 +101,7 @@ impl ExecStrategy for MainnetExec {
             return Ok(results);
         }
 
-        for (_x, trade) in prepared.iter().enumerate() {
+        for trade in prepared.iter() {
             let bnum = provider.get_block_number().await.expect("Failed to get block number");
             let target_block = bnum + mmc.inclusion_block_delay;
             tracing::info!(
@@ -169,7 +169,7 @@ impl ExecStrategy for MainnetExec {
 
             // let endpoints = endpoints.iter().map(|e| e.clone()).collect::<Vec<_>>();
             tracing::info!("Bundle sent successfully. Got {} responses", responses.len());
-            for (_x, response) in responses.iter().enumerate() {
+            for response in responses.iter() {
                 let took = time.elapsed().unwrap_or_default().as_millis();
                 bd.broadcasted_took_ms = took;
                 match response {

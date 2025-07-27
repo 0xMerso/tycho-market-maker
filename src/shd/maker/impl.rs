@@ -671,7 +671,7 @@ impl IMarketMaker for MarketMaker {
                                 let intro = format!(
                                     "{}  {} stream: b#{} with {} states", // , + {} pairs, - {} pairs",
                                     self.config.pair_tag,
-                                    self.config.network_name.as_str().to_string(),
+                                    self.config.network_name.as_str(),
                                     msg.block_number,
                                     msg.states.len()
                                 );
