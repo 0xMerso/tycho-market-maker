@@ -200,6 +200,10 @@ pub async fn fetch_wallet_state(config: MarketMakerConfig, _env: EnvConfig) {
 /// @return Result<TransactionReceipt, String>: Receipt or error
 /// =============================================================================
 pub async fn fetch_receipt(rpc: String, hash: String) -> Result<TransactionReceipt, String> {
+    // If it doesn't contain 0x, return error
+    if !hash.starts_with("0x") {
+        return Err(format!("Invalid transaction hash: {}", hash));
+    }
     let provider = ProviderBuilder::new().on_http(rpc.clone().parse().expect("Failed to parse RPC_URL"));
     match provider.get_transaction_receipt(hash.parse().unwrap()).await {
         Ok(receipt) => match receipt {

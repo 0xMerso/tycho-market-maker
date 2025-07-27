@@ -238,6 +238,13 @@ impl MarketMakerConfig {
             }
         }
 
+        // Check if skip_simulation is enabled on mainnet (not yet implemented)
+        if let NetworkName::Ethereum = NetworkName::from_str(&self.network_name).unwrap() {
+            if !self.skip_simulation {
+                return Err(ConfigError::Config("skip_simulation must be true on mainnet".into()));
+            }
+        }
+
         Ok(())
     }
 

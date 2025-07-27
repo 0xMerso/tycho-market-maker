@@ -126,15 +126,10 @@ pub trait ExecStrategy: Send + Sync {
         tracing::info!("Saving trades for instance identifier: {}", identifier);
         if config.publish_events {
             for trade in trades {
-                if trade.metadata.status != TradeStatus::BroadcastSucceeded {
-                    tracing::error!("Trade not broadcasted, skipping post-exec hook");
-                    continue;
-                } else {
-                    let _ = crate::data::r#pub::trade(NewTradeMessage {
-                        identifier: identifier.clone(), // Use passed identifier for trade tracking
-                        data: trade.metadata.clone(),
-                    });
-                }
+                let _ = crate::data::r#pub::trade(NewTradeMessage {
+                    identifier: identifier.clone(), // Use passed identifier for trade tracking
+                    data: trade.metadata.clone(),
+                });
             }
         }
     }

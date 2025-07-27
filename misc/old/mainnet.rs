@@ -10,7 +10,6 @@ use async_trait::async_trait;
 use std::str::FromStr;
 
 use alloy::{
-    network::{NetworkWallet, TransactionBuilder, TxSignerSync},
     providers::{Provider, ProviderBuilder},
     rpc::types::mev::EthSendBundle,
     signers::local::PrivateKeySigner,
@@ -101,7 +100,12 @@ impl ExecStrategy for MainnetExec {
             return Ok(results);
         }
 
-        for (_x, trade) in prepared.iter().enumerate() {
+        for (x, tx) in prepared.iter().enumerate() {
+            if x > 0 {
+                tracing::info!("Executing only one transaction for now");
+                break;
+            }
+
             let bnum = provider.get_block_number().await.expect("Failed to get block number");
             let target_block = bnum + mmc.inclusion_block_delay;
             tracing::info!(
@@ -113,28 +117,20 @@ impl ExecStrategy for MainnetExec {
             );
 
             // Add swap to bundle
+            let revertability = false;
             let mut bd = BroadcastData::default();
             let time = std::time::SystemTime::now();
+
             let now = std::time::SystemTime::now();
             let broadcasted_at_ms = now.duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis();
             bd.broadcasted_at_ms = broadcasted_at_ms;
 
             // --- NEW ---
-            match trade.swap.clone().build(&signer).await {
-                Ok(tx) => {
-                    let hash = tx.tx_hash().to_string();
-                    tracing::info!("{}: Expected hash: {:?}", self.name(), hash);
-                    bd.hash = hash;
-                }
-                Err(e) => {
-                    tracing::error!("{}: Failed to build transaction: {:?}", self.name(), e);
-                }
-            }
 
             let mut txs = vec![];
-            match provider.encode_request(trade.swap.clone()).await {
+            match provider.encode_request(tx.swap.clone()).await {
                 Ok(swap) => {
-                    if let Some(approval) = &trade.approve {
+                    if let Some(approval) = &tx.approve {
                         match provider.encode_request(approval.clone()).await {
                             Ok(approval) => {
                                 txs.push(approval);
@@ -153,7 +149,7 @@ impl ExecStrategy for MainnetExec {
                     return Err(msg.clone());
                 }
             }
-            let responses = provider
+            match provider
                 .send_eth_bundle(
                     EthSendBundle {
                         txs,
@@ -165,25 +161,64 @@ impl ExecStrategy for MainnetExec {
                     },
                     &endpoints,
                 )
-                .await;
+                .await
+            {
+                Ok(responses) => {
+                    tracing::info!("{}: Bundle sent successfully ({})", self.name(), responses[0].bundle_hash);
+                }
+                Err(e) => {
+                    tracing::error!("{}: Failed to send bundle: {:?}", self.name(), e);
+                    bd.broadcast_error = Some(format!("Failed to send bundle: {:?}", e));
+                }
+            }
 
-            // let endpoints = endpoints.iter().map(|e| e.clone()).collect::<Vec<_>>();
-            tracing::info!("Bundle sent successfully. Got {} responses", responses.len());
-            for (_x, response) in responses.iter().enumerate() {
-                let took = time.elapsed().unwrap_or_default().as_millis();
-                bd.broadcasted_took_ms = took;
-                match response {
-                    Ok(response) => {
-                        tracing::info!("    =>  Bundle sent successfully ({})", response.bundle_hash);
-                        // bd.hash = response.bundle_hash.to_string();
+            // --- OLD ---
+            let mut bundle = vec![];
+
+            // Add approval to bundle if it exists
+            if let Some(approval) = &tx.approve {
+                match provider.build_bundle_item(approval.clone(), false).await {
+                    Ok(approval) => {
+                        bundle.push(approval);
                     }
                     Err(e) => {
-                        tracing::warn!("    =>  Failed to send bundle: {:?}", e);
-                        // bd.broadcast_error = Some(format!("Failed to send bundle: {:?}", e));
+                        tracing::error!("{}: Failed to build approval bundle item: {:?}", self.name(), e.to_string());
+                        return Err(format!("Failed to build approval bundle item: {:?}", e.to_string()));
                     }
                 }
             }
-            results.push(bd);
+            match provider.build_bundle_item(tx.swap.clone(), revertability).await {
+                Ok(swap) => {
+                    bundle.push(swap);
+                    let bundle = alloy::rpc::types::mev::SendBundleRequest {
+                        bundle_body: bundle,
+                        inclusion: alloy::rpc::types::mev::Inclusion::at_block(target_block),
+                        ..Default::default()
+                    };
+                    match provider.send_mev_bundle(bundle, bsigner.clone()).await {
+                        Ok(response) => {
+                            tracing::info!("{}: Bundle sent successfully ({})", self.name(), response.bundle_hash);
+                            let took = time.elapsed().unwrap_or_default().as_millis();
+                            bd.broadcasted_took_ms = took;
+                            bd.hash = response.bundle_hash.to_string();
+                        }
+                        Err(e) => {
+                            tracing::error!("{}: Failed to send bundle: {:?}", self.name(), e);
+                            let took = time.elapsed().unwrap_or_default().as_millis();
+                            bd.broadcasted_took_ms = took;
+                            bd.broadcast_error = Some(format!("Failed to send bundle: {:?}", e));
+                        }
+                    }
+
+                    // Get receipt of bundle hash
+
+                    results.push(bd);
+                }
+                Err(e) => {
+                    tracing::error!("{}: Failed to build swap bundle item: {:?}", self.name(), e);
+                    return Err(format!("Failed to build swap bundle item: {:?}", e));
+                }
+            }
         }
 
         Ok(results)

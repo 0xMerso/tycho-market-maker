@@ -410,7 +410,7 @@ impl IMarketMaker for MarketMaker {
                     let gas_cost_usd = gas_cost_eth * context.eth_to_usd;
                     let gas_cost_in_output = if base_to_quote { gas_cost_eth / context.quote_to_eth } else { gas_cost_eth / context.base_to_eth };
                     tracing::info!(
-                        "   => Swap: {:.5} {} for {:.5} {} | Gas cost : {:.5} $ | Gas cost in output: {:.2} %",
+                        "   => Swap: {:.5} {} for {:.5} {} | Gas cost : {:.5} $ | Gas cost in output: {:.5} %",
                         selling_amount,
                         selling.symbol,
                         amount_out_normalized,
@@ -669,7 +669,7 @@ impl IMarketMaker for MarketMaker {
                             Ok(msg) => {
                                 let time = std::time::SystemTime::now();
                                 let intro = format!(
-                                    "{} {} stream: b#{} with {} states", // , + {} pairs, - {} pairs",
+                                    "{}  {} stream: b#{} with {} states", // , + {} pairs, - {} pairs",
                                     self.config.pair_tag,
                                     self.config.network_name.as_str().to_string(),
                                     msg.block_number,
