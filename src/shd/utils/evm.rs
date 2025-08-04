@@ -22,13 +22,23 @@ use crate::types::sol::IERC20;
 /// =============================================================================
 
 /// =============================================================================
+/// @function: create_provider
+/// @description: Create an HTTP provider instance from RPC URL
+/// @param rpc: RPC endpoint URL as string
+/// @return RootProvider<Http<Client>>: Configured provider instance
+/// =============================================================================
+pub fn create_provider(rpc: &str) -> RootProvider<Http<Client>> {
+    ProviderBuilder::new().on_http(rpc.parse().expect("Failed to parse RPC URL"))
+}
+
+/// =============================================================================
 /// @function: latest
 /// @description: Retrieve the latest block number from the specified RPC endpoint
 /// @param provider: RPC endpoint URL as string
 /// @return u64: Latest block number (returns 0 if failed)
 /// =============================================================================
 pub async fn latest(provider: String) -> u64 {
-    let provider = ProviderBuilder::new().on_http(provider.parse().unwrap());
+    let provider = create_provider(&provider);
     provider.get_block_number().await.unwrap_or_default()
 }
 
@@ -39,7 +49,7 @@ pub async fn latest(provider: String) -> u64 {
 /// @return u128: Current gas price in wei (returns 0 if failed)
 /// =============================================================================
 pub async fn gas_price(provider: String) -> u128 {
-    let provider = ProviderBuilder::new().on_http(provider.parse().unwrap());
+    let provider = create_provider(&provider);
     provider.get_gas_price().await.unwrap_or_default()
 }
 
@@ -50,7 +60,7 @@ pub async fn gas_price(provider: String) -> u128 {
 /// @return Result<Eip1559Estimation, String>: EIP-1559 fee estimation or error
 /// =============================================================================
 pub async fn eip1559_fees(provider: String) -> Result<Eip1559Estimation, String> {
-    let provider = ProviderBuilder::new().on_http(provider.parse().unwrap());
+    let provider = create_provider(&provider);
 
     match provider.estimate_eip1559_fees(None).await {
         Ok(fees) => Ok(fees),
@@ -101,7 +111,7 @@ pub async fn balances(provider: &RootProvider<Http<Client>>, owner: String, toke
 /// @return Result<u128, String>: Allowance amount in wei or error
 /// =============================================================================
 pub async fn allowance(rpc: String, owner: String, spender: String, token: String) -> Result<u128, String> {
-    let provider = ProviderBuilder::new().on_http(rpc.clone().parse().expect("Failed to parse RPC_URL"));
+    let provider = create_provider(&rpc);
     let client = Arc::new(provider);
     let contract = IERC20::new(token.parse().unwrap(), client.clone());
     match contract.allowance(owner.parse().unwrap(), spender.parse().unwrap()).call().await {
@@ -180,8 +190,8 @@ pub async fn approve(mmc: MarketMakerConfig, env: EnvConfig, spender: String, to
 /// - Gets current nonce for transaction ordering
 /// - Logs wallet state for debugging
 /// =============================================================================
-pub async fn fetch_wallet_state(config: MarketMakerConfig, _env: EnvConfig) {
-    let provider = ProviderBuilder::new().on_http(config.rpc_url.clone().parse().expect("Failed to parse RPC_URL"));
+pub async fn fetch_wallet_state(config: MarketMakerConfig) {
+    let provider = create_provider(&config.rpc_url);
     let tokens = vec![config.base_token_address.clone(), config.quote_token_address.clone()];
     if let Ok(balances) = balances(&provider, config.wallet_public_key.clone(), tokens.clone()).await {
         tracing::debug!("Balances of sender {}: {:?}", config.wallet_public_key.clone(), balances);
@@ -204,7 +214,7 @@ pub async fn fetch_receipt(rpc: String, hash: String) -> Result<TransactionRecei
     if !hash.starts_with("0x") {
         return Err(format!("Invalid transaction hash: {}", hash));
     }
-    let provider = ProviderBuilder::new().on_http(rpc.clone().parse().expect("Failed to parse RPC_URL"));
+    let provider = create_provider(&rpc);
     match provider.get_transaction_receipt(hash.parse().unwrap()).await {
         Ok(receipt) => match receipt {
             Some(receipt) => Ok(receipt),

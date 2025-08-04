@@ -120,7 +120,7 @@ pub trait IMarketMaker: Send + Sync {
     /// @param env: Environment configuration
     /// @return Solution: Tycho solution
     /// =============================================================================
-    fn build_tycho_solution(&self, order: ExecutionOrder, env: EnvConfig) -> Solution;
+    fn build_tycho_solution(&self, order: ExecutionOrder) -> Solution;
 
     /// =============================================================================
     /// @function: trade_tx_request
@@ -132,7 +132,7 @@ pub trait IMarketMaker: Send + Sync {
     /// @param env: Environment configuration
     /// @return Result<TradeTxRequest, String>: Transaction request or error
     /// =============================================================================
-    fn trade_tx_request(&self, solution: Solution, encoded: Transaction, context: MarketContext, inventory: Inventory, env: EnvConfig) -> Result<TradeTxRequest, String>;
+    fn trade_tx_request(&self, solution: Solution, encoded: Transaction, context: MarketContext, inventory: Inventory) -> Result<TradeTxRequest, String>;
 
     /// =============================================================================
     /// @function: prepare

@@ -475,7 +475,7 @@ impl IMarketMaker for MarketMaker {
     /// @param order: Execution order containing adjustment and calculation data
     /// @param _env: Environment configuration (unused but kept for future use)
     /// @return Solution: Tycho solution struct for execution
-    fn build_tycho_solution(&self, order: ExecutionOrder, _env: EnvConfig) -> Solution {
+    fn build_tycho_solution(&self, order: ExecutionOrder) -> Solution {
         let split = 0.;
         let input = order.adjustment.selling.address;
         let output = order.adjustment.buying.address;
@@ -520,7 +520,7 @@ impl IMarketMaker for MarketMaker {
     /// @param inventory: Current inventory state
     /// @param _env: Environment configuration (unused but kept for future use)
     /// @return Result<EncodedTx, String>: Prepared transaction with optional approval and swap
-    fn trade_tx_request(&self, solution: Solution, tx: Transaction, context: MarketContext, inventory: Inventory, _env: EnvConfig) -> Result<TradeTxRequest, String> {
+    fn trade_tx_request(&self, solution: Solution, tx: Transaction, context: MarketContext, inventory: Inventory) -> Result<TradeTxRequest, String> {
         let max_priority_fee_per_gas = context.max_priority_fee_per_gas; // 1 Gwei, not suited for L2s.
         let max_fee_per_gas = context.max_fee_per_gas;
 
@@ -577,7 +577,7 @@ impl IMarketMaker for MarketMaker {
         }
         let (_, _, chain) = crate::maker::tycho::chain(self.config.network_name.as_str().to_string()).unwrap();
         let mut output: Vec<Trade> = vec![];
-        let solutions = orders.iter().map(|order| self.build_tycho_solution(order.clone(), env.clone())).collect::<Vec<Solution>>();
+        let solutions = orders.iter().map(|order| self.build_tycho_solution(order.clone())).collect::<Vec<Solution>>();
         let encoder = EVMEncoderBuilder::new().chain(chain).initialize_tycho_router_with_permit2(env.wallet_private_key.clone());
         match encoder {
             Ok(encoder) => match encoder.build() {
@@ -588,7 +588,7 @@ impl IMarketMaker for MarketMaker {
                             let solution = &solutions[i];
                             let transaction = &transactions[i];
                             let metadata = tdata[i].clone();
-                            match self.trade_tx_request(solution.clone(), transaction.clone(), context.clone(), inventory.clone(), env.clone()) {
+                            match self.trade_tx_request(solution.clone(), transaction.clone(), context.clone(), inventory.clone()) {
                                 Ok(encoded_tx) => {
                                     output.push(Trade {
                                         approve: encoded_tx.approve,

@@ -108,7 +108,7 @@ pub trait ExecStrategy: Send + Sync {
     /// @param _config: Market maker configuration (unused parameter)
     /// @behavior: Logs default pre-execution message
     /// =============================================================================
-    async fn pre_hook(&self, _config: &MarketMakerConfig) {
+    async fn pre_hook(&self) {
         tracing::info!("{} default_pre_exec_hook", self.name());
     }
 
@@ -144,7 +144,7 @@ pub trait ExecStrategy: Send + Sync {
     /// @behavior: Orchestrates simulation, broadcasting, and status updates
     /// =============================================================================
     async fn execute(&self, config: MarketMakerConfig, prepared: Vec<Trade>, env: EnvConfig, identifier: String) -> Result<Vec<Trade>, String> {
-        self.pre_hook(&config).await;
+        self.pre_hook().await;
         tracing::info!("{} Executing {} trades", self.name(), prepared.len());
         let mut trades = if config.skip_simulation {
             tracing::info!("🚀 Skipping simulation - direct execution enabled");
@@ -201,7 +201,7 @@ pub trait ExecStrategy: Send + Sync {
         let mut output = vec![];
         for tx in trades.iter() {
             let time = std::time::Instant::now();
-            let simulation_start = std::time::SystemTime::now();
+            let _simulation_start = std::time::SystemTime::now();
             let mut calls = vec![];
             if let Some(approval) = &tx.approve {
                 calls.push(approval.clone());
