@@ -10,12 +10,12 @@ NC='\033[0m'
 # 
 # @description: Main entry point for starting the Tycho Market Maker bot
 # @usage: 
-#   sh ops/maker.sh          # Start market maker in normal mode
-#   sh ops/maker.sh test     # Run tests with verbose output
+#   sh ops/maker.sh <config_name>    # Start market maker with specified config
+#   Example: sh ops/maker.sh base.eth-usdc
 # 
 # @requirements:
 #   - Rust and Cargo must be installed
-#   - Valid TOML configuration file must be specified in CONFIG_PATH
+#   - Valid TOML configuration file must be specified as argument
 #   - Environment variables must be properly configured
 # 
 # @config_files:
@@ -40,48 +40,48 @@ cleanup() {
 # =============================================================================
 # @function: start
 # @description: Main startup function that builds and runs the market maker
-# @param: $1 - Optional "test" argument to run tests instead of the main program
+# @param: $1 - Config name (e.g., "base.eth-usdc")
 # @return: None
 # =============================================================================
 function start() {
+    # Check if config argument is provided
+    if [ -z "$1" ]; then
+        echo -e "${RED}Error: Config argument required${NC}"
+        echo "Usage: sh ops/maker.sh <config_name>"
+        echo "Example: sh ops/maker.sh base.eth-usdc"
+        exit 1
+    fi
+
+    # Set config path
+    CONFIG_PATH="config/$1.toml"
+    
+    # Check if config file exists
+    if [ ! -f "$CONFIG_PATH" ]; then
+        echo -e "${RED}Error: Config file not found: $CONFIG_PATH${NC}"
+        echo "Available configs:"
+        ls config/*.toml | sed 's|config/||' | sed 's|.toml||'
+        exit 1
+    fi
+
     # Set up signal handlers for graceful shutdown
     trap cleanup SIGINT SIGTERM
 
-    if [ "$1" = "test" ]; then
-        # Test mode: Run cargo tests with verbose output
-        export RUST_LOG="off,maker=trace,shd=trace,test=trace"
-        cargo test -- --nocapture
-    else
-        # Production mode: Build and run the market maker
-        echo "Building MarketMaker program (might take a few minutes the first time) ..."
-        cargo build --bin maker
-        if [ $? -ne 0 ]; then
-            echo -e "${RED}Build failed${NC}"
-            exit 1
-        fi
-        echo "Build successful. Executing..."
-
-        # Set logging level for production run
-        export RUST_LOG="off,maker=trace,shd=trace"
-        cargo run --bin maker
-
-        echo "Program has finished or was interrupted."
+    # Build and run the market maker
+    echo "Building MarketMaker program (might take a few minutes the first time) ..."
+    cargo build --bin maker
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}Build failed${NC}"
+        exit 1
     fi
+    echo "Build successful. Executing with config: $CONFIG_PATH"
+
+    # Set logging level for production run
+    export RUST_LOG="off,maker=trace,shd=trace"
+    export CONFIG_PATH="$CONFIG_PATH"
+    cargo run --bin maker
+
+    echo "Program has finished or was interrupted."
 }
-
-# =============================================================================
-# Configuration Selection
-# =============================================================================
-# Uncomment the desired configuration file for your target network/pair:
-
-# Mainnet configurations (production)
-# export CONFIG_PATH="config/mainnet.eth-usdc.toml"
-# export CONFIG_PATH="config/mainnet.usdc-dai.toml"
-# export CONFIG_PATH="config/mainnet.eth-wbtc.toml"
-
-# L2 configurations (testing/development)
-# export CONFIG_PATH="config/base.eth-usdc.toml"
-export CONFIG_PATH="config/unichain.eth-usdc.toml"
 
 # =============================================================================
 # Script Execution

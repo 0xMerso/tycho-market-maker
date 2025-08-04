@@ -17,8 +17,8 @@ explorer_url = "https://uniscan.xyz/"
 tycho_api = "tycho-unichain-beta.propellerheads.xyz"
 
 # === Execution ===
-min_watch_spread_bps = 5.0
-min_executable_spread_bps = 1.0
+min_watch_spread_bps = 1.0
+min_executable_spread_bps = 0.0
 max_slippage_pct = 0.0005
 max_inventory_ratio = 0.5
 
@@ -40,7 +40,6 @@ min_publish_timeframe_ms = 12000
 type = "binance"
 source = "https://api.binance.com/api/v3"
 reverse = false
-
 
 # type = "chainlink"                   
 # source = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419"
