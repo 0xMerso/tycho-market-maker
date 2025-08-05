@@ -22,7 +22,12 @@ pub trait PriceFeed: Send + Sync {
 pub struct PriceFeedFactory;
 
 impl PriceFeedFactory {
-    /// Create the appropriate price feed based on configuration
+    /// =============================================================================
+    /// @function: create
+    /// @description: Factory method to create price feed instances based on type string
+    /// @param feed: Price feed type string ("chainlink" or "binance")
+    /// @behavior: Returns boxed trait object of appropriate price feed implementation
+    /// =============================================================================
     pub fn create(feed: &str) -> Box<dyn PriceFeed> {
         let feed = PriceFeedType::from_str(feed);
         match feed {
@@ -44,6 +49,12 @@ pub enum PriceFeedType {
 }
 
 impl PriceFeedType {
+    /// =============================================================================
+    /// @function: from_str
+    /// @description: Parses string to PriceFeedType enum
+    /// @param s: String to parse ("chainlink" or "binance")
+    /// @behavior: Returns corresponding enum variant, panics on unknown type
+    /// =============================================================================
     pub fn from_str(s: &str) -> Self {
         match s {
             "chainlink" => PriceFeedType::Chainlink,
@@ -51,6 +62,11 @@ impl PriceFeedType {
             _ => panic!("Unknown price feed type: {}", s),
         }
     }
+    /// =============================================================================
+    /// @function: as_str
+    /// @description: Converts PriceFeedType enum to string representation
+    /// @behavior: Returns lowercase string representation of the feed type
+    /// =============================================================================
     pub fn as_str(&self) -> &str {
         match self {
             PriceFeedType::Chainlink => "chainlink",
@@ -82,7 +98,13 @@ impl PriceFeed for ChainlinkPriceFeed {
     }
 }
 
-/// Fetch the price of and oracle
+/// =============================================================================
+/// @function: chainlink
+/// @description: Fetches price from a Chainlink oracle contract
+/// @param rpc: RPC endpoint URL for blockchain connection
+/// @param pfeed: Chainlink price feed contract address
+/// @behavior: Calls latestAnswer() and decimals() on oracle, returns normalized price
+/// =============================================================================
 pub async fn chainlink(rpc: String, pfeed: String) -> Result<f64, String> {
     let provider = ProviderBuilder::new().on_http(rpc.parse().unwrap());
     let pfeed: Address = pfeed.clone().parse().unwrap();
@@ -129,7 +151,12 @@ impl PriceFeed for BinancePriceFeed {
     }
 }
 
-/// Fetch the price of a token from Binance
+/// =============================================================================
+/// @function: binance
+/// @description: Fetches token price from Binance API
+/// @param endpoint: Full Binance API endpoint URL with symbol parameter
+/// @behavior: Makes HTTP request to Binance and parses price from JSON response
+/// =============================================================================
 async fn binance(endpoint: String) -> Result<f64, String> {
     let response = reqwest::get(&endpoint).await.map_err(|e| format!("Failed to fetch from Binance: {}", e))?;
     let data: serde_json::Value = response.json().await.map_err(|e| format!("Failed to parse Binance response: {}", e))?;
@@ -150,7 +177,11 @@ pub struct CryptoPrice {
     pub usd: f64,
 }
 
-/// Retrieve eth usd price
+/// =============================================================================
+/// @function: coingecko_eth_usd
+/// @description: Fetches ETH/USD price from CoinGecko API as fallback
+/// @behavior: Queries CoinGecko simple price endpoint and returns ETH price in USD
+/// =============================================================================
 pub async fn coingecko_eth_usd() -> Option<f64> {
     let endpoint = "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd";
     let Ok(response) = reqwest::get(endpoint).await else {

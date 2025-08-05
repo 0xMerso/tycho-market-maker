@@ -54,6 +54,7 @@ function start() {
 
     # Set config path
     CONFIG_PATH="config/$1.toml"
+    SECRET_PATH="config/secrets/.env.$1"
     
     # Check if config file exists
     if [ ! -f "$CONFIG_PATH" ]; then
@@ -78,6 +79,7 @@ function start() {
     # Set logging level for production run
     export RUST_LOG="off,maker=trace,shd=trace"
     export CONFIG_PATH="$CONFIG_PATH"
+    export SECRET_PATH="$SECRET_PATH"
     cargo run --bin maker
 
     echo "Program has finished or was interrupted."

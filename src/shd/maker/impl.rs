@@ -40,9 +40,12 @@ use tycho_simulation::{
 
 use alloy_primitives::Bytes as AlloyBytes;
 
-// Impl print for MarketContext
-// Implemented here for tracing/log purposes, prefix path has to be maker.rs file
 impl MarketContext {
+    /// =============================================================================
+    /// @function: print
+    /// @description: Prints market context data for debugging purposes
+    /// @behavior: Logs all market context values including prices, gas fees, and block number
+    /// =============================================================================
     pub fn print(&self) {
         tracing::info!(
             "Market Context: Base to ETH: {:.6} | Quote to ETH: {:.6} | ETH to USD: {:.2} | Max Fee per Gas: {} | Max Priority Fee per Gas: {} | Native Gas Price: {} | Block: {:?}",
@@ -61,10 +64,20 @@ impl MarketContext {
 impl IMarketMaker for MarketMaker {
     /// Market Maker main functions
 
+    /// =============================================================================
+    /// @function: fetch_market_price
+    /// @description: Fetches current market price from configured price feed
+    /// @behavior: Delegates to the configured price feed (Chainlink, Binance, etc.)
+    /// =============================================================================
     async fn fetch_market_price(&self) -> Result<f64, String> {
         self.feed.get(self.config.clone()).await
     }
 
+    /// =============================================================================
+    /// @function: fetch_eth_usd
+    /// @description: Fetches ETH/USD price for gas cost calculations
+    /// @behavior: Uses Chainlink oracle if configured, falls back to CoinGecko or default value
+    /// =============================================================================
     async fn fetch_eth_usd(&self) -> Result<f64, String> {
         if self.config.gas_token_chainlink_price_feed.is_empty() {
             tracing::warn!("No gas oracle feed found, using Coingecko");
@@ -78,7 +91,12 @@ impl IMarketMaker for MarketMaker {
         super::feed::chainlink(self.config.rpc_url.clone(), self.config.gas_token_chainlink_price_feed.clone()).await
     }
 
-    /// Get the prices of the components
+    /// =============================================================================
+    /// @function: prices
+    /// @description: Calculates spot prices for all protocol components (pools)
+    /// @param psc: Vector of protocol simulation components
+    /// @behavior: Returns spot price for base/quote pair in each component
+    /// =============================================================================
     fn prices(&self, psc: &Vec<ProtoSimComp>) -> Vec<ComponentPriceData> {
         let mut ss = Vec::new();
         for proto in psc.iter() {
@@ -106,10 +124,12 @@ impl IMarketMaker for MarketMaker {
         ss
     }
 
-    /// Token inventory balances and metadata
-    /// Might take some delay to get the balances which is an problem to deal with later
-    /// Should be stored in memory and updated after each readjustment only
+    /// =============================================================================
+    /// @function: fetch_inventory
+    /// @description: Fetches current wallet token balances and nonce
     /// @param _env: Environment configuration (unused but kept for future use)
+    /// @behavior: Queries blockchain for base/quote token balances and transaction nonce
+    /// =============================================================================
     async fn fetch_inventory(&self, _env: EnvConfig) -> Result<Inventory, String> {
         let provider = ProviderBuilder::new().on_http(self.config.rpc_url.clone().parse().expect("Failed to parse RPC_URL"));
         let tokens = [self.base.clone(), self.quote.clone()];
@@ -142,11 +162,14 @@ impl IMarketMaker for MarketMaker {
         }
     }
 
-    /// @param components: list of ALL components, used to find the path than can be multi hop
-    /// @param tokens: list of ALL tokens
-    /// Fetch base/ETH and quote/ETH spot prices
-    /// Fetch ETH/USD
-    /// ! Compute base/USD and quote/USD, based on a arbitrary path ! Just a valid path !
+    /// =============================================================================
+    /// @function: fetch_market_context
+    /// @description: Fetches market context including base/ETH, quote/ETH, and ETH/USD prices
+    /// @param components: List of all protocol components
+    /// @param protosims: Map of protocol simulation components
+    /// @param tokens: List of all tokens
+    /// @behavior: Computes base/USD and quote/USD prices based on a valid routing path
+    /// =============================================================================
     async fn fetch_market_context(&self, components: Vec<ProtocolComponent>, protosims: &HashMap<std::string::String, Box<dyn ProtocolSim>>, tokens: Vec<Token>) -> Option<MarketContext> {
         let time = std::time::SystemTime::now();
         match crate::utils::evm::eip1559_fees(self.config.rpc_url.clone()).await {
@@ -217,7 +240,12 @@ impl IMarketMaker for MarketMaker {
         }
     }
 
-    /// Create simple trade data from execution order and market context
+    /// =============================================================================
+    /// @function: pre_trade_data
+    /// @description: Creates simple trade data from execution order and market context
+    /// @param order: Execution order
+    /// @behavior: Returns PreTradeData struct with trade details
+    /// =============================================================================
     fn pre_trade_data(&self, order: &ExecutionOrder) -> PreTradeData {
         PreTradeData {
             pool: order.adjustment.psc.component.id.to_string(),
@@ -234,8 +262,14 @@ impl IMarketMaker for MarketMaker {
         }
     }
 
-    // Evaluate if given pools are out of range (= require intervention)
-    // Targets are the pools to monitor, nothing more
+    /// =============================================================================
+    /// @function: evaluate
+    /// @description: Evaluates if given pools are out of range (= require intervention)
+    /// @param targets: Pools to monitor
+    /// @param sps: Spot prices
+    /// @param reference: Reference price
+    /// @behavior: Returns vector of readjustment orders if pools are out of range
+    /// =============================================================================
     fn evaluate(&self, targets: &Vec<ProtoSimComp>, sps: Vec<f64>, reference: f64) -> Vec<CompReadjustment> {
         let mut orders = vec![];
         if sps.is_empty() || (targets.len() != sps.len()) {
@@ -288,11 +322,15 @@ impl IMarketMaker for MarketMaker {
         orders
     }
 
-    /// Process readjustment orders
-    /// Questions, given that there might be multiple readjustments to do:
-    /// - How to allocate the size of each readjustment, they are dependent on ea
-    /// ch other
-    /// "Optimal swap is to swap until marginal price + fee = market price"
+    /// =============================================================================
+    /// @function: readjust
+    /// @description: Performs inventory rebalancing based on spread opportunities
+    /// @param context: Current market context with prices and gas
+    /// @param inventory: Current wallet inventory
+    /// @param adjustments: Pool adjustment opportunities
+    /// @param env: Environment configuration
+    /// @behavior: Calculates optimal trade sizes and validates profitability after gas costs
+    /// =============================================================================
     async fn readjust(&self, context: MarketContext, inventory: Inventory, mut adjustments: Vec<CompReadjustment>, env: EnvConfig) -> Vec<ExecutionOrder> {
         adjustments.sort_by(|a, b| a.spread_bps.partial_cmp(&b.spread_bps).unwrap_or(std::cmp::Ordering::Equal));
         let mut orders = vec![];
@@ -471,10 +509,12 @@ impl IMarketMaker for MarketMaker {
         orders
     }
 
-    /// Build a Tycho Solution struct, for the given order
+    /// =============================================================================
+    /// @function: build_tycho_solution
+    /// @description: Builds Tycho solution struct for given execution order
     /// @param order: Execution order containing adjustment and calculation data
-    /// @param _env: Environment configuration (unused but kept for future use)
-    /// @return Solution: Tycho solution struct for execution
+    /// @behavior: Creates Tycho solution struct with proper swap details
+    /// =============================================================================
     fn build_tycho_solution(&self, order: ExecutionOrder) -> Solution {
         let split = 0.;
         let input = order.adjustment.selling.address;
@@ -512,14 +552,15 @@ impl IMarketMaker for MarketMaker {
         }
     }
 
-    /// Convert a solution to a transaction payload
-    /// Build approval transaction only if infinite_approval is false
-    /// @param solution: Tycho solution struct
-    /// @param tx: Transaction data
-    /// @param context: Market context with gas prices and block info
+    /// =============================================================================
+    /// @function: trade_tx_request
+    /// @description: Builds transaction request for trade execution
+    /// @param solution: Tycho solution containing swap details
+    /// @param tx: Transaction data from encoder
+    /// @param context: Market context with gas prices
     /// @param inventory: Current inventory state
-    /// @param _env: Environment configuration (unused but kept for future use)
-    /// @return Result<EncodedTx, String>: Prepared transaction with optional approval and swap
+    /// @behavior: Creates transaction with proper gas settings and optional approval
+    /// =============================================================================
     fn trade_tx_request(&self, solution: Solution, tx: Transaction, context: MarketContext, inventory: Inventory) -> Result<TradeTxRequest, String> {
         let max_priority_fee_per_gas = context.max_priority_fee_per_gas; // 1 Gwei, not suited for L2s.
         let max_fee_per_gas = context.max_fee_per_gas;
@@ -569,7 +610,16 @@ impl IMarketMaker for MarketMaker {
         Ok(TradeTxRequest { approve: approval, swap })
     }
 
-    /// Entrypoint for executing the orders
+    /// =============================================================================
+    /// @function: prepare
+    /// @description: Prepares execution orders for on-chain submission
+    /// @param orders: Vector of execution orders to process
+    /// @param tdata: Trade data for each order
+    /// @param context: Current market context
+    /// @param inventory: Current wallet inventory
+    /// @param env: Environment configuration
+    /// @behavior: Encodes orders into transactions and prepares them for execution
+    /// =============================================================================
     fn prepare(&self, orders: Vec<ExecutionOrder>, tdata: Vec<TradeData>, context: MarketContext, inventory: Inventory, env: EnvConfig) -> Vec<Trade> {
         tracing::debug!(">>>>>>> Preparing the execution of {} trades <<<<<<<", orders.len());
         unsafe {
@@ -617,7 +667,13 @@ impl IMarketMaker for MarketMaker {
         output
     }
 
-    /// Monitor the ProtocolStreamBuilder for new pairs and updates, evaluate if MM bot has opportunities
+    /// =============================================================================
+    /// @function: run
+    /// @description: Main market maker runtime loop that monitors pools and executes trades
+    /// @param mtx: Shared state containing protocol components and tokens
+    /// @param env: Environment configuration
+    /// @behavior: Streams protocol updates, evaluates opportunities, and executes profitable trades
+    /// =============================================================================
     async fn run(&mut self, mtx: SharedTychoStreamState, env: EnvConfig) {
         let mut last_publish = std::time::Instant::now() - std::time::Duration::from_millis(self.config.min_publish_timeframe_ms);
         let mut last_poll = std::time::Instant::now() - std::time::Duration::from_millis(self.config.poll_interval_ms);
@@ -847,7 +903,6 @@ impl IMarketMaker for MarketMaker {
                     return;
                 }
             };
-            // End
         }
     }
 }

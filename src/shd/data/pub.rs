@@ -5,7 +5,12 @@ use redis::Commands;
 use serde::Serialize;
 use serde_json;
 
-/// Generic function to publish any serializable message to Redis pubsub
+/// =============================================================================
+/// @function: publish
+/// @description: Generic function to publish any serializable message to Redis pubsub
+/// @param event: Any serializable event to publish to Redis channel
+/// @behavior: Serializes the event to JSON and publishes it to CHANNEL_REDIS
+/// =============================================================================
 pub fn publish<T: Serialize>(event: &T) -> Result<(), String> {
     let start_time = std::time::SystemTime::now();
 
@@ -37,6 +42,11 @@ pub fn publish<T: Serialize>(event: &T) -> Result<(), String> {
     }
 }
 
+/// =============================================================================
+/// @function: ping
+/// @description: Publishes a ping message to verify Redis connectivity and health
+/// @behavior: Creates a Ping message type and publishes it to the Redis channel
+/// =============================================================================
 pub fn ping() -> Result<(), String> {
     let message = RedisMessage {
         message: MessageType::Ping,
@@ -46,7 +56,12 @@ pub fn ping() -> Result<(), String> {
     publish(&message)
 }
 
-/// Publish a new instance launch event (for market_maker instances)
+/// =============================================================================
+/// @function: instance
+/// @description: Publishes a new market maker instance creation event
+/// @param msg: NewInstanceMessage containing instance configuration and metadata
+/// @behavior: Wraps the message in RedisMessage and publishes to monitoring system
+/// =============================================================================
 pub fn instance(msg: NewInstanceMessage) -> Result<(), String> {
     let message = RedisMessage {
         message: MessageType::NewInstance,
@@ -56,7 +71,12 @@ pub fn instance(msg: NewInstanceMessage) -> Result<(), String> {
     publish(&message)
 }
 
-/// Publish a trade event (flexible version that doesn't require database trade model)
+/// =============================================================================
+/// @function: prices
+/// @description: Publishes price update events from the market maker
+/// @param msg: NewPricesMessage containing latest price information
+/// @behavior: Wraps price data in RedisMessage and publishes for monitoring
+/// =============================================================================
 pub fn prices(msg: NewPricesMessage) -> Result<(), String> {
     let message = RedisMessage {
         message: MessageType::NewPrices,
@@ -66,7 +86,12 @@ pub fn prices(msg: NewPricesMessage) -> Result<(), String> {
     publish(&message)
 }
 
-/// Publish a trade event (flexible version that doesn't require database trade model)
+/// =============================================================================
+/// @function: trade
+/// @description: Publishes trade execution events from the market maker
+/// @param msg: NewTradeMessage containing trade details and execution information
+/// @behavior: Wraps trade data in RedisMessage and publishes for monitoring and analysis
+/// =============================================================================
 pub fn trade(msg: NewTradeMessage) -> Result<(), String> {
     let message = RedisMessage {
         message: MessageType::NewTrade,

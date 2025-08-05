@@ -167,10 +167,11 @@ async fn initialize() -> Result<()> {
     tracing_subscriber::fmt().with_max_level(Level::TRACE).with_env_filter(filter).init();
 
     // Load secrets from environment-specific file
-    let path = std::env::var("CONFIG_PATH").unwrap();
-    let path = path.replace(".toml", "");
-    let path = path.replace("config/", "");
-    let secrets = format!("config/secrets/.env.{}", path);
+    // let path = std::env::var("CONFIG_PATH").unwrap();
+    let path = std::env::var("SECRET_PATH").unwrap();
+    // let path = path.replace(".toml", "");
+    // let path = path.replace("config/", "");
+    let secrets = path;
     tracing::info!("Loading secrets from: {}", secrets);
 
     // Load environment variables and validate configuration

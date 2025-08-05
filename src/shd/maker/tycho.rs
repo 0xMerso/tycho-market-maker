@@ -25,7 +25,12 @@ pub type ChainCommon = tycho_common::dto::Chain;
 pub type ChainSimCore = tycho_simulation::tycho_core::dto::Chain;
 pub type ChainSimu = tycho_simulation::evm::tycho_models::Chain;
 
-/// Return the chains types for a given network name
+/// =============================================================================
+/// @function: chain
+/// @description: Maps network name to corresponding chain type tuples from different libraries
+/// @param name: Network name string ("ethereum", "base", "unichain")
+/// @behavior: Returns tuple of chain types or None if network is unsupported
+/// =============================================================================
 pub fn chain(name: String) -> Option<(ChainCommon, ChainSimCore, ChainSimu)> {
     match name.as_str() {
         "ethereum" => Some((ChainCommon::Ethereum, ChainSimCore::Ethereum, ChainSimu::Ethereum)),
@@ -38,7 +43,12 @@ pub fn chain(name: String) -> Option<(ChainCommon, ChainSimCore, ChainSimu)> {
     }
 }
 
-/// Get the Alloy chain based on the network name
+/// =============================================================================
+/// @function: get_alloy_chain
+/// @description: Converts network name to Alloy's NamedChain enum
+/// @param network: Network name string to convert
+/// @behavior: Maps network names to NamedChain variants, returns error for unsupported networks
+/// =============================================================================
 pub fn get_alloy_chain(network: String) -> Result<NamedChain, String> {
     match network.as_str() {
         "ethereum" => Ok(NamedChain::Mainnet),
@@ -51,12 +61,12 @@ pub fn get_alloy_chain(network: String) -> Result<NamedChain, String> {
     }
 }
 
-/// Converts a native fee (as a hex string) into a byte vector representing fee in basis points.
-/// The conversion depends on the protocol type:
-/// - uniswap_v2_pool: fee is already in basis points (e.g., "0x1e" → 30)
-/// - uniswap_v3_pool or uniswap_v4_pool: fee is stored on a 1e6 scale (so 3000 → 30 bps, i.e. divide by 100)
-/// - curve: fee is stored on a pow10 scale (e.g., 4000000 becomes 4 bps, so divide by 1_000_000)
-/// - balancer_v2_pool: fee is stored on a pow18 scale (e.g., 1*10^15 becomes 10 bps, so divide by 1e14)
+/// =============================================================================
+/// @function: amm_fee_to_bps
+/// @description: Converts AMM protocol fees to basis points based on protocol type
+/// @param cp: ProtocolComponent containing fee information in static_attributes
+/// @behavior: Extracts fee from attributes and converts to basis points using protocol-specific scaling
+/// =============================================================================
 pub fn amm_fee_to_bps(cp: ProtocolComponent) -> u128 {
     let value = cp
         .static_attributes
@@ -77,14 +87,24 @@ pub fn amm_fee_to_bps(cp: ProtocolComponent) -> u128 {
     }
 }
 
-// Just a helper function to print the component name in a custom way
+/// =============================================================================
+/// @function: cpname
+/// @description: Formats protocol component information for readable display
+/// @param cp: ProtocolComponent to format
+/// @behavior: Returns formatted string with truncated ID, protocol system, and fee in bps
+/// =============================================================================
 pub fn cpname(cp: ProtocolComponent) -> String {
     let fee = amm_fee_to_bps(cp.clone());
     let addr: String = cp.id.to_string().chars().take(7).collect();
     format!("[{} {:>15} {:>3}]", addr, cp.protocol_system, fee)
 }
 
-/// Filter out invalid strings from a vector of strings, that are not ASCII
+/// =============================================================================
+/// @function: sanitize
+/// @description: Filters and converts ResponseToken array to valid Token array
+/// @param input: Vector of ResponseToken from API response
+/// @behavior: Removes tokens with invalid symbols, addresses, or control characters
+/// =============================================================================
 fn sanitize(input: Vec<ResponseToken>) -> Vec<Token> {
     let mut tokens = vec![];
     for t in input.iter() {
@@ -112,7 +132,13 @@ fn sanitize(input: Vec<ResponseToken>) -> Vec<Token> {
         .collect()
 }
 
-/// Get the tokens only for the configured strategy
+/// =============================================================================
+/// @function: scope
+/// @description: Fetches only the base and quote tokens configured for the market maker
+/// @param config: Market maker configuration with token addresses
+/// @param key: Optional API key for authentication
+/// @behavior: Retrieves all tokens and filters to only base and quote tokens
+/// =============================================================================
 pub async fn scope(config: MarketMakerConfig, key: Option<&str>) -> Vec<Token> {
     let Some(atks) = tokens(config.clone(), key).await else {
         tracing::error!("Failed to get tokens");
@@ -130,8 +156,14 @@ pub async fn scope(config: MarketMakerConfig, key: Option<&str>) -> Vec<Token> {
         .collect::<Vec<Token>>()
 }
 
-/// Get the tokens from the Tycho API
-/// Filters are hardcoded for now.
+/// =============================================================================
+/// @function: specific
+/// @description: Fetches specific tokens by their addresses from Tycho API
+/// @param mmc: Market maker configuration
+/// @param key: Optional API key for authentication
+/// @param addresses: List of token addresses to fetch
+/// @behavior: Queries Tycho API for specific tokens with quality filter of 100
+/// =============================================================================
 pub async fn specific(mmc: MarketMakerConfig, key: Option<&str>, addresses: Vec<String>) -> Option<Vec<Token>> {
     tracing::info!("Getting tokens for network {}", mmc.network_name.as_str().to_string());
 
@@ -162,8 +194,13 @@ pub async fn specific(mmc: MarketMakerConfig, key: Option<&str>, addresses: Vec<
     }
 }
 
-/// Get the tokens from the Tycho API
-/// Filters are hardcoded for now.
+/// =============================================================================
+/// @function: tokens
+/// @description: Fetches all available tokens from Tycho API for a network
+/// @param mmc: Market maker configuration with network and API settings
+/// @param key: Optional API key for authentication
+/// @behavior: Retrieves all tokens with quality >= 100, traded in last day, max 3000 tokens
+/// =============================================================================
 pub async fn tokens(mmc: MarketMakerConfig, key: Option<&str>) -> Option<Vec<Token>> {
     tracing::info!("Getting tokens for network {}", mmc.network_name.as_str());
 
@@ -189,8 +226,15 @@ pub async fn tokens(mmc: MarketMakerConfig, key: Option<&str>) -> Option<Vec<Tok
     }
 }
 
-/// Get the default protocol stream builder
-/// But any other configuration of ProtocolStreamBuilder can be used
+/// =============================================================================
+/// @function: psb
+/// @description: Creates and configures a ProtocolStreamBuilder for streaming AMM updates
+/// @param mmc: Market maker configuration
+/// @param key: API key for authentication
+/// @param psbc: Protocol stream builder configuration with filters
+/// @param tokens: List of tokens to track
+/// @behavior: Sets up stream for UniswapV2, V3, V4 protocols with provided filters
+/// =============================================================================
 pub async fn psb(mmc: MarketMakerConfig, key: String, psbc: PsbConfig, tokens: Vec<Token>) -> ProtocolStreamBuilder {
     let (_, _, chain) = crate::types::tycho::chain(mmc.network_name.clone().as_str().to_string()).expect("Invalid chain");
     let u4 = uniswap_v4_pool_with_hook_filter;
@@ -223,9 +267,14 @@ pub async fn psb(mmc: MarketMakerConfig, key: String, psbc: PsbConfig, tokens: V
     psb
 }
 
-/// Get the balances of the component in the specified protocol system.
-/// Returns a HashMap of component addresses and their balances.
-/// Balance is returned as a u128, with decimals.
+/// =============================================================================
+/// @function: get_component_balances
+/// @description: Fetches token balances for a specific protocol component (pool)
+/// @param mmc: Market maker configuration
+/// @param cp: Protocol component to query balances for
+/// @param key: API key for authentication
+/// @behavior: Queries protocol state with balances and returns HashMap of address->balance
+/// =============================================================================
 pub async fn get_component_balances(mmc: MarketMakerConfig, cp: ProtocolComponent, key: String) -> Option<HashMap<String, u128>> {
     match HttpRPCClient::new(format!("https://{}", mmc.tycho_api).as_str(), Some(key.as_str())) {
         Ok(client) => {

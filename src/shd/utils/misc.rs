@@ -6,8 +6,11 @@ use std::{
 
 use serde::{de::DeserializeOwned, Serialize};
 
-/// Get the current Git commit hash
-/// Make sure, if running within Docker, git is installed in the Dockerfile
+/// =============================================================================
+/// @function: commit
+/// @description: Gets the current Git commit hash from the repository
+/// @behavior: Executes git rev-parse HEAD and returns commit hash if successful
+/// =============================================================================
 pub fn commit() -> Option<String> {
     let Ok(output) = Command::new("git").args(["rev-parse", "HEAD"]).output() else {
         tracing::error!("Failed to exec git rev-parse");
@@ -24,12 +27,22 @@ pub fn commit() -> Option<String> {
     }
 }
 
-/// Get an environment variable
+/// =============================================================================
+/// @function: get
+/// @description: Retrieves an environment variable value with panic on failure
+/// @param key: Name of the environment variable to retrieve
+/// @behavior: Returns env var value or panics if variable is not found
+/// =============================================================================
 pub fn get(key: &str) -> String {
     std::env::var(key).unwrap_or_else(|_| panic!("Environment variable not found: {}", key))
 }
 
-/// Read a file and return a Vec<T> where T is a deserializable type
+/// =============================================================================
+/// @function: read
+/// @description: Reads and deserializes a JSON file into a vector of type T
+/// @param file: Path to the JSON file to read
+/// @behavior: Opens file, reads contents, and deserializes JSON to Vec<T>
+/// =============================================================================
 pub fn read<T: DeserializeOwned>(file: &str) -> Vec<T> {
     let mut file = File::open(file).unwrap();
     let mut buffer = String::new();
@@ -37,7 +50,13 @@ pub fn read<T: DeserializeOwned>(file: &str) -> Vec<T> {
     serde_json::from_str(&buffer).unwrap()
 }
 
-/// Write output to file
+/// =============================================================================
+/// @function: save
+/// @description: Serializes and saves a vector to a JSON file
+/// @param output: Vector of serializable items to save
+/// @param file: Path to the output file
+/// @behavior: Creates/truncates file, writes JSON data with newline, and flushes
+/// =============================================================================
 pub fn save<T: Serialize>(output: Vec<T>, file: &str) {
     let mut file = OpenOptions::new().create(true).write(true).truncate(true).open(file).expect("Failed to open or create file");
 

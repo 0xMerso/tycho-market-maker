@@ -5,7 +5,12 @@ use crate::{
     utils::constants::HEARTBEAT_DELAY,
 };
 
-/// Send a heartbeat 200 Get
+/// =============================================================================
+/// @function: alive
+/// @description: Sends HTTP GET heartbeat request to check endpoint health
+/// @param endpoint: URL endpoint to send heartbeat request to
+/// @behavior: Returns true if request succeeds, false on error
+/// =============================================================================
 pub async fn alive(endpoint: String) -> bool {
     let client = reqwest::Client::new();
 
@@ -21,9 +26,13 @@ pub async fn alive(endpoint: String) -> bool {
     }
 }
 
-/// Conditional heartbeat, with a dedicated task. Not used for now.
+/// =============================================================================
+/// @function: heartbeats
+/// @description: Spawns background task for periodic heartbeat monitoring
 /// @param _mmc: Market maker configuration (unused but kept for future use)
 /// @param env: Environment configuration containing testing mode and heartbeat endpoint
+/// @behavior: Spawns async task that ticks every HEARTBEAT_DELAY/2 seconds (skipped in testing mode)
+/// =============================================================================
 pub async fn heartbeats(_mmc: MarketMakerConfig, env: EnvConfig) {
     if env.testing {
         tracing::info!("Testing mode, heartbeat task not spawned.");

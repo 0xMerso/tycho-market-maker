@@ -21,28 +21,29 @@ services:
     #   monitor:
     #     condition: service_started
     environment:
-      - RUST_LOG="off,maker=trace,shd=trace,monitor=trace,test=trace"
+      - RUST_LOG="off,maker=trace,shd=trace,test=trace"
       - REDIS_HOST=redis
       - CONFIG_PATH=config/unichain.eth-usdc.toml
+      - SECRET_PATH=config/secrets/.env.unichain.eth-usdc
     restart: always
     networks:
       - tmm
 
-  base-eth-usdc:
-    build: 
-      context: .
-      dockerfile: ops/Dockerfile
-      args:
-        - PROGRAM=maker
-        - BUILD_TYPE=debug #!
-    depends_on: []
-    environment:
-      - RUST_LOG="off,maker=trace,shd=trace,monitor=trace,test=trace"
-      - REDIS_HOST=redis
-      - CONFIG_PATH=config/base.eth-usdc.toml
-    restart: always
-    networks:
-      - tmm
+  # base-eth-usdc:
+  #   build: 
+  #     context: .
+  #     dockerfile: ops/Dockerfile
+  #     args:
+  #       - PROGRAM=maker
+  #       - BUILD_TYPE=debug #!
+  #   depends_on: []
+  #   environment:
+  #     - RUST_LOG="off,maker=trace,shd=trace,monitor=trace,test=trace"
+  #     - REDIS_HOST=redis
+  #     - CONFIG_PATH=config/base.eth-usdc.toml
+  #   restart: always
+  #   networks:
+  #     - tmm
 
   # One monitor for all market maker instances
   monitor:
