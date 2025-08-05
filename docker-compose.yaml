@@ -21,8 +21,8 @@ services:
       monitor: # Important to have the monitor running before the maker, else the publish action will fail
         condition: service_started
     environment:
-      - RUST_LOG=off,maker=trace,shd=trace
       - REDIS_HOST=redis
+      - RUST_LOG=off,maker=trace,shd=trace,monitor=trace
       - CONFIG_PATH=config/unichain.eth-usdc.toml
       - SECRET_PATH=config/secrets/.env.unichain.eth-usdc
     restart: always
@@ -42,8 +42,8 @@ services:
       redis:
         condition: service_healthy
     environment:
-      - RUST_LOG=off,maker=trace,shd=trace,monitor=trace
       - REDIS_HOST=redis
+      - RUST_LOG=off,maker=trace,shd=trace,monitor=trace
     restart: always
     networks:
       - tmm
