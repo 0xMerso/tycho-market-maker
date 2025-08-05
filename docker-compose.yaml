@@ -21,7 +21,7 @@ services:
       monitor: # Important to have the monitor running before the maker, else the publish action will fail
         condition: service_started
     environment:
-      - RUST_LOG="off,maker=trace,shd=trace"
+      - RUST_LOG=off,maker=trace,shd=trace
       - REDIS_HOST=redis
       - CONFIG_PATH=config/unichain.eth-usdc.toml
       - SECRET_PATH=config/secrets/.env.unichain.eth-usdc
@@ -42,7 +42,7 @@ services:
       redis:
         condition: service_healthy
     environment:
-      - RUST_LOG="off,maker=trace,shd=trace,monitor=trace"
+      - RUST_LOG=off,maker=trace,shd=trace,monitor=trace
       - REDIS_HOST=redis
     restart: always
     networks:
@@ -55,13 +55,13 @@ services:
     restart: always
     ports:
       - "42044:42044"
+    command: redis-server --port 42044 --loglevel verbose --save "" --appendonly no
     environment:
       - BUILD_TYPE=debug
       - REDIS_HOST=redis
       - REDIS_PORT=42044
-      - REDIS_ARGS="--loglevel verbose"
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      test: ["CMD-SHELL", "redis-cli -p 42044 ping | grep PONG"]
       interval: 1s
       timeout: 3s
       retries: 5
@@ -77,7 +77,7 @@ services:
   #       - BUILD_TYPE=debug #!
   #   depends_on: []
   #   environment:
-  #     - RUST_LOG="off,maker=trace,shd=trace,monitor=trace,test=trace"
+  #     - RUST_LOG=off,maker=trace,shd=trace,monitor=trace,test=trace
   #     - REDIS_HOST=redis
   #     - CONFIG_PATH=config/base.eth-usdc.toml
   #   restart: always
