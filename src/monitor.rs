@@ -67,7 +67,6 @@ async fn main() {
         }
         Err(err) => {
             tracing::error!("Error fetching configurations from DB: {}", err);
-            tracing::error!("🐘 Make sure Neon has tables, etc. Exiting ...");
             return;
         }
     }

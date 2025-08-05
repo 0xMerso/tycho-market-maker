@@ -53,7 +53,7 @@ services:
       dockerfile: ops/Dockerfile
       args:
         - PROGRAM=monitor
-        - BUILD_TYPE=debug #!
+        - BUILD_TYPE=debug
     depends_on:
       redis:
         condition: service_healthy
