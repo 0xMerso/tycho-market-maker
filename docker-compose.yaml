@@ -15,35 +15,19 @@ services:
         - PROGRAM=maker
         - BUILD_TYPE=debug #!
     depends_on: []
-    # depends_on:
-    #   redis:
-    #     condition: service_healthy
-    #   monitor:
-    #     condition: service_started
+    depends_on:
+      redis:
+        condition: service_healthy
+      monitor: # Important to have the monitor running before the maker, else the publish action will fail
+        condition: service_started
     environment:
-      - RUST_LOG="off,maker=trace,shd=trace,test=trace"
+      - RUST_LOG="off,maker=trace,shd=trace"
       - REDIS_HOST=redis
       - CONFIG_PATH=config/unichain.eth-usdc.toml
       - SECRET_PATH=config/secrets/.env.unichain.eth-usdc
     restart: always
     networks:
       - tmm
-
-  # base-eth-usdc:
-  #   build: 
-  #     context: .
-  #     dockerfile: ops/Dockerfile
-  #     args:
-  #       - PROGRAM=maker
-  #       - BUILD_TYPE=debug #!
-  #   depends_on: []
-  #   environment:
-  #     - RUST_LOG="off,maker=trace,shd=trace,monitor=trace,test=trace"
-  #     - REDIS_HOST=redis
-  #     - CONFIG_PATH=config/base.eth-usdc.toml
-  #   restart: always
-  #   networks:
-  #     - tmm
 
   # One monitor for all market maker instances
   monitor:
@@ -58,7 +42,7 @@ services:
       redis:
         condition: service_healthy
     environment:
-      - RUST_LOG="off,maker=trace,shd=trace,monitor=trace,test=trace"
+      - RUST_LOG="off,maker=trace,shd=trace,monitor=trace"
       - REDIS_HOST=redis
     restart: always
     networks:
@@ -83,3 +67,20 @@ services:
       retries: 5
     networks:
       - tmm
+
+  # base-eth-usdc:
+  #   build: 
+  #     context: .
+  #     dockerfile: ops/Dockerfile
+  #     args:
+  #       - PROGRAM=maker
+  #       - BUILD_TYPE=debug #!
+  #   depends_on: []
+  #   environment:
+  #     - RUST_LOG="off,maker=trace,shd=trace,monitor=trace,test=trace"
+  #     - REDIS_HOST=redis
+  #     - CONFIG_PATH=config/base.eth-usdc.toml
+  #   restart: always
+  #   networks:
+  #     - tmm
+

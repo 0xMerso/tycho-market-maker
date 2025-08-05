@@ -190,11 +190,28 @@ async fn initialize() -> Result<()> {
 
     if config.publish_events {
         tracing::info!("📕  PublishEvent mode enabled. Publishing ping event to make sure Redis and Monitor are running");
-        if let Err(e) = shd::data::r#pub::ping() {
-            tracing::error!("Failed to publish ping event: {}", e);
-            std::process::exit(1);
-        } else {
-            tracing::info!("Ping event published successfully");
+        
+        const MAX_RETRIES: u32 = 5;
+        const RETRY_DELAY_SECS: u64 = 5;
+        
+        let mut retry_count = 0;
+        loop {
+            match shd::data::r#pub::ping() {
+                Ok(_) => {
+                    tracing::info!("Ping event published successfully");
+                    break;
+                }
+                Err(e) => {
+                    retry_count += 1;
+                    if retry_count >= MAX_RETRIES {
+                        tracing::error!("Failed to publish ping event after {} attempts: {}", MAX_RETRIES, e);
+                        std::process::exit(1);
+                    }
+                    tracing::warn!("Failed to publish ping event (attempt {}/{}): {}. Retrying in {} seconds...", 
+                                  retry_count, MAX_RETRIES, e, RETRY_DELAY_SECS);
+                    tokio::time::sleep(tokio::time::Duration::from_secs(RETRY_DELAY_SECS)).await;
+                }
+            }
         }
     }
 
