@@ -55,7 +55,7 @@ services:
     restart: always
     ports:
       - "42044:42044"
-    command: redis-server --port 42044 --loglevel verbose --save "" --appendonly no
+    command: redis-server --port 42044 --save "" --appendonly no --loglevel warning
     environment:
       - BUILD_TYPE=debug
       - REDIS_HOST=redis
