@@ -14,7 +14,7 @@ services:
       args:
         - PROGRAM=maker
         - BUILD_TYPE=debug #!
-    depends_on: []
+    # depends_on: []
     depends_on:
       redis:
         condition: service_healthy
