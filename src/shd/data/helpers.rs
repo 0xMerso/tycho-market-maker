@@ -41,15 +41,18 @@ pub async fn ping() {
 /// =============================================================================
 /// @function: connect
 /// @description: Establishes an async multiplexed connection to Redis server
-/// @behavior: Reads REDIS_HOST from environment or uses default localhost:42044
+/// @behavior: Reads REDIS_HOST and REDIS_PORT from environment or uses defaults
 /// =============================================================================
 pub async fn connect() -> Result<MultiplexedConnection, RedisError> {
-    let endpoint = std::env::var("REDIS_HOST"); // Contain port too
-    let endpoint = match endpoint {
-        Ok(endpoint) => endpoint,
-        Err(_) => "127.0.0.1:42044".to_string(), // ! Default to update ?
+    let host = std::env::var("REDIS_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
+    let port = std::env::var("REDIS_PORT").unwrap_or_else(|_| "42044".to_string());
+    let endpoint = if host.contains(':') {
+        // If host already contains port, use as is
+        format!("redis://{}", host)
+    } else {
+        // Otherwise, combine host and port
+        format!("redis://{}:{}", host, port)
     };
-    let endpoint = format!("redis://{}", endpoint);
     // log::info!("Redis endpoint: {}", endpoint);
     let client = Client::open(endpoint);
     match client {
@@ -67,13 +70,16 @@ pub async fn connect() -> Result<MultiplexedConnection, RedisError> {
 /// @behavior: Reads REDIS_HOST from environment or uses default localhost:42044
 /// =============================================================================
 pub fn pubsub() -> Result<redis::Client, RedisError> {
-    let endpoint = std::env::var("REDIS_HOST"); // Contain port too
-    let endpoint = match endpoint {
-        Ok(endpoint) => endpoint,
-        Err(_) => "127.0.0.1:42044".to_string(), // ! Default to update ?
+    let host = std::env::var("REDIS_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
+    let port = std::env::var("REDIS_PORT").unwrap_or_else(|_| "42044".to_string());
+    let endpoint = if host.contains(':') {
+        // If host already contains port, use as is
+        format!("redis://{}", host)
+    } else {
+        // Otherwise, combine host and port
+        format!("redis://{}:{}", host, port)
     };
-    let endpoint = format!("redis://{}", endpoint);
-    tracing::info!("📕 Pubsub: endpoint: {}", endpoint);
+    tracing::debug!("📕 Pubsub: endpoint: {}", endpoint);
     let client = Client::open(endpoint);
     match client {
         Ok(client) => Ok(client),
