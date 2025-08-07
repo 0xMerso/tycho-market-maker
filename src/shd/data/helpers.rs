@@ -76,7 +76,7 @@ pub fn pubsub() -> Result<redis::Client, RedisError> {
         Err(_) => "127.0.0.1:42044".to_string(),
     };
     let endpoint = format!("redis://{}", endpoint);
-    tracing::debug!("📕 Pubsub: endpoint: {}", endpoint);
+    // tracing::debug!("📕 Pubsub: endpoint: {}", endpoint);
     let client = Client::open(endpoint);
     match client {
         Ok(client) => Ok(client),
