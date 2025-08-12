@@ -1,0 +1,133 @@
+// Success
+{
+    "data": {
+        "status": "BroadcastSucceeded",
+        "context": {
+            "block": 24286521,
+            "eth_to_usd": 4594.12,
+            "base_to_eth": 1,
+            "quote_to_eth": 0.00021765121815877197,
+            "max_fee_per_gas": 4107,
+            "native_gas_price": 1000293,
+            "max_priority_fee_per_gas": 3521
+        },
+        "metadata": {
+            "pool": "0x8927058918e3cff6f55efe45a58db1be1f069e49",
+            "base_token": "USDC",
+            "spot_price": 4594.5067914599085,
+            "quote_token": "WETH",
+            "gas_cost_usd": 0.00060660152218512,
+            "reference_price": 4610,
+            "trade_direction": "Sell",
+            "profit_delta_bps": 3.526172219497789, // <======= Profit in basis points, add that
+            "amount_out_expected": 0.0261970604165229, // <===== Optional: sum of that, to get the total volume
+            "amount_in_normalized": 120.362572, // <===== Optional: sum of that, to get the total volume
+            "slippage_tolerance_bps": 5
+        },
+        "broadcast": {
+            "hash": "0x6cb430c2d6ec92fd35feace38dbf2605f65698f87d75153d6c9b4bd435062e08",
+            "receipt": {
+                "error": null,
+                "status": true, // <======= Status of the transaction, true if successful, FALSE If reverted ❌❌❌, HIGHLIGHT THAT
+                "gas_used": 171265, // <======= Gas used for the transaction
+                "block_number": 24286524, // Delta between context.block and this one
+                "transaction_hash": "0x6cb430c2d6ec92fd35feace38dbf2605f65698f87d75153d6c9b4bd435062e08",
+                "transaction_index": 6, // <======= Index of the transaction in the block, usefull to evaluate the exec strat performance
+                "effective_gas_price": 3815
+            },
+            "broadcast_error": null,
+            "broadcasted_at_ms": 1755034881869,
+            "broadcasted_took_ms": 209 // USEFULL too
+        },
+        "inventory": {
+            "nonce": 3791, // USEFULL too
+            "base_balance": 172527576400078720, // ? Chart it to have a idea of the MM bot position historically
+            "quote_balance": 240725144 // ? Chart it to have a idea of the MM bot position historically
+        },
+        "timestamp": 1755034881453,
+        "simulation": {
+            "error": null,
+            "status": true,
+            "estimated_gas": 172321,
+            "simulated_at_ms": 1755034881636,
+            "simulated_took_ms": 72 // USEFULL too
+        }
+    },
+    "identifier": "mmc-unichain-eth-usdc-0xf5029a5-instance-1755016712"
+}
+// ============== Revert ==============
+{
+    "data": {
+        "status": "BroadcastSucceeded",
+        "context": {
+            "block": 24286643,
+            "eth_to_usd": 3500,
+            "base_to_eth": 1,
+            "quote_to_eth": 0.00021743388043164036,
+            "max_fee_per_gas": 4097,
+            "native_gas_price": 1000288,
+            "max_priority_fee_per_gas": 3521
+        },
+        "metadata": {
+            "pool": "0x8927058918e3cff6f55efe45a58db1be1f069e49",
+            "base_token": "USDC",
+            "spot_price": 4599.0992664751375,
+            "quote_token": "WETH",
+            "gas_cost_usd": 0.00046213305600000004,
+            "reference_price": 4614.81,
+            "trade_direction": "Sell",
+            "profit_delta_bps": 3.646047414780756, // The higher, the most revert-prone it is
+            "amount_out_expected": 0.0032713626360865882,
+            "amount_in_normalized": 15.0453215,
+            "slippage_tolerance_bps": 5
+        },
+        "broadcast": {
+            "hash": "0x6e6a131480c30d42fd085f85a1c4540b151b6a2efdefd00509a7e3346e9c6fa8",
+            "receipt": {
+                "error": null,
+                "status": false,
+                "gas_used": 205094,
+                "block_number": 24286645,
+                "transaction_hash": "0x6e6a131480c30d42fd085f85a1c4540b151b6a2efdefd00509a7e3346e9c6fa8",
+                "transaction_index": 6,
+                "effective_gas_price": 3810
+            },
+        }
+        // Simu Failed
+        {
+            "data": {
+                "status": "SimulationFailed", // <======== Simulation failed, opportunity not seized or lived not long enough
+                "context": {
+                    "block": 23675362,
+                    "eth_to_usd": 3567.27,
+                    "base_to_eth": 1,
+                    "quote_to_eth": 0.00028011970265922394,
+                    "max_fee_per_gas": 1626,
+                    "native_gas_price": 1000308,
+                    "max_priority_fee_per_gas": 1010
+                },
+                "metadata": {
+                    "pool": "0x65081cb48d74a32e9ccfed75164b8c09972dbcf1",
+                    "base_token": "USDC",
+                    "spot_price": 3566.916820138764,
+                    "quote_token": "WETH",
+                    "gas_cost_usd": 0.00047102467092912005,
+                    "reference_price": 3570.99,
+                    "trade_direction": "Sell",
+                    "profit_delta_bps": 5.666054914591041,
+                    "amount_out_expected": 0.0018738627327283667,
+                    "amount_in_normalized": 6.6839125,
+                    "slippage_tolerance_bps": 5
+                },
+                "broadcast": null, // <=== Null if the simulation failed, no transaction was sent
+                "inventory": {
+                    "nonce": 2464,
+                    "base_balance": 58065369368740540,
+                    "quote_balance": 13367825
+                },
+                "timestamp": 1754423722933,
+                "simulation": {
+                    "error": "execution reverted",
+                    "status": false,
+                    "estimated_gas": 206209,
+                }
