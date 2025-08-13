@@ -31,7 +31,7 @@ tycho_router_address = "0xfD0b31d2E955fA55e3fa641Fe90e08b677188d35"
 # === Misc ===
 poll_interval_ms = 6000
 publish_events = false
-skip_simulation = false # ! Very important parameter
+skip_simulation = true # ! Very important parameter
 infinite_approval = false
 min_publish_timeframe_ms = 6000
 
