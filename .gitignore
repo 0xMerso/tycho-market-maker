@@ -12,3 +12,5 @@ dump.rdb
 node_modules
 .cursor
 .cursorignore
+
+config/secrets/.env.stage2

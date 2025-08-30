@@ -8,30 +8,25 @@ fn test_parse_all_configs() {
     // List of all config files to test
     let config_files = vec![
         "config/base.eth-usdc.toml",
-        "config/mainnet.eth-usdc.toml", 
+        "config/mainnet.eth-usdc.toml",
         "config/mainnet.eth-wbtc.toml",
         "config/mainnet.usdc-dai.toml",
         "config/unichain.eth-usdc.toml",
     ];
-    
+
     println!("\n🔍 Testing parsing of all config files...\n");
-    
+
     for config_path in config_files {
         println!("📄 Testing: {}", config_path);
-        
+
         // Test loading the config
         let config = load_market_maker_config(config_path);
-        
+
         // Assert the config loads successfully
-        assert!(
-            config.is_ok(), 
-            "Failed to parse config {}: {:?}", 
-            config_path, 
-            config
-        );
-        
+        assert!(config.is_ok(), "Failed to parse config {}: {:?}", config_path, config);
+
         let config = config.unwrap();
-        
+
         // Verify essential fields are populated
         assert!(!config.base_token.is_empty(), "base_token is empty in {}", config_path);
         assert!(!config.quote_token.is_empty(), "quote_token is empty in {}", config_path);
@@ -44,28 +39,30 @@ fn test_parse_all_configs() {
         assert!(!config.tycho_api.is_empty(), "tycho_api is empty in {}", config_path);
         assert!(!config.permit2_address.is_empty(), "permit2_address is empty in {}", config_path);
         assert!(!config.tycho_router_address.is_empty(), "tycho_router_address is empty in {}", config_path);
-        
+
         // Verify execution parameters are reasonable
         // Note: min_watch_spread_bps and min_executable_spread_bps can be negative for certain strategies
         assert!(config.max_slippage_pct >= 0.0, "max_slippage_pct is negative in {}", config_path);
-        assert!(config.max_inventory_ratio > 0.0 && config.max_inventory_ratio <= 1.0, 
-               "max_inventory_ratio out of bounds in {}", config_path);
+        assert!(
+            config.max_inventory_ratio > 0.0 && config.max_inventory_ratio <= 1.0,
+            "max_inventory_ratio out of bounds in {}",
+            config_path
+        );
         assert!(config.tx_gas_limit > 0, "tx_gas_limit is 0 in {}", config_path);
         assert!(config.poll_interval_ms > 0, "poll_interval_ms is 0 in {}", config_path);
-        
+
         // Verify price feed config
         assert!(!config.price_feed_config.r#type.is_empty(), "price_feed_config.type is empty in {}", config_path);
         assert!(!config.price_feed_config.source.is_empty(), "price_feed_config.source is empty in {}", config_path);
-        
+
         println!("  ✅ Config parsed successfully");
         println!("     Network: {} (Chain ID: {})", config.network_name, config.chain_id);
         println!("     Pair: {} {}/{}", config.pair_tag, config.base_token, config.quote_token);
         println!("     Price Feed: {}", config.price_feed_config.r#type);
-        println!("     Spread: {} bps (watch), {} bps (exec)", 
-                 config.min_watch_spread_bps, config.min_executable_spread_bps);
+        println!("     Spread: {} bps (watch), {} bps (exec)", config.min_watch_spread_bps, config.min_executable_spread_bps);
         println!();
     }
-    
+
     println!("✨ All configs parsed successfully!\n");
 }
 
@@ -126,30 +123,30 @@ async fn test_basic_endpoints() {
     // List of all config files to test
     let config_files = vec![
         "config/base.eth-usdc.toml",
-        "config/mainnet.eth-usdc.toml", 
+        "config/mainnet.eth-usdc.toml",
         "config/mainnet.eth-wbtc.toml",
         "config/mainnet.usdc-dai.toml",
         "config/unichain.eth-usdc.toml",
     ];
-    
+
     println!("\n🔌 Testing basic endpoints for all configs...\n");
-    
+
     for config_path in config_files {
         println!("📄 Testing endpoints for: {}", config_path);
-        
+
         let config = load_market_maker_config(config_path).expect("Failed to load config");
         println!("   Network: {} (Chain ID: {})", config.network_name, config.chain_id);
-        
+
         // Test 1: Fetch block number
         let block_num = latest(config.rpc_url.clone()).await;
         assert!(block_num > 0, "Block number should be greater than 0 for {}, got: {}", config_path, block_num);
         println!("   ✓ Block number: {}", block_num);
-        
+
         // Test 2: Fetch gas price
         let gas = gas_price(config.rpc_url.clone()).await;
         assert!(gas > 0, "Gas price should be greater than 0 for {}, got: {}", config_path, gas);
         println!("   ✓ Gas price: {} wei", gas);
-        
+
         // Test 3: Fetch EIP-1559 fees
         match eip1559_fees(config.rpc_url.clone()).await {
             Ok(fees) => {
@@ -161,13 +158,13 @@ async fn test_basic_endpoints() {
                 println!("   ⚠ EIP-1559 not available");
             }
         }
-        
+
         // Test 4: Test provider connection and chain ID
         let provider = create_provider(&config.rpc_url);
         let chain_id = provider.get_chain_id().await.expect("Failed to get chain ID");
         assert_eq!(chain_id, config.chain_id, "Chain ID mismatch for {}", config_path);
         println!("   ✓ Chain ID verified: {}", chain_id);
-        
+
         // Test 5: Fetch Chainlink oracle price (if configured)
         if !config.gas_token_chainlink_price_feed.is_empty() {
             match chainlink(config.rpc_url.clone(), config.gas_token_chainlink_price_feed.clone()).await {
@@ -182,9 +179,9 @@ async fn test_basic_endpoints() {
         } else {
             println!("   ⚠ No Chainlink oracle configured");
         }
-        
+
         println!();
     }
-    
+
     println!("✨ All endpoint tests completed!\n");
 }
