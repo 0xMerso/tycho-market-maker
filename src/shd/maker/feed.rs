@@ -163,9 +163,9 @@ pub async fn chainlink(rpc: String, pfeed: String) -> Result<f64, String> {
     match (price, precision) {
         (Ok(price), Ok(precision)) => {
             let power = 10f64.powi(precision._0 as i32);
-            // tracing::debug!("Price fetched: {}", price._0.as_u64() as f64 / power);
             // Ok(price._0.as_u64() as f64 / power)
             let price = price._0.to_string().parse::<u128>().unwrap() as f64 / power;
+            // tracing::debug!("Price fetched from {}: {}", pfeed, price);
             Ok(price)
         }
         _ => {

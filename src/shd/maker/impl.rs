@@ -85,8 +85,8 @@ impl IMarketMaker for MarketMaker {
                 return Ok(price);
             }
             tracing::warn!("No gas oracle feed found, using fallback price of 3500 $");
-            return Ok(3500.0);
-            // return Err("No gas oracle feed found, even using Coingecko".to_string());
+            // return Ok(3500.0);
+            return Err("No gas oracle feed found, even using Coingecko".to_string());
         }
         super::feed::chainlink(self.config.rpc_url.clone(), self.config.gas_token_chainlink_price_feed.clone()).await
     }
@@ -282,7 +282,7 @@ impl IMarketMaker for MarketMaker {
             let spread_bps = spread / reference * BASIS_POINT_DENO;
             let symbol = if spread_bps < 0_f64 { "buy 📈" } else { "sell 📉" };
             tracing::debug!(
-                "   => Evaluating pool {}: Spot: {:.5} | Reference: {:.5} | Spread: {:.5} | Spread BPS: {:<3.2} | Should {}",
+                "===> Evaluating pool {}: Spot: {:.5} | Reference: {:.5} | Spread: {:.5} | Spread BPS: {:<3.2} | Should {}",
                 cpname(psc.component.clone()),
                 spot,
                 reference,
@@ -379,12 +379,15 @@ impl IMarketMaker for MarketMaker {
             }
 
             let base_to_quote = *selling == self.base;
+
+            // Optimal amount computation
             let inventory_balance = if base_to_quote { inventory.base_balance } else { inventory.quote_balance };
             let inventory_balance_normalized = (inventory_balance as f64) / selling_pow;
             let optimal = pool_selling_balance_normalized * SHARE_POOL_BAL_SWAP_BPS / BASIS_POINT_DENO;
             let max_alloc = inventory_balance_normalized * self.config.max_inventory_ratio;
             let selling_amount = max_alloc;
             let buying_amount = if base_to_quote { selling_amount * adjustment.spot } else { selling_amount / adjustment.spot };
+            // ---
             let pool_msg = format!(
                 "Pool {} | Tycho Spot: {:>12.5} vs ref {:>12.5} | Spread: {:>7.2} {} = {:>5.0} bps",
                 cpname(adjustment.psc.component.clone()),
