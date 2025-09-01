@@ -53,24 +53,34 @@ impl MainnetExec {
 }
 
 /// =============================================================================
-/// @function: name
-/// @description: Get the strategy name for logging purposes
-/// @return String: Strategy name as string
+/// TRAIT IMPLEMENTATION: ExecStrategy
+/// =============================================================================
+/// OVERRIDDEN FUNCTIONS:
+/// - name(): Returns "Mainnet_Strategy"
+/// - broadcast(): Custom implementation using Flashbots bundles for MEV protection
+/// 
+/// INHERITED FUNCTIONS (using default implementation):
+/// - pre_hook(): Default logging
+/// - post_hook(): Default event publishing
+/// - execute(): Default orchestration flow
+/// - simulate(): Default EVM simulation
 /// =============================================================================
 #[async_trait]
 impl ExecStrategy for MainnetExec {
+    /// OVERRIDDEN: Custom strategy name
     fn name(&self) -> String {
         ExecStrategyName::MainnetStrategy.as_str().to_string()
     }
 
     /// =============================================================================
-    /// @function: broadcast
-    /// @description: Broadcast transactions using Flashbots bundle submission
+    /// OVERRIDDEN: Custom broadcast implementation
+    /// @description: Replaces default mempool broadcast with Flashbots bundle submission
     /// @param prepared: Vector of trades to broadcast
     /// @param mmc: Market maker configuration
     /// @param env: Environment configuration
     /// @return Result<Vec<BroadcastData>, String>: Broadcast results or error
     /// @behavior: Submits transactions as bundles to Flashbots for MEV protection
+    /// @differs_from_default: Uses private mempool via Flashbots instead of public mempool
     /// =============================================================================
     async fn broadcast(&self, prepared: Vec<Trade>, mmc: MarketMakerConfig, env: EnvConfig) -> Result<Vec<BroadcastData>, String> {
         tracing::info!("{}: broadcasting {} transactions on Mainnet via bundle", self.name(), prepared.len());

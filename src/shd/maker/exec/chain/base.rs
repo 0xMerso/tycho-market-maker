@@ -46,13 +46,30 @@ impl BaseExec {
 }
 
 /// =============================================================================
-/// @function: name
-/// @description: Get the strategy name for logging purposes
-/// @return String: Strategy name as string
+/// TRAIT IMPLEMENTATION: ExecStrategy
+/// =============================================================================
+/// OVERRIDDEN FUNCTIONS:
+/// - name(): Returns "Base_Strategy"
+/// 
+/// INHERITED FUNCTIONS (using default implementation):
+/// - pre_hook(): Default logging
+/// - post_hook(): Default event publishing  
+/// - execute(): Default orchestration flow
+/// - simulate(): Default EVM simulation
+/// - broadcast(): Default mempool broadcast (will be customized for flashblocks)
+/// 
+/// TODO: Implement custom broadcast() for flashblock support:
+/// - Each flashblock represents transaction ordering for a portion of the coming block
+/// - Built-in gas limits based on flashblock index
+/// - Fixed flashblock sequence (no preemption)
 /// =============================================================================
 #[async_trait]
 impl ExecStrategy for BaseExec {
+    /// OVERRIDDEN: Custom strategy name
     fn name(&self) -> String {
         ExecStrategyName::BaseStrategy.as_str().to_string()
     }
+    
+    // TODO: Override broadcast() for flashblock implementation
+    // async fn broadcast(&self, prepared: Vec<Trade>, mmc: MarketMakerConfig, env: EnvConfig) -> Result<Vec<BroadcastData>, String>
 }

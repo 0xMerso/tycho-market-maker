@@ -1,3 +1,11 @@
+/// =============================================================================
+/// Price Feed Module
+/// =============================================================================
+///
+/// @description: Price feed implementations for fetching external market prices.
+/// Supports multiple price sources including Chainlink oracles and Binance API
+/// for real-time price discovery in market making operations.
+/// =============================================================================
 use alloy::providers::ProviderBuilder;
 use alloy_primitives::Address;
 use async_trait::async_trait;
@@ -8,17 +16,34 @@ use crate::types::{config::MarketMakerConfig, sol::IChainLinkPF};
 
 // === SHARED/TRAITS ===
 
-/// Price feed trait for handling different price feed methods
+/// =============================================================================
+/// @trait: PriceFeed
+/// @description: Interface for external price feed implementations
+/// @behavior: Provides standardized methods for fetching market prices
+/// =============================================================================
 #[async_trait]
 pub trait PriceFeed: Send + Sync {
-    /// Fetch the current market price of token0/token1 from an external feed (e.g. Chainlink, Binance).
+    /// =============================================================================
+    /// @function: get
+    /// @description: Fetch the current market price of token0/token1 from external feed
+    /// @param mmc: Market maker configuration with feed settings
+    /// @return Result<f64, String>: Price as float or error message
+    /// =============================================================================
     async fn get(&self, mmc: MarketMakerConfig) -> Result<f64, String>;
 
-    /// Get the feed name for logging
+    /// =============================================================================
+    /// @function: name
+    /// @description: Get the feed name for logging purposes
+    /// @return &'static str: Name of the price feed implementation
+    /// =============================================================================
     fn name(&self) -> &'static str;
 }
 
-/// Dynamic price feed factory
+/// =============================================================================
+/// @struct: PriceFeedFactory
+/// @description: Factory for creating price feed instances dynamically
+/// @behavior: Creates appropriate price feed based on configuration
+/// =============================================================================
 pub struct PriceFeedFactory;
 
 impl PriceFeedFactory {
@@ -43,6 +68,13 @@ impl PriceFeedFactory {
     }
 }
 
+/// =============================================================================
+/// @enum: PriceFeedType
+/// @description: Enumeration of available price feed types
+/// @variants:
+/// - Chainlink: On-chain oracle price feed
+/// - Binance: Centralized exchange price feed
+/// =============================================================================
 pub enum PriceFeedType {
     Chainlink,
     Binance,
@@ -77,11 +109,22 @@ impl PriceFeedType {
 
 // === CHAINLINK ===
 
+/// =============================================================================
+/// @struct: ChainlinkPriceFeed
+/// @description: Chainlink oracle price feed implementation
+/// @behavior: Fetches prices from on-chain Chainlink price feed contracts
+/// =============================================================================
 pub struct ChainlinkPriceFeed;
 
 #[async_trait]
 impl PriceFeed for ChainlinkPriceFeed {
-    // Fetch the price from chainlink and reverse it if configured as such
+    /// =============================================================================
+    /// @function: get
+    /// @description: Fetch price from Chainlink oracle and apply reversal if configured
+    /// @param mmc: Market maker configuration with Chainlink settings
+    /// @return Result<f64, String>: Oracle price or error
+    /// @behavior: Queries Chainlink contract and optionally inverts price
+    /// =============================================================================
     async fn get(&self, mmc: MarketMakerConfig) -> Result<f64, String> {
         let rev = mmc.price_feed_config.reverse;
         match chainlink(mmc.rpc_url.clone(), mmc.price_feed_config.source.clone()).await {
@@ -93,6 +136,11 @@ impl PriceFeed for ChainlinkPriceFeed {
         }
     }
 
+    /// =============================================================================
+    /// @function: name
+    /// @description: Get the Chainlink price feed identifier
+    /// @return &'static str: "ChainlinkPriceFeed"
+    /// =============================================================================
     fn name(&self) -> &'static str {
         "ChainlinkPriceFeed"
     }
@@ -130,22 +178,42 @@ pub async fn chainlink(rpc: String, pfeed: String) -> Result<f64, String> {
 
 // ToDo === Pyth ===
 
+/// =============================================================================
+/// @struct: PythPriceFeed
+/// @description: Pyth network price feed implementation (placeholder)
+/// @behavior: Future implementation for Pyth oracle integration
+/// =============================================================================
 pub struct PythPriceFeed;
 
 // === BINANCE ===
 
+/// =============================================================================
+/// @struct: BinancePriceFeed
+/// @description: Binance exchange price feed implementation
+/// @behavior: Fetches spot prices from Binance REST API
+/// =============================================================================
 pub struct BinancePriceFeed;
 
 #[async_trait]
 impl PriceFeed for BinancePriceFeed {
-    // Fetch the price from Binance
-    // ! No reverse option for Binance, only for Chainlink
+    /// =============================================================================
+    /// @function: get
+    /// @description: Fetch spot price from Binance API
+    /// @param mmc: Market maker configuration with Binance settings
+    /// @return Result<f64, String>: Current market price or error
+    /// @behavior: Queries Binance ticker endpoint. Note: No reverse option for Binance
+    /// =============================================================================
     async fn get(&self, mmc: MarketMakerConfig) -> Result<f64, String> {
         let symbol = format!("{}{}", mmc.base_token.to_uppercase(), mmc.quote_token.to_uppercase());
         let endpoint = format!("{}/ticker/price?symbol={}", mmc.price_feed_config.source, symbol);
         binance(endpoint).await
     }
 
+    /// =============================================================================
+    /// @function: name
+    /// @description: Get the Binance price feed identifier
+    /// @return &'static str: "BinancePriceFeed"
+    /// =============================================================================
     fn name(&self) -> &'static str {
         "BinancePriceFeed"
     }
@@ -163,14 +231,24 @@ async fn binance(endpoint: String) -> Result<f64, String> {
     data["price"].as_str().unwrap_or("0").parse::<f64>().map_err(|e| format!("Failed to parse price: {}", e))
 }
 
-// === COINGECKO === Not a reference feed, just for gas price in case of no chainlink gas feed configured (or error)
+// === COINGECKO ===
 
+/// =============================================================================
+/// @struct: CoinGeckoResponse
+/// @description: Response structure for CoinGecko API price data
+/// @behavior: Used as fallback for gas price when Chainlink feed unavailable
+/// =============================================================================
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct CoinGeckoResponse {
     pub ethereum: CryptoPrice,
 }
 
+/// =============================================================================
+/// @struct: CryptoPrice
+/// @description: Price structure containing USD value
+/// @fields: usd - Price in USD
+/// =============================================================================
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct CryptoPrice {

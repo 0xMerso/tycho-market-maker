@@ -134,7 +134,7 @@ pub trait ExecStrategy: Send + Sync {
     }
 
     /// =============================================================================
-    /// @function: execute
+    /// @function: default execute
     /// @description: Execute the prepared transactions with full orchestration
     /// @param config: Market maker configuration
     /// @param prepared: Vector of trades to execute

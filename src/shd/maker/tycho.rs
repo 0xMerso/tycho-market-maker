@@ -1,3 +1,11 @@
+/// =============================================================================
+/// Tycho Protocol Integration Module
+/// =============================================================================
+///
+/// @description: Integration layer for Tycho protocol providing market data streaming,
+/// protocol state management, and token pair discovery. Handles communication with
+/// Tycho RPC endpoints and manages protocol component streams.
+/// =============================================================================
 use std::collections::HashMap;
 use std::str::FromStr;
 use tycho_client::rpc::RPCClient;
@@ -20,7 +28,10 @@ use crate::types::config::MarketMakerConfig;
 use crate::types::tycho::{AmmType, PsbConfig, TychoSupportedProtocol};
 use crate::utils::constants::BASIS_POINT_DENO;
 
-/// Due to library conflicts, we need to redefine the Chain type depending the use case, hence the following aliases.
+/// =============================================================================
+/// Type Aliases
+/// @description: Chain type aliases to resolve library conflicts between different Tycho modules
+/// =============================================================================
 pub type ChainCommon = tycho_common::dto::Chain;
 pub type ChainSimCore = tycho_simulation::tycho_core::dto::Chain;
 pub type ChainSimu = tycho_simulation::evm::tycho_models::Chain;
