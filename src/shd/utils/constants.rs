@@ -27,7 +27,7 @@ pub const DEFAULT_APPROVE_GAS: u64 = 75_000;
 pub const DEFAULT_SWAP_GAS: u64 = 300_000;
 
 /// Min amount worth USD to swap
-pub const MIN_AMOUNT_WORTH_USD: f64 = 5.0;
+pub const MIN_AMOUNT_WORTH_USD: f64 = 10.0;
 
 /// Approve function signature
 pub const APPROVE_FN_SIGNATURE: &str = "approve(address,uint256)";
