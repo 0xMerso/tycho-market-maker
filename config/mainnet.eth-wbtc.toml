@@ -19,7 +19,7 @@ tycho_api = "tycho-beta.propellerheads.xyz"
 min_watch_spread_bps = 5.0
 min_executable_spread_bps = 1.0
 max_slippage_pct = 0.0005
-max_inventory_ratio = 0.5
+max_inventory_ratio = 0.99
 
 tx_gas_limit = 300000
 block_offset = 1
