@@ -43,3 +43,7 @@ pub const DEFAULT_REDIS_HOST: &str = "127.0.0.1:42044";
 
 /// Default heartbeat delay
 pub const HEARTBEAT_DELAY: u64 = 300;
+
+/// Optimization constants
+pub const OPTI_TOLERANCE: f64 = 0.0001; // Stop when change is less than 0.01%
+pub const OPTI_MAX_ITERATIONS: usize = 20;

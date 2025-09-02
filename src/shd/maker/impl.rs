@@ -12,9 +12,7 @@ use crate::{
         moni::NewPricesMessage,
         tycho::{ProtoSimComp, PsbConfig, SharedTychoStreamState},
     },
-    utils::constants::{
-        ADD_TVL_THRESHOLD, APPROVE_FN_SIGNATURE, BASIS_POINT_DENO, DEFAULT_APPROVE_GAS, DEFAULT_SWAP_GAS, MIN_AMOUNT_WORTH_USD, NULL_ADDRESS, PRICE_MOVE_THRESHOLD, SHARE_POOL_BAL_SWAP_BPS,
-    },
+    utils::constants::{ADD_TVL_THRESHOLD, APPROVE_FN_SIGNATURE, BASIS_POINT_DENO, DEFAULT_APPROVE_GAS, DEFAULT_SWAP_GAS, MIN_AMOUNT_WORTH_USD, NULL_ADDRESS, PRICE_MOVE_THRESHOLD},
 };
 use alloy::{
     providers::{Provider, ProviderBuilder},
@@ -378,14 +376,45 @@ impl IMarketMaker for MarketMaker {
                 continue;
             }
 
-            let base_to_quote = *selling == self.base;
+            // --- OLD ---
+            // let inventory_balance = if base_to_quote { inventory.base_balance } else { inventory.quote_balance };
+            // let inventory_balance_normalized = (inventory_balance as f64) / selling_pow;
+            // let optimal = pool_selling_balance_normalized * SHARE_POOL_BAL_SWAP_BPS / BASIS_POINT_DENO;
+            // let max_alloc = inventory_balance_normalized * self.config.max_inventory_ratio;
+            // let selling_amount = max_alloc;
+            // let buying_amount = if base_to_quote { selling_amount * adjustment.spot } else { selling_amount / adjustment.spot };
 
-            // Optimal amount computation
+            // Use TradeDirection from adjustment to determine swap direction
+            let base_to_quote = adjustment.direction == TradeDirection::Buy;
+
+            // Optimal amount computation using binary search
             let inventory_balance = if base_to_quote { inventory.base_balance } else { inventory.quote_balance };
             let inventory_balance_normalized = (inventory_balance as f64) / selling_pow;
-            let optimal = pool_selling_balance_normalized * SHARE_POOL_BAL_SWAP_BPS / BASIS_POINT_DENO;
             let max_alloc = inventory_balance_normalized * self.config.max_inventory_ratio;
-            let selling_amount = max_alloc;
+
+            // Run optimization to find optimal swap amount
+
+            // tracing::info!("Pool {}: find_optimal_swap_amount ...", cpname(adjustment.psc.component.clone()),);
+            let optimization_result = crate::opti::math::find_optimal_swap_amount(&adjustment.psc.protosim, selling, buying, adjustment.reference, base_to_quote, max_alloc);
+
+            let selling_amount = match optimization_result {
+                Ok(opt) => {
+                    tracing::info!(
+                        "   => Optimization complete: Optimal qty: {:.5} {} | Exec price: {:.5} | Impact: {:.2} bps | Simulations: {}",
+                        opt.optimal_qty,
+                        selling.symbol,
+                        opt.execution_price,
+                        opt.price_impact_bps,
+                        opt.simulation_count,
+                    );
+                    opt.optimal_qty
+                }
+                Err(e) => {
+                    tracing::error!("   => Optimization failed: {}. Skipping trade.", e);
+                    continue; // Skip this adjustment if optimization fails
+                }
+            };
+
             let buying_amount = if base_to_quote { selling_amount * adjustment.spot } else { selling_amount / adjustment.spot };
             // ---
             let pool_msg = format!(
@@ -398,8 +427,8 @@ impl IMarketMaker for MarketMaker {
                 adjustment.spread_bps,
             );
             let inventory_msg = format!(
-                " - Inventory: {:.2} {} | Optimal: {:.} | Max: {:.5} | Selling {:.5} {} for {:.5} {}",
-                inventory_balance_normalized, selling.symbol, optimal, max_alloc, selling_amount, selling.symbol, buying_amount, buying.symbol
+                " - Inventory: {:.2} {} | Max: {:.5} | Selling {:.5} {} for {:.5} {}",
+                inventory_balance_normalized, selling.symbol, max_alloc, selling_amount, selling.symbol, buying_amount, buying.symbol
             );
             tracing::debug!("{} | {}", pool_msg, inventory_msg);
             let powered_selling_amount = selling_amount * selling_pow;

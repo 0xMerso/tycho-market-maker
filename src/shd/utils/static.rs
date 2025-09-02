@@ -12,8 +12,8 @@ pub static COINGECKO_ETH_USD: &str = "https://api.coingecko.com/api/v3/simple/pr
 // Optimization constants
 pub static OPTI_LOW_FACTOR: f64 = 1e-6;
 pub static OPTI_HIGH_FACTOR: f64 = 1e5;
-pub static OPTI_TOLERANCE: f64 = 1e-3;
-pub static OPTI_MAX_ITERATIONS: usize = 10;
+pub static OPTI_TOLERANCE: f64 = 0.0001; // Stop when change is less than 0.01%
+pub static OPTI_MAX_ITERATIONS: usize = 20;
 
 // Execution constants
 pub static APPROVE_FN_SIGNATURE: &str = "approve(address,uint256)";

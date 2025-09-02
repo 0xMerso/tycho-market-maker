@@ -217,7 +217,7 @@ pub struct PriceFeedConfig {
 /// - Buy: Buy order (quote to base)
 /// - Sell: Sell order (base to quote)
 /// =============================================================================
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum TradeDirection {
     Buy,
     Sell,

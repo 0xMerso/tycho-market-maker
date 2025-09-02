@@ -227,6 +227,7 @@ pub trait ExecStrategy: Send + Sync {
                         tracing::trace!("🔮 Simulated on block #{} ...", block.inner.header.number);
                         match block.calls.len() {
                             1 => {
+                                // Swap only
                                 tracing::trace!("   => No approval needed, only swap");
                                 let swap = &block.calls[0];
                                 let took = time.elapsed().as_millis();
@@ -243,6 +244,7 @@ pub trait ExecStrategy: Send + Sync {
                                 }
                             }
                             2 => {
+                                // Approve + Swap
                                 tracing::trace!(" - Approval needed, simulating both swap and approval");
                                 let approval = &block.calls[0]; // Approval is ignored for now
                                 let swap = &block.calls[1];
