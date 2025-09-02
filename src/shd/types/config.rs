@@ -13,6 +13,19 @@ pub type Result<T> = std::result::Result<T, ConfigError>;
 
 use super::maker::PriceFeedConfig;
 
+/// Helper function to validate Ethereum addresses
+fn is_valid_eth_address(address: &str) -> bool {
+    // Check if it starts with 0x and has 42 characters total (0x + 40 hex chars)
+    if !address.starts_with("0x") {
+        return false;
+    }
+    if address.len() != 42 {
+        return false;
+    }
+    // Check if the remaining characters are valid hex
+    address[2..].chars().all(|c| c.is_ascii_hexdigit())
+}
+
 /// Environment configuration expected
 #[derive(Debug, Clone)]
 pub struct EnvConfig {
@@ -278,14 +291,53 @@ impl MarketMakerConfig {
     /// @behavior: Checks spreads, slippage, inventory ratios, and network-specific settings
     /// =============================================================================
     pub fn validate(&self) -> Result<()> {
+        // Check spread bounds
         if self.min_watch_spread_bps > BASIS_POINT_DENO {
             return Err(ConfigError::Config("min_watch_spread_bps must be ≤ 10000 BPS (100%)".into()));
         }
+        if self.min_executable_spread_bps < -50.0 {
+            return Err(ConfigError::Config("min_executable_spread_bps must be ≥ -50 BPS (-0.5%)".into()));
+        }
+
+        // Check slippage and inventory ratio
         if self.max_slippage_pct > 1. {
             return Err(ConfigError::Config("max_slippage_pct must be ≤ 1.0 (100%)".into()));
         }
         if !(0.0..=1.0).contains(&self.max_inventory_ratio) {
             return Err(ConfigError::Config("max_inventory_ratio must be between 0.0 and 1.0".into()));
+        }
+
+        // Check gas limit
+        if self.tx_gas_limit > 1_000_000 {
+            return Err(ConfigError::Config("tx_gas_limit must be ≤ 1,000,000".into()));
+        }
+
+        // Validate Ethereum addresses
+        if !is_valid_eth_address(&self.wallet_public_key) {
+            return Err(ConfigError::Config(format!("Invalid wallet_public_key address: {}", self.wallet_public_key)));
+        }
+        if !is_valid_eth_address(&self.base_token_address) {
+            return Err(ConfigError::Config(format!("Invalid base_token_address: {}", self.base_token_address)));
+        }
+        if !is_valid_eth_address(&self.quote_token_address) {
+            return Err(ConfigError::Config(format!("Invalid quote_token_address: {}", self.quote_token_address)));
+        }
+        if !is_valid_eth_address(&self.gas_token_symbol) {
+            return Err(ConfigError::Config(format!("Invalid gas_token_symbol address: {}", self.gas_token_symbol)));
+        }
+        if !is_valid_eth_address(&self.gas_token_chainlink_price_feed) {
+            return Err(ConfigError::Config(format!("Invalid gas_token_chainlink_price_feed address: {}", self.gas_token_chainlink_price_feed)));
+        }
+        if !is_valid_eth_address(&self.permit2_address) {
+            return Err(ConfigError::Config(format!("Invalid permit2_address: {}", self.permit2_address)));
+        }
+        if !is_valid_eth_address(&self.tycho_router_address) {
+            return Err(ConfigError::Config(format!("Invalid tycho_router_address: {}", self.tycho_router_address)));
+        }
+
+        // Check that token addresses are different
+        if self.base_token_address.eq_ignore_ascii_case(&self.quote_token_address) {
+            return Err(ConfigError::Config("base_token_address and quote_token_address must be different".into()));
         }
 
         // Check if using preconfirmation on Base network
