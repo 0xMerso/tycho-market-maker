@@ -15,3 +15,5 @@ elif [ -z "$2" ]; then
 else
     cargo test --test $1 $2 -- --nocapture --exact
 fi
+
+# cargo test test_parse_all_configs -- --nocapture

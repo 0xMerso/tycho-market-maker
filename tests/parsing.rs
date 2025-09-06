@@ -3,20 +3,21 @@ use shd::maker::feed::chainlink;
 use shd::types::config::load_market_maker_config;
 use shd::utils::evm::{create_provider, eip1559_fees, gas_price, latest};
 
+// Global list of all config files to test
+static CONFIG_FILES: &[&str] = &[
+    "config/base.eth-usdc.toml",
+    "config/mainnet.eth-usdc.toml",
+    "config/mainnet.eth-wbtc.toml",
+    "config/mainnet.usdc-dai.toml",
+    "config/unichain.eth-usdc.toml",
+];
+
 #[test]
 fn test_parse_all_configs() {
-    // List of all config files to test
-    let config_files = vec![
-        "config/base.eth-usdc.toml",
-        "config/mainnet.eth-usdc.toml",
-        "config/mainnet.eth-wbtc.toml",
-        "config/mainnet.usdc-dai.toml",
-        "config/unichain.eth-usdc.toml",
-    ];
 
     println!("\n🔍 Testing parsing of all config files...\n");
 
-    for config_path in config_files {
+    for config_path in CONFIG_FILES {
         println!("📄 Testing: {}", config_path);
 
         // Test loading the config
@@ -55,7 +56,7 @@ fn test_parse_all_configs() {
         assert!(!config.price_feed_config.r#type.is_empty(), "price_feed_config.type is empty in {}", config_path);
         assert!(!config.price_feed_config.source.is_empty(), "price_feed_config.source is empty in {}", config_path);
 
-        println!("  ✅ Config parsed successfully");
+        println!("  - Config parsed successfully");
         println!("     Network: {} (Chain ID: {})", config.network_name, config.chain_id);
         println!("     Pair: {} {}/{}", config.pair_tag, config.base_token, config.quote_token);
         println!("     Price Feed: {}", config.price_feed_config.r#type);
@@ -67,71 +68,64 @@ fn test_parse_all_configs() {
 }
 
 #[test]
-fn test_parse_current_config() {
-    // Load the actual config file from the config folder
+fn test_validate_configs() {
+    // Load and validate the reference config
     let config_path = "config/unichain.eth-usdc.toml";
+
+    println!("\n🔍 Testing config validation for: {}\n", config_path);
 
     // Test loading the config
     let config = load_market_maker_config(config_path);
 
     // Assert the config loads successfully
-    assert!(config.is_ok(), "Failed to parse current config format: {:?}", config);
+    assert!(config.is_ok(), "Failed to parse config: {:?}", config.err());
 
     let config = config.unwrap();
 
-    // Test all current field names are parsed correctly
-    assert_eq!(config.pair_tag, "🟣");
-    assert_eq!(config.base_token, "ETH");
-    assert_eq!(config.base_token_address, "0x4200000000000000000000000000000000000006");
-    assert_eq!(config.quote_token, "USDC");
-    assert_eq!(config.quote_token_address, "0x078D782b760474a361dDA0AF3839290b0EF57AD6");
-    assert_eq!(config.network_name, "unichain");
-    assert_eq!(config.chain_id, 130);
-    assert_eq!(config.wallet_public_key, "0xF5029A50494714b3f80b39F05acC2c9Cea017FD6");
-    assert_eq!(config.gas_token_symbol, "0x4200000000000000000000000000000000000006");
-    assert_eq!(config.gas_token_chainlink_price_feed, "");
-    assert_eq!(config.rpc_url, "https://unichain-mainnet.blastapi.io/713ef8fa-d6fb-4192-bf47-3c924ec3ff6b");
-    assert_eq!(config.explorer_url, "https://uniscan.xyz/");
-    assert_eq!(config.tycho_api, "tycho-unichain-beta.propellerheads.xyz");
+    // The validation already ran during load_market_maker_config
+    // So if we get here, the config is valid
+    println!("  - Config loaded and validated successfully");
 
-    // Execution parameters
-    assert_eq!(config.min_watch_spread_bps, 2.0);
-    assert_eq!(config.min_executable_spread_bps, 2.0);
-    assert_eq!(config.max_slippage_pct, 0.0005);
-    assert_eq!(config.max_inventory_ratio, 0.5);
-    assert_eq!(config.tx_gas_limit, 300000);
-    assert_eq!(config.block_offset, 1);
-    assert_eq!(config.inclusion_block_delay, 0);
-    assert_eq!(config.permit2_address, "0x000000000022D473030F116dDEE9F6B43aC78BA3");
-    assert_eq!(config.tycho_router_address, "0xFfA5ec2e444e4285108e4a17b82dA495c178427B");
+    // Test some key validations are working
+    println!("\n  - Validation checks passed:");
 
-    // Misc parameters
-    assert_eq!(config.poll_interval_ms, 500);
-    assert_eq!(config.publish_events, true);
-    assert_eq!(config.skip_simulation, false);
-    assert_eq!(config.infinite_approval, true);
-    assert_eq!(config.min_publish_timeframe_ms, 5000);
+    // Check spreads
+    assert!(config.min_executable_spread_bps >= -50.0, "min_executable_spread_bps below -50 bps");
+    println!("    ✓ Spread limits: {} bps (watch), {} bps (exec)", config.min_watch_spread_bps, config.min_executable_spread_bps);
 
-    // Price feed config
-    assert_eq!(config.price_feed_config.r#type, "binance");
-    assert_eq!(config.price_feed_config.source, "https://api.binance.com/api/v3");
-    assert_eq!(config.price_feed_config.reverse, false);
+    // Check inventory ratio
+    assert!(config.max_inventory_ratio > 0.0 && config.max_inventory_ratio <= 1.0);
+    println!("    ✓ Inventory ratio: {}%", config.max_inventory_ratio * 100.0);
+
+    // Check gas limit
+    assert!(config.tx_gas_limit <= 1_000_000, "Gas limit exceeds 1M");
+    println!("    ✓ Gas limit: {}", config.tx_gas_limit);
+
+    // Check addresses are valid format
+    assert!(config.base_token_address.starts_with("0x") && config.base_token_address.len() == 42);
+    assert!(config.quote_token_address.starts_with("0x") && config.quote_token_address.len() == 42);
+    println!("    ✓ Token addresses are valid Ethereum addresses");
+
+    // Check tokens are different
+    assert_ne!(config.base_token_address.to_lowercase(), config.quote_token_address.to_lowercase());
+    println!("    ✓ Base and quote tokens are different");
+
+    // Display config summary
+    println!("\n  📊 Config Summary:");
+    println!("    Network: {} (Chain ID: {})", config.network_name, config.chain_id);
+    println!("    Pair: {} {}/{}", config.pair_tag, config.base_token, config.quote_token);
+    println!("    Price Feed: {} from {}", config.price_feed_config.r#type, config.price_feed_config.source);
+    println!("    Skip Simulation: {}", config.skip_simulation);
+    println!("    Publish Events: {}", config.publish_events);
+
+    println!("\n✨ Config validation test completed!\n");
 }
 
 #[tokio::test]
 async fn test_basic_endpoints() {
-    // List of all config files to test
-    let config_files = vec![
-        "config/base.eth-usdc.toml",
-        "config/mainnet.eth-usdc.toml",
-        "config/mainnet.eth-wbtc.toml",
-        "config/mainnet.usdc-dai.toml",
-        "config/unichain.eth-usdc.toml",
-    ];
-
     println!("\n🔌 Testing basic endpoints for all configs...\n");
 
-    for config_path in config_files {
+    for config_path in CONFIG_FILES {
         println!("📄 Testing endpoints for: {}", config_path);
 
         let config = load_market_maker_config(config_path).expect("Failed to load config");

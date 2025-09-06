@@ -312,6 +312,11 @@ impl MarketMakerConfig {
             return Err(ConfigError::Config("tx_gas_limit must be ≤ 1,000,000".into()));
         }
 
+        // Check min_publish_timeframe_ms
+        if self.min_publish_timeframe_ms < 30000 {
+            return Err(ConfigError::Config("min_publish_timeframe_ms must be ≥ 30000 ms (30 seconds)".into()));
+        }
+
         // Validate Ethereum addresses
         if !is_valid_eth_address(&self.wallet_public_key) {
             return Err(ConfigError::Config(format!("Invalid wallet_public_key address: {}", self.wallet_public_key)));

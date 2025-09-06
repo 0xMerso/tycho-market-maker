@@ -14,3 +14,9 @@ node_modules
 .cursorignore
 
 config/secrets/.env.stage2
+
+.claude/
+.cursor/
+config/old
+
+misc
