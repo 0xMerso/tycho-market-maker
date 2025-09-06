@@ -47,3 +47,7 @@ pub const HEARTBEAT_DELAY: u64 = 300;
 /// Optimization constants
 pub const OPTI_TOLERANCE: f64 = 0.0001; // Stop when change is less than 0.01%
 pub const OPTI_MAX_ITERATIONS: usize = 20;
+
+/// Pool price validation constants
+pub const MAX_POOL_PRICE_DEVIATION_PCT: f64 = 5.0; // Maximum allowed price deviation from reference (5%)
+pub const PERCENT_MULTIPLIER: f64 = 100.0; // Multiplier to convert decimal to percentage

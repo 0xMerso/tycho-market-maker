@@ -260,11 +260,12 @@ pub async fn psb(mmc: MarketMakerConfig, key: String, psbc: PsbConfig, tokens: V
     let psb = ProtocolStreamBuilder::new(&mmc.tycho_api, chain)
         .exchange::<UniswapV2State>(TychoSupportedProtocol::UniswapV2.to_string().as_str(), filter.clone(), None)
         .exchange::<UniswapV3State>(TychoSupportedProtocol::UniswapV3.to_string().as_str(), filter.clone(), None)
-        .exchange::<UniswapV4State>(TychoSupportedProtocol::UniswapV4.to_string().as_str(), filter.clone(), Some(u4))
+        .exchange::<UniswapV4State>(TychoSupportedProtocol::UniswapV4.to_string().as_str(), filter.clone(), None) // Some(u4))
         .auth_key(Some(key.clone()))
         .skip_state_decode_failures(true)
         .set_tokens(hmt.clone()) // ALL Tokens
         .await;
+
     // if mmc.network_name.as_str() == "ethereum" {
     //     tracing::trace!("Adding mainnet-specific exchanges");
     //     psb = psb
@@ -275,6 +276,7 @@ pub async fn psb(mmc: MarketMakerConfig, key: String, psbc: PsbConfig, tokens: V
     //         .exchange::<EVMPoolState<PreCachedDB>>(TychoSupportedProtocol::BalancerV2.to_string().as_str(), filter.clone(), Some(balancer))
     //         .exchange::<EVMPoolState<PreCachedDB>>(TychoSupportedProtocol::Curve.to_string().as_str(), filter.clone(), Some(curve));
     // }
+
     psb
 }
 

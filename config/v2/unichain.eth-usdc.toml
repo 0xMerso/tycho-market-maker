@@ -6,7 +6,7 @@ quote_token = "USDC"
 quote_token_address = "0x078D782b760474a361dDA0AF3839290b0EF57AD6"
 network_name = "unichain"
 chain_id = 130
-wallet_public_key = "0xF5029A50494714b3f80b39F05acC2c9Cea017FD6"
+wallet_public_key = "0x32bf8C1dB9887e296Ccd24A8Ba29Df760F39F886"
 gas_token_symbol = "0x4200000000000000000000000000000000000006"
 gas_token_chainlink_price_feed = "0x5b0cf2b36a65a6BB085D501B971e4c102B9Cd473"
 rpc_url = "https://unichain-mainnet.blastapi.io/713ef8fa-d6fb-4192-bf47-3c924ec3ff6b"
@@ -14,17 +14,15 @@ explorer_url = "https://uniscan.xyz/"
 tycho_api = "tycho-unichain-beta.propellerheads.xyz"
 
 # === Execution ===
-min_watch_spread_bps = 2.0
-min_executable_spread_bps = 2.0
+min_watch_spread_bps = 3.0
+min_executable_spread_bps = 3.0
 max_slippage_pct = 0.0005
 max_inventory_ratio = 0.99
-
 tx_gas_limit = 300000
 block_offset = 1
 inclusion_block_delay = 0
 permit2_address = "0x000000000022D473030F116dDEE9F6B43aC78BA3"
 tycho_router_address = "0xFfA5ec2e444e4285108e4a17b82dA495c178427B"
-
 
 # === Misc ===
 poll_interval_ms = 500

@@ -12,7 +12,10 @@ use crate::{
         moni::NewPricesMessage,
         tycho::{ProtoSimComp, PsbConfig, SharedTychoStreamState},
     },
-    utils::constants::{ADD_TVL_THRESHOLD, APPROVE_FN_SIGNATURE, BASIS_POINT_DENO, DEFAULT_APPROVE_GAS, DEFAULT_SWAP_GAS, MIN_AMOUNT_WORTH_USD, NULL_ADDRESS, PRICE_MOVE_THRESHOLD},
+    utils::constants::{
+        ADD_TVL_THRESHOLD, APPROVE_FN_SIGNATURE, BASIS_POINT_DENO, DEFAULT_APPROVE_GAS, DEFAULT_SWAP_GAS, MAX_POOL_PRICE_DEVIATION_PCT, MIN_AMOUNT_WORTH_USD, NULL_ADDRESS, PERCENT_MULTIPLIER,
+        PRICE_MOVE_THRESHOLD,
+    },
 };
 use alloy::{
     providers::{Provider, ProviderBuilder},
@@ -466,7 +469,7 @@ impl IMarketMaker for MarketMaker {
                         amount_out_normalized,
                         buying.symbol,
                         gas_cost_usd,
-                        gas_cost_in_output * 100.0
+                        gas_cost_in_output * PERCENT_MULTIPLIER
                     );
                     let average_sell_price = if base_to_quote {
                         amount_out_normalized / selling_amount
@@ -729,7 +732,7 @@ impl IMarketMaker for MarketMaker {
                             Ok(msg) => {
                                 let time = std::time::SystemTime::now();
                                 let intro = format!(
-                                    "{}  {} stream: b#{} with {} states", // , + {} pairs, - {} pairs",
+                                    "{} {} stream: b#{} with {} states", // , + {} pairs, - {} pairs",
                                     self.config.pair_tag,
                                     self.config.network_name.as_str(),
                                     msg.block_number,
@@ -739,14 +742,30 @@ impl IMarketMaker for MarketMaker {
                                 if !self.ready {
                                     tracing::info!("{}", intro);
                                     // --- First stream ---
+
+                                    // Fetch reference price first for validation
+                                    let reference_price = match self.fetch_market_price().await {
+                                        Ok(price) if price > 0.0 => {
+                                            tracing::info!("📊 Reference price at initialization: ${:.2}", price);
+                                            price
+                                        }
+                                        _ => {
+                                            tracing::error!("Failed to fetch reference price at initialization, retrying...");
+                                            continue;
+                                        }
+                                    };
+
                                     protosims = msg.states.clone();
                                     let mut keys = vec![];
                                     for (_id, comp) in msg.new_pairs.iter() {
                                         keys.push(comp.id.to_string().to_lowercase());
                                     }
                                     let mut targets = 0;
+                                    let mut filtered_out = 0;
+                                    let mut target_components = vec![];
+
                                     for k in keys.clone() {
-                                        if let Some(_proto) = msg.states.get(&k.to_string()) {
+                                        if let Some(proto) = msg.states.get(&k.to_string()) {
                                             // Need to make sure protosim exists
                                             let comp = msg.new_pairs.get(&k.to_string()).expect("New pair not found");
                                             let symbols = comp.tokens.iter().map(|t| t.symbol.clone()).collect::<Vec<String>>();
@@ -754,15 +773,61 @@ impl IMarketMaker for MarketMaker {
                                                 components.push(comp.clone());
                                                 // If the component contains both config tokens, add it to the monitored list
                                                 let tks = comp.tokens.iter().map(|t| t.address.to_string().to_lowercase()).collect::<Vec<String>>();
+                                                tracing::debug!("Tokens in component: {:?}", tks);
                                                 if tks.contains(&self.base.address.to_string().to_lowercase()) && tks.contains(&self.quote.address.to_string().to_lowercase()) {
-                                                    targets += 1;
-                                                    tracing::debug!(" - Adding target component: {} | Tokens: {:?} ", cpname(comp.clone()), symbols);
+                                                    // Calculate spot price for this pool
+                                                    let token0 = comp.tokens[0].address.to_string().to_lowercase();
+                                                    let is0base = token0 == self.base.address.to_string().to_lowercase();
+
+                                                    let spot_price_result = if is0base {
+                                                        proto.spot_price(&comp.tokens[0], &comp.tokens[1])
+                                                    } else {
+                                                        proto.spot_price(&comp.tokens[1], &comp.tokens[0])
+                                                    };
+
+                                                    match spot_price_result {
+                                                        Ok(spot_price) => {
+                                                            let price_deviation = ((spot_price - reference_price).abs() / reference_price) * PERCENT_MULTIPLIER;
+
+                                                            if price_deviation <= MAX_POOL_PRICE_DEVIATION_PCT {
+                                                                targets += 1;
+                                                                target_components.push(comp.clone());
+                                                                tracing::debug!(
+                                                                    "✅ Adding pool: {} | Price: {:.5} | Deviation: {:.2}% | Tokens: {:?}",
+                                                                    cpname(comp.clone()),
+                                                                    spot_price,
+                                                                    price_deviation,
+                                                                    symbols
+                                                                );
+                                                            } else {
+                                                                filtered_out += 1;
+                                                                tracing::warn!(
+                                                                    "⚠️  Filtered out: {} | Price: {:.5} | Deviation: {:.2}% (>{:.1}%) | Tokens: {:?}",
+                                                                    cpname(comp.clone()),
+                                                                    spot_price,
+                                                                    price_deviation,
+                                                                    MAX_POOL_PRICE_DEVIATION_PCT,
+                                                                    symbols
+                                                                );
+                                                            }
+                                                        }
+                                                        Err(e) => {
+                                                            filtered_out += 1;
+                                                            tracing::warn!(" - ❌ Could not get spot price for {}: {:?}", cpname(comp.clone()), e);
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
                                     }
                                     self.ready = true;
-                                    tracing::info!("✅ ProtocolStreamBuilder initialised successfully. Monitoring {} on {} components\n", targets, components.len());
+                                    tracing::info!(
+                                        "✅ ProtocolStreamBuilder initialised successfully. Monitoring {} targets (filtered {} outside {:.1}% range) on {} total components\n",
+                                        targets,
+                                        filtered_out,
+                                        MAX_POOL_PRICE_DEVIATION_PCT,
+                                        components.len()
+                                    );
                                 } else {
                                     // --- Update protosims ---
                                     if !msg.states.is_empty() {
