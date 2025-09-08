@@ -291,7 +291,49 @@ Import dashboard for monitoring:
 - Gas usage
 - System resources
 
-### 3. Log Aggregation
+### 3. Real-time Monitoring UI
+
+When `publish_events` is enabled in your configuration, a comprehensive monitoring UI becomes available. This UI provides real-time insights into your market making operations.
+
+#### Prerequisites
+- PostgreSQL database endpoint (e.g., Neon)
+- `publish_events: true` in your TOML configuration
+- Redis for event streaming
+
+#### Setting Up the UI
+
+1. **Clone the UI Repository**
+   ```bash
+   # Clone the monitoring UI from the documentation
+   git clone [UI_REPOSITORY_URL]
+   cd tycho-mm-ui
+   ```
+
+2. **Configure Database Connection**
+   ```bash
+   # Update the PostgreSQL endpoint in the UI configuration
+   # Edit .env or config file with your Neon database URL
+   DATABASE_URL="postgresql://user:password@your-neon-endpoint.neon.tech/tycho_prod"
+   ```
+
+3. **Install and Run**
+   ```bash
+   npm install
+   npm run dev  # For development
+   npm run build && npm start  # For production
+   ```
+
+#### Features Available in the UI
+- **Real-time Trade Monitoring**: View trades as they happen
+- **Performance Metrics**: Track profit/loss, success rates, and gas usage
+- **Market Analysis**: Monitor spreads, liquidity, and price movements
+- **Historical Data**: Access past trades and performance trends
+- **Alert Dashboard**: Configure and view trading alerts
+- **Pool Analytics**: Detailed insights into each trading pool
+
+The UI automatically subscribes to Redis events published by the market maker and persists them to PostgreSQL for historical analysis.
+
+### 4. Log Aggregation
 
 ```bash
 # Setup log rotation
@@ -311,7 +353,7 @@ cat > /etc/logrotate.d/tycho-mm << EOF
 EOF
 ```
 
-### 4. Alerting Rules
+### 5. Alerting Rules
 
 Set up alerts for:
 - Service downtime
