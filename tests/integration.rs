@@ -9,11 +9,9 @@ use tycho_simulation::tycho_common::Bytes;
 
 // Global list of all config files to test (same as in parsing.rs)
 static CONFIG_FILES: &[&str] = &[
-    "config/base.eth-usdc.toml",
     "config/mainnet.eth-usdc.toml",
-    "config/mainnet.eth-wbtc.toml",
-    "config/mainnet.usdc-dai.toml",
     "config/unichain.eth-usdc.toml",
+    "config/unichain.btc-usdc.toml",
 ];
 
 // Mock environment config for testing (no real private keys)

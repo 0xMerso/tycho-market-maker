@@ -5,11 +5,9 @@ use shd::utils::evm::{create_provider, eip1559_fees, gas_price, latest};
 
 // Global list of all config files to test
 static CONFIG_FILES: &[&str] = &[
-    "config/base.eth-usdc.toml",
     "config/mainnet.eth-usdc.toml",
-    "config/mainnet.eth-wbtc.toml",
-    "config/mainnet.usdc-dai.toml",
     "config/unichain.eth-usdc.toml",
+    "config/unichain.btc-usdc.toml",
 ];
 
 #[test]
