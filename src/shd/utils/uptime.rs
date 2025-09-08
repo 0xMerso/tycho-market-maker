@@ -1,9 +1,6 @@
-use std::time::Duration;
+use std::{process::Command, time::Duration};
 
-use crate::{
-    types::config::{EnvConfig, MarketMakerConfig},
-    utils::constants::HEARTBEAT_DELAY,
-};
+use crate::utils::constants::HEARTBEAT_DELAY;
 
 /// =============================================================================
 /// @function: alive
@@ -26,15 +23,43 @@ pub async fn alive(endpoint: String) -> bool {
     }
 }
 
+pub fn ghead() -> Option<String> {
+    let output = Command::new("git").args(["rev-parse", "HEAD"]).output().expect("Failed to execute git command");
+    if output.status.success() {
+        let commit = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        tracing::info!("♻️  Commit: {}", commit);
+        Some(commit)
+    } else {
+        let error_message = String::from_utf8_lossy(&output.stderr);
+        tracing::info!("♻️  Failed to get Git Commit hash: {}", error_message);
+        None
+    }
+}
+
+pub async fn heartbeat(endpoint: String) {
+    ghead();
+    let client = reqwest::Client::new();
+    let _res = match client.get(endpoint.clone()).send().await {
+        Ok(res) => {
+            tracing::info!("Hearbeat Success for {}: {}", endpoint.clone(), res.status());
+            res
+        }
+        Err(e) => {
+            tracing::error!("Hearbeat Error on {}: {}", endpoint, e);
+            return;
+        }
+    };
+}
+
 /// =============================================================================
 /// @function: heartbeats
 /// @description: Spawns background task for periodic heartbeat monitoring
-/// @param _mmc: Market maker configuration (unused but kept for future use)
-/// @param env: Environment configuration containing testing mode and heartbeat endpoint
+/// @param testing: Whether the system is in testing mode
+/// @param heartbeat_endpoint: URL endpoint to send heartbeat requests to
 /// @behavior: Spawns async task that ticks every HEARTBEAT_DELAY/2 seconds (skipped in testing mode)
 /// =============================================================================
-pub async fn heartbeats(_mmc: MarketMakerConfig, env: EnvConfig) {
-    if env.testing {
+pub async fn heartbeats(testing: bool, heartbeat_endpoint: String) {
+    if testing {
         tracing::info!("Testing mode, heartbeat task not spawned.");
         return;
     }
@@ -43,7 +68,8 @@ pub async fn heartbeats(_mmc: MarketMakerConfig, env: EnvConfig) {
         let mut hb = tokio::time::interval(Duration::from_secs(HEARTBEAT_DELAY / 2));
         loop {
             hb.tick().await;
-            tracing::debug!("Heartbeat tick. Endpoint: {}", env.heartbeat);
+            heartbeat(heartbeat_endpoint.clone()).await;
+            tracing::debug!("Heartbeat tick. Endpoint: {}", heartbeat_endpoint);
         }
     });
 }

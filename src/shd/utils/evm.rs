@@ -140,14 +140,7 @@ pub async fn approve(mmc: MarketMakerConfig, env: EnvConfig, spender: String, to
     let contract = IERC20::new(token.parse().unwrap(), client.clone());
     let symbol = contract.symbol().call().await.expect("Failed to get symbol")._0.to_string();
     let amount = U256::from(amount);
-    tracing::info!(
-        "Approval: {} at address {}: Amount: {:?} for spender {} and owner {}",
-        symbol,
-        token,
-        amount,
-        spender,
-        wallet.address().to_string()
-    );
+    tracing::info!("Approval: {} at address {} for spender {} and owner {}", symbol, token, spender, wallet.address().to_string());
     let native_gas_price = crate::utils::evm::eip1559_fees(mmc.rpc_url).await.expect("Failed to get native gas price");
     let nonce = client.get_transaction_count(wallet.address()).await.expect("Failed to get nonce");
     let call = contract

@@ -122,8 +122,8 @@ pub trait ExecStrategy: Send + Sync {
     /// =============================================================================
     async fn post_hook(&self, config: &MarketMakerConfig, trades: Vec<Trade>, identifier: String) {
         tracing::info!("{}: default_post_exec_hook", self.name());
-        tracing::info!("Saving trades for instance identifier: {}", identifier);
         if config.publish_events {
+            tracing::info!("Saving trades for instance identifier: {}", identifier);
             for trade in trades {
                 let _ = crate::data::r#pub::trade(NewTradeMessage {
                     identifier: identifier.clone(), // Use passed identifier for trade tracking

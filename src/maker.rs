@@ -39,9 +39,9 @@ async fn init_allowance(config: MarketMakerConfig, env: EnvConfig) {
     }
 
     tracing::info!(
-        "Checking allowance for {} on Tycho Router {} | For {} and {}",
+        "Checking allowance for {} on Permit2 {} | For {} and {}",
         config.wallet_public_key.clone(),
-        config.tycho_router_address.clone(),
+        config.permit2_address.clone(),
         config.base_token.clone(),
         config.quote_token.clone()
     );
@@ -126,6 +126,9 @@ async fn run<M: IMarketMaker>(mut mk: M, identifier: String, config: MarketMaker
         components: HashMap::new(),
         atks: tokens.clone(),
     }));
+
+    // Spawn heartbeat task
+    shd::utils::uptime::heartbeats(env.testing, env.heartbeat.clone()).await;
 
     // Main runtime loop with automatic restart
     loop {

@@ -15,7 +15,7 @@ pub const BASIS_POINT_DENO: f64 = 10_000.0;
 pub const PRICE_MOVE_THRESHOLD: f64 = 0.5;
 
 /// Add TVL threshold (minimum TVL for components to be monitored)
-pub const ADD_TVL_THRESHOLD: f64 = 100.0;
+pub const ADD_TVL_THRESHOLD: f64 = 10.0;
 
 /// Share pool balance swap basis points
 pub const SHARE_POOL_BAL_SWAP_BPS: f64 = 0.1;

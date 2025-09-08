@@ -248,7 +248,7 @@ pub async fn tokens(mmc: MarketMakerConfig, key: Option<&str>) -> Option<Vec<Tok
 /// =============================================================================
 pub async fn psb(mmc: MarketMakerConfig, key: String, psbc: PsbConfig, tokens: Vec<Token>) -> ProtocolStreamBuilder {
     let (_, _, chain) = crate::types::tycho::chain(mmc.network_name.clone().as_str().to_string()).expect("Invalid chain");
-    let u4 = uniswap_v4_pool_with_hook_filter;
+    let _u4 = uniswap_v4_pool_with_hook_filter;
     let _balancer = balancer_pool_filter;
     let _curve = curve_pool_filter;
     let filter = psbc.filter.clone();

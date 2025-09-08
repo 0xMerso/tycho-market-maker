@@ -71,6 +71,9 @@ async fn main() {
         }
     }
 
+    // Spawn heartbeat task
+    shd::utils::uptime::heartbeats(env.testing, env.heartbeat.clone()).await;
+
     // Start listening to Redis pub/sub channel for market maker events
     tracing::info!("🐘 Starting infinite listening of the Redis pub-sub channel: {}, for MM events", CHANNEL_REDIS);
     shd::data::sub::listen(env.clone()).await;

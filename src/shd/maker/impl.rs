@@ -142,7 +142,7 @@ impl IMarketMaker for MarketMaker {
                     for (x, tk) in tokens.iter().enumerate() {
                         let balance = balances.get(x).cloned().unwrap_or_default();
                         let divided = balance as f64 / 10f64.powi(tk.decimals as i32);
-                        msgs.push(format!("{:.3} of {}", divided, tk.symbol));
+                        msgs.push(format!("{:.5} of {}", divided, tk.symbol));
                     }
                     tracing::debug!("💵  Inventory evaluation: Nonce {} | Wallet {} | Holding {}", nonce, self.config.wallet_public_key, msgs.join(" and "));
                     Ok(Inventory {
@@ -773,7 +773,7 @@ impl IMarketMaker for MarketMaker {
                                                 components.push(comp.clone());
                                                 // If the component contains both config tokens, add it to the monitored list
                                                 let tks = comp.tokens.iter().map(|t| t.address.to_string().to_lowercase()).collect::<Vec<String>>();
-                                                tracing::debug!("Tokens in component: {:?}", tks);
+                                                // tracing::debug!("Tokens in component: {:?}", tks);
                                                 if tks.contains(&self.base.address.to_string().to_lowercase()) && tks.contains(&self.quote.address.to_string().to_lowercase()) {
                                                     // Calculate spot price for this pool
                                                     let token0 = comp.tokens[0].address.to_string().to_lowercase();
