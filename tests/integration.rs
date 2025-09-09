@@ -8,11 +8,7 @@ use tycho_simulation::models::Token;
 use tycho_simulation::tycho_common::Bytes;
 
 // Global list of all config files to test (same as in parsing.rs)
-static CONFIG_FILES: &[&str] = &[
-    "config/mainnet.eth-usdc.toml",
-    "config/unichain.eth-usdc.toml",
-    "config/unichain.btc-usdc.toml",
-];
+static CONFIG_FILES: &[&str] = &["config/mainnet.eth-usdc.toml", "config/unichain.eth-usdc.toml", "config/unichain.btc-usdc.toml"];
 
 // Mock environment config for testing (no real private keys)
 fn create_test_env_config() -> EnvConfig {
@@ -198,7 +194,7 @@ async fn test_market_context() {
     };
 
     // Build market maker to test context fetching
-    let env_config = create_test_env_config();
+    let _env_config = create_test_env_config();
     let feed = PriceFeedFactory::create(&config.price_feed_config.r#type);
 
     // Try to create execution strategy (may panic for some networks)
@@ -271,26 +267,19 @@ async fn test_execution_strategy_selection() {
     println!("\n🎯 Testing Execution Strategy Selection...\n");
 
     // Test known networks
-    let networks = vec![
-        ("ethereum", "Mainnet_Strategy"),
-        ("base", "Base_Strategy"),
-        ("unichain", "Unichain_Strategy"),
-    ];
+    let networks = vec![("ethereum", "Mainnet_Strategy"), ("base", "Base_Strategy"), ("unichain", "Unichain_Strategy")];
 
     for (network_name, expected_strategy) in networks {
         println!("🌐 Testing network: {}", network_name);
-        
+
         // Use catch_unwind since create might panic
-        let result = std::panic::catch_unwind(|| {
-            ExecStrategyFactory::create(network_name)
-        });
+        let result = std::panic::catch_unwind(|| ExecStrategyFactory::create(network_name));
 
         match result {
             Ok(strategy) => {
                 let strategy_name = strategy.name();
                 println!("   ✓ Created strategy: {}", strategy_name);
-                assert_eq!(strategy_name, expected_strategy, 
-                    "Strategy name mismatch for network {}", network_name);
+                assert_eq!(strategy_name, expected_strategy, "Strategy name mismatch for network {}", network_name);
             }
             Err(_) => {
                 println!("   ⚠️  Failed to create strategy for {}", network_name);
@@ -301,9 +290,7 @@ async fn test_execution_strategy_selection() {
 
     // Test unknown network - should panic
     println!("\n🔍 Testing unknown network handling:");
-    let unknown_result = std::panic::catch_unwind(|| {
-        ExecStrategyFactory::create("unknown_network")
-    });
+    let unknown_result = std::panic::catch_unwind(|| ExecStrategyFactory::create("unknown_network"));
 
     match unknown_result {
         Ok(_) => {
@@ -326,7 +313,7 @@ async fn test_execution_strategy_selection() {
     // Test strategy name enum conversion
     println!("\n📝 Testing strategy name conversions:");
     use shd::maker::exec::ExecStrategyName;
-    
+
     assert_eq!(ExecStrategyName::MainnetStrategy.as_str(), "Mainnet_Strategy");
     assert_eq!(ExecStrategyName::BaseStrategy.as_str(), "Base_Strategy");
     assert_eq!(ExecStrategyName::UnichainStrategy.as_str(), "Unichain_Strategy");
