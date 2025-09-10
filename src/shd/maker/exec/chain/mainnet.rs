@@ -85,21 +85,24 @@ impl ExecStrategy for MainnetExec {
     async fn broadcast(&self, prepared: Vec<Trade>, mmc: MarketMakerConfig, env: EnvConfig) -> Result<Vec<BroadcastData>, String> {
         tracing::info!("{}: broadcasting {} transactions on Mainnet via bundle", self.name(), prepared.len());
 
-        let ac = get_alloy_chain(mmc.network_name.as_str().to_string()).expect("Failed to get alloy chain");
+        // Setup provider with wallet
+        let _ac = get_alloy_chain(mmc.network_name.as_str().to_string()).expect("Failed to get alloy chain");
         let rpc = mmc.rpc_url.parse::<url::Url>().unwrap().clone();
         let pk = env.wallet_private_key.clone();
         let wallet = PrivateKeySigner::from_bytes(&B256::from_str(&pk).expect("Failed to convert swapper pk to B256")).expect("Failed to private key signer");
         let signer = alloy::network::EthereumWallet::from(wallet.clone());
-        let provider = ProviderBuilder::new().with_chain(ac).wallet(signer.clone()).on_http(rpc.clone());
-
-        let buildernet = "https://direct-us.buildernet.org:443".to_string();
-        let bsigner = PrivateKeySigner::random();
+        let provider = ProviderBuilder::new().with_chain_id(mmc.chain_id).wallet(signer.clone()).connect_http(rpc.clone());
+        
+        // Create a signer for Flashbots authentication
+        // In production, this should be a persistent key, not random
+        let bundle_signer = PrivateKeySigner::random();
+        
+        // Build endpoints for multiple builders
         let endpoints = provider
             .endpoints_builder()
-            .authenticated_endpoint(buildernet.parse::<url::Url>().unwrap(), BundleSigner::flashbots(bsigner.clone()))
-            .titan(BundleSigner::flashbots(bsigner.clone()))
             .beaverbuild()
-            .flashbots(BundleSigner::flashbots(bsigner.clone()))
+            .titan(BundleSigner::flashbots(bundle_signer.clone()))
+            .flashbots(BundleSigner::flashbots(bundle_signer.clone()))
             .rsync()
             .build();
 
@@ -128,6 +131,7 @@ impl ExecStrategy for MainnetExec {
             let broadcasted_at_ms = now.duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis();
             bd.broadcasted_at_ms = broadcasted_at_ms;
 
+            // Build and get expected transaction hash
             match trade.swap.clone().build(&signer).await {
                 Ok(tx) => {
                     let hash = tx.tx_hash().to_string();
@@ -139,55 +143,70 @@ impl ExecStrategy for MainnetExec {
                 }
             }
 
+            // Encode transactions for bundle
             let mut txs = vec![];
-            match provider.encode_request(trade.swap.clone()).await {
-                Ok(swap) => {
-                    if let Some(approval) = &trade.approve {
-                        match provider.encode_request(approval.clone()).await {
-                            Ok(approval) => {
-                                txs.push(approval);
-                            }
-                            Err(e) => {
-                                tracing::error!("{}: Failed to encode approval: {:?}", self.name(), e);
-                            }
-                        }
+            
+            // Add approval transaction if needed
+            if let Some(approval) = &trade.approve {
+                match provider.encode_request(approval.clone()).await {
+                    Ok(encoded) => {
+                        txs.push(encoded);
                     }
-                    txs.push(swap);
+                    Err(e) => {
+                        tracing::error!("{}: Failed to encode approval: {:?}", self.name(), e);
+                    }
+                }
+            }
+            
+            // Encode the swap transaction
+            match provider.encode_request(trade.swap.clone()).await {
+                Ok(encoded) => {
+                    txs.push(encoded);
                 }
                 Err(e) => {
                     let msg = format!("Failed to encode swap: {:?}", e);
                     tracing::error!("{}: {}", self.name(), msg.clone());
                     bd.broadcast_error = Some(msg.clone());
-                    return Err(msg.clone());
+                    return Err(msg);
                 }
             }
+
+            // Create bundle for Flashbots
+            let bundle = EthSendBundle {
+                txs,
+                block_number: target_block,
+                min_timestamp: None,
+                max_timestamp: None,
+                reverting_tx_hashes: vec![],
+                replacement_uuid: None,
+                dropping_tx_hashes: vec![],
+                refund_percent: None,
+                refund_recipient: None,
+                refund_tx_hashes: vec![],
+                extra_fields: Default::default(),
+            };
+
+            // Send bundle to multiple builders using alloy-mev
             let responses = provider
-                .send_eth_bundle(
-                    EthSendBundle {
-                        txs,
-                        block_number: target_block,
-                        min_timestamp: None,
-                        max_timestamp: None,
-                        reverting_tx_hashes: vec![],
-                        replacement_uuid: None,
-                    },
-                    &endpoints,
-                )
+                .send_eth_bundle(bundle, &endpoints)
                 .await;
 
-            tracing::info!("Bundle sent successfully. Got {} responses", responses.len());
+            let took = time.elapsed().unwrap_or_default().as_millis();
+            bd.broadcasted_took_ms = took;
+
+            tracing::info!("Bundle sent. Got {} responses", responses.len());
             for response in responses.iter() {
-                let took = time.elapsed().unwrap_or_default().as_millis();
-                bd.broadcasted_took_ms = took;
                 match response {
                     Ok(response) => {
                         tracing::info!("    =>  Bundle sent successfully ({})", response.bundle_hash);
                     }
                     Err(e) => {
                         tracing::warn!("    =>  Failed to send bundle: {:?}", e);
+                        bd.broadcast_error = Some(format!("Bundle submission failed: {:?}", e));
                     }
                 }
             }
+            
             results.push(bd);
         }
 

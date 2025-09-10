@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet, VecDeque};
-use tycho_simulation::{models::Token, protocol::models::ProtocolComponent};
+use tycho_common::models::token::Token;
+use tycho_simulation::protocol::models::ProtocolComponent;
 
 use crate::types::tycho::{ProtoSimComp, ValorisationPath};
 

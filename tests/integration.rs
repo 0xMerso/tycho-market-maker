@@ -1,11 +1,11 @@
 use alloy_primitives::bytes;
-use num_bigint::BigUint;
 use shd::maker::exec::ExecStrategyFactory;
 use shd::maker::feed::PriceFeedFactory;
 use shd::types::builder::MarketMakerBuilder;
 use shd::types::config::{load_market_maker_config, EnvConfig};
-use tycho_simulation::models::Token;
-use tycho_simulation::tycho_common::Bytes;
+use tycho_common::models::token::Token;
+use tycho_common::models::Chain;
+use tycho_common::Bytes;
 
 // Global list of all config files to test (same as in parsing.rs)
 static CONFIG_FILES: &[&str] = &["config/mainnet.eth-usdc.toml", "config/unichain.eth-usdc.toml", "config/unichain.btc-usdc.toml"];
@@ -48,14 +48,20 @@ async fn test_market_maker_initialization() {
             address: Bytes(bytes::Bytes::from(base_address_vec)),
             symbol: config.base_token.clone(),
             decimals: 18, // ETH decimals
-            gas: BigUint::from(0u64),
+            gas: vec![],
+            chain: Chain::Ethereum, // Default to Ethereum for tests
+            quality: 100,           // Normal token
+            tax: 0,                 // No tax
         };
 
         let quote_token = Token {
             address: Bytes(bytes::Bytes::from(quote_address_vec)),
             symbol: config.quote_token.clone(),
             decimals: if config.quote_token == "WBTC" { 8 } else { 6 }, // WBTC has 8, USDC/DAI have 6
-            gas: BigUint::from(0u64),
+            gas: vec![],
+            chain: Chain::Ethereum, // Default to Ethereum for tests
+            quality: 100,           // Normal token
+            tax: 0,                 // No tax
         };
 
         // Create price feed
@@ -183,14 +189,20 @@ async fn test_market_context() {
         address: Bytes(bytes::Bytes::from(base_address_vec)),
         symbol: config.base_token.clone(),
         decimals: 18,
-        gas: BigUint::from(0u64),
+        gas: vec![],
+        chain: Chain::Ethereum, // Default to Ethereum for tests
+        quality: 100,           // Normal token
+        tax: 0,                 // No tax
     };
 
     let quote_token = Token {
         address: Bytes(bytes::Bytes::from(quote_address_vec)),
         symbol: config.quote_token.clone(),
         decimals: 6,
-        gas: BigUint::from(0u64),
+        gas: vec![],
+        chain: Chain::Ethereum, // Default to Ethereum for tests
+        quality: 100,           // Normal token
+        tax: 0,                 // No tax,
     };
 
     // Build market maker to test context fetching

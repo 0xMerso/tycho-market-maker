@@ -1,4 +1,4 @@
-use tycho_simulation::models::Token;
+use tycho_common::models::token::Token;
 
 use super::maker::MarketMaker;
 use crate::maker::{exec::ExecStrategy, feed::PriceFeed};

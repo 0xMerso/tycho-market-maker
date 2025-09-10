@@ -6,7 +6,8 @@
 /// swap quantity that maximizes profit
 /// =============================================================================
 use num_bigint::BigUint;
-use tycho_simulation::{models::Token, protocol::state::ProtocolSim};
+use tycho_common::models::token::Token;
+use tycho_common::simulation::protocol_sim::ProtocolSim;
 
 use crate::utils::constants::{BASIS_POINT_DENO, OPTI_MAX_ITERATIONS, OPTI_TOLERANCE};
 

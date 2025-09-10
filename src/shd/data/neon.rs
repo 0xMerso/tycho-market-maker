@@ -167,7 +167,7 @@ pub async fn handle(msg: &ParsedMessage, env: MoniEnvConfig) {
                             if let Ok(swap_receipt) = swap_receipt {
                                 let swap_receipt_data = ReceiptData {
                                     status: swap_receipt.status(),
-                                    gas_used: swap_receipt.gas_used,
+                                    gas_used: swap_receipt.gas_used as u128,
                                     effective_gas_price: swap_receipt.effective_gas_price,
                                     error: None,
                                     transaction_hash: swap_receipt.transaction_hash.to_string(),

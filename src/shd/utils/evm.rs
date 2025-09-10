@@ -2,13 +2,14 @@ use crate::types::config::{EnvConfig, MarketMakerConfig};
 use std::{str::FromStr, sync::Arc};
 
 use alloy::{
-    providers::{utils::Eip1559Estimation, Provider, ProviderBuilder, RootProvider},
+    // network::Ethereum, // Unused
+    providers::{utils::Eip1559Estimation, Provider, ProviderBuilder}, // Removed RootProvider
     rpc::types::TransactionReceipt,
     signers::local::PrivateKeySigner,
-    transports::http::Http,
+    // transports::http::Http, // Unused
 };
 use alloy_primitives::{B256, U256};
-use reqwest::Client;
+// use reqwest::Client; // Unused
 use url;
 
 use crate::types::sol::IERC20;
@@ -25,10 +26,10 @@ use crate::types::sol::IERC20;
 /// @function: create_provider
 /// @description: Create an HTTP provider instance from RPC URL
 /// @param rpc: RPC endpoint URL as string
-/// @return RootProvider<Http<Client>>: Configured provider instance
+/// @return impl Provider: Configured provider instance
 /// =============================================================================
-pub fn create_provider(rpc: &str) -> RootProvider<Http<Client>> {
-    ProviderBuilder::new().on_http(rpc.parse().expect("Failed to parse RPC URL"))
+pub fn create_provider(rpc: &str) -> impl Provider {
+    ProviderBuilder::new().connect_http(rpc.parse().expect("Failed to parse RPC URL"))
 }
 
 /// =============================================================================
@@ -62,7 +63,7 @@ pub async fn gas_price(provider: String) -> u128 {
 pub async fn eip1559_fees(provider: String) -> Result<Eip1559Estimation, String> {
     let provider = create_provider(&provider);
 
-    match provider.estimate_eip1559_fees(None).await {
+    match provider.estimate_eip1559_fees().await {
         Ok(fees) => Ok(fees),
         Err(e) => {
             tracing::error!("Failed to estimate EIP-1559 fees: {:?}", e);
@@ -79,7 +80,7 @@ pub async fn eip1559_fees(provider: String) -> Result<Eip1559Estimation, String>
 /// @param tokens: Vector of token contract addresses
 /// @return Result<Vec<u128>, String>: Vector of token balances in wei or error
 /// =============================================================================
-pub async fn balances(provider: &RootProvider<Http<Client>>, owner: String, tokens: Vec<String>) -> Result<Vec<u128>, String> {
+pub async fn balances(provider: &impl Provider, owner: String, tokens: Vec<String>) -> Result<Vec<u128>, String> {
     let mut balances = vec![];
     let client = Arc::new(provider);
 
@@ -88,7 +89,7 @@ pub async fn balances(provider: &RootProvider<Http<Client>>, owner: String, toke
 
         match contract.balanceOf(owner.parse().unwrap()).call().await {
             Ok(res) => {
-                let balance = res.balance.to_string().parse::<u128>().unwrap_or_default();
+                let balance = res.to_string().parse::<u128>().unwrap_or_default();
                 balances.push(balance);
             }
             Err(e) => {
@@ -115,7 +116,7 @@ pub async fn allowance(rpc: String, owner: String, spender: String, token: Strin
     let client = Arc::new(provider);
     let contract = IERC20::new(token.parse().unwrap(), client.clone());
     match contract.allowance(owner.parse().unwrap(), spender.parse().unwrap()).call().await {
-        Ok(allowance) => Ok(allowance._0.to_string().parse::<u128>().unwrap_or_default()),
+        Ok(allowance) => Ok(allowance.to_string().parse::<u128>().unwrap_or_default()),
         Err(e) => {
             tracing::error!("Failed to get allowance for {}: {:?}", token, e);
             Err(format!("Failed to get allowance for {}: {:?}", token, e))
@@ -135,10 +136,10 @@ pub async fn approve(mmc: MarketMakerConfig, env: EnvConfig, spender: String, to
     let pk = env.wallet_private_key.clone();
     let wallet = PrivateKeySigner::from_bytes(&B256::from_str(&pk).expect("Failed to convert swapper pk to B256")).expect("Failed to private key signer");
     let signer = alloy::network::EthereumWallet::from(wallet.clone());
-    let provider = ProviderBuilder::new().with_chain_id(mmc.chain_id).wallet(signer.clone()).on_http(rpc.clone());
+    let provider = ProviderBuilder::new().with_chain_id(mmc.chain_id).wallet(signer.clone()).connect_http(rpc.clone());
     let client = Arc::new(provider);
     let contract = IERC20::new(token.parse().unwrap(), client.clone());
-    let symbol = contract.symbol().call().await.expect("Failed to get symbol")._0.to_string();
+    let symbol = contract.symbol().call().await.expect("Failed to get symbol");
     let amount = U256::from(amount);
     tracing::info!("Approval: {} at address {} for spender {} and owner {}", symbol, token, spender, wallet.address().to_string());
     let native_gas_price = crate::utils::evm::eip1559_fees(mmc.rpc_url).await.expect("Failed to get native gas price");

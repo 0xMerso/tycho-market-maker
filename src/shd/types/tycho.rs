@@ -1,12 +1,11 @@
-use num_bigint::BigUint;
+// use num_bigint::BigUint; // No longer used, gas is now Vec<Option<u64>>
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
-use tycho_simulation::tycho_core::Bytes;
-use tycho_simulation::{
-    models::Token,
-    protocol::{models::ProtocolComponent, state::ProtocolSim},
-    tycho_client::feed::component_tracker::ComponentFilter,
-};
+use tycho_common::Bytes;
+use tycho_common::models::token::Token;
+use tycho_common::simulation::protocol_sim::ProtocolSim;
+use tycho_simulation::protocol::models::ProtocolComponent;
+use tycho_client::feed::component_tracker::ComponentFilter;
 
 #[derive(Clone)]
 pub struct PsbConfig {
@@ -15,7 +14,7 @@ pub struct PsbConfig {
 
 /// Due to library conflicts, we need to redefine the Chain type depending the use case, hence the following aliases.
 pub type ChainCommon = tycho_common::dto::Chain;
-pub type ChainSimCore = tycho_simulation::tycho_core::dto::Chain;
+pub type ChainSimCore = tycho_common::dto::Chain;
 pub type ChainSimu = tycho_simulation::evm::tycho_models::Chain;
 
 /// Return the chains types for a given network name
@@ -33,7 +32,7 @@ pub fn chain(name: String) -> Option<(ChainCommon, ChainSimCore, ChainSimu)> {
 
 use std::{collections::HashMap, str::FromStr, sync::Arc};
 use strum::VariantNames;
-use strum_macros::{Display, EnumString};
+use strum_macros::{Display, EnumString, VariantNames};
 
 #[derive(Display, VariantNames, EnumString)]
 pub enum TychoSupportedProtocol {
@@ -130,9 +129,9 @@ impl From<Token> for SrzToken {
     fn from(token: Token) -> Self {
         SrzToken {
             address: token.address.to_string(),
-            decimals: token.decimals,
+            decimals: token.decimals as usize,
             symbol: token.symbol,
-            gas: token.gas.to_string(), // Convert BigUint to String
+            gas: token.gas.iter().map(|opt| opt.unwrap_or(0)).collect::<Vec<_>>().iter().map(|&x| x.to_string()).collect::<Vec<_>>().join(","), // Convert Vec<Option<u64>> to String
         }
     }
 }
@@ -140,10 +139,13 @@ impl From<Token> for SrzToken {
 impl From<SrzToken> for Token {
     fn from(serialized: SrzToken) -> Self {
         Token {
+            chain: tycho_common::models::Chain::Ethereum, // Default chain
+            quality: 100, // Default quality
+            tax: 0, // No tax information
             address: Bytes::from_str(serialized.address.to_lowercase().as_str()).unwrap(),
-            decimals: serialized.decimals,
+            decimals: serialized.decimals as u32,
             symbol: serialized.symbol,
-            gas: BigUint::parse_bytes(serialized.gas.as_bytes(), 10).expect("Failed to parse BigUint"), // Convert String back to BigUint
+            gas: serialized.gas.split(',').map(|s| s.parse::<u64>().ok()).collect(), // Convert String back to Vec<Option<u64>>
         }
     }
 }

@@ -12,8 +12,8 @@ use tycho_client::rpc::RPCClient;
 use tycho_client::HttpRPCClient;
 use tycho_common::dto::{PaginationParams, ProtocolStateRequestBody, ResponseToken, TokensRequestBody, VersionParam};
 use tycho_common::Bytes;
-use tycho_simulation::evm::protocol::filters::{balancer_pool_filter, curve_pool_filter, uniswap_v4_pool_with_hook_filter};
-use tycho_simulation::models::Token;
+use tycho_simulation::evm::protocol::filters::{balancer_v2_pool_filter, curve_pool_filter, uniswap_v4_pool_with_hook_filter};
+use tycho_common::models::token::Token;
 
 use tycho_simulation::evm::protocol::uniswap_v3::state::UniswapV3State;
 use tycho_simulation::evm::protocol::uniswap_v4::state::UniswapV4State;
@@ -21,7 +21,7 @@ use tycho_simulation::evm::protocol::uniswap_v4::state::UniswapV4State;
 use tycho_simulation::evm::{protocol::uniswap_v2::state::UniswapV2State, stream::ProtocolStreamBuilder};
 
 use alloy_chains::NamedChain;
-use num_bigint::BigUint;
+// use num_bigint::BigUint; // No longer used, gas is now Vec<Option<u64>>
 use tycho_simulation::protocol::models::ProtocolComponent;
 
 use crate::types::config::MarketMakerConfig;
@@ -123,12 +123,15 @@ fn sanitize(input: Vec<ResponseToken>) -> Vec<Token> {
         if t.symbol.len() >= 20 {
             continue; // Symbol has been mistaken for a contract address, possibly.
         }
-        if let Ok(addr) = tycho_simulation::tycho_core::Bytes::from_str(t.address.clone().to_string().as_str()) {
+        if let Ok(addr) = tycho_common::Bytes::from_str(t.address.clone().to_string().as_str()) {
             tokens.push(Token {
                 address: addr,
-                decimals: t.decimals as usize,
+                decimals: t.decimals as u32,
                 symbol: t.symbol.clone(),
-                gas: BigUint::from(g),
+                gas: vec![Some(g)],
+                chain: tycho_common::models::Chain::Ethereum, // Default chain, should be set properly
+                quality: 100, // Default quality
+                tax: 0, // No tax information
             });
         }
     }
@@ -249,7 +252,7 @@ pub async fn tokens(mmc: MarketMakerConfig, key: Option<&str>) -> Option<Vec<Tok
 pub async fn psb(mmc: MarketMakerConfig, key: String, psbc: PsbConfig, tokens: Vec<Token>) -> ProtocolStreamBuilder {
     let (_, _, chain) = crate::types::tycho::chain(mmc.network_name.clone().as_str().to_string()).expect("Invalid chain");
     let _u4 = uniswap_v4_pool_with_hook_filter;
-    let _balancer = balancer_pool_filter;
+    let _balancer = balancer_v2_pool_filter;
     let _curve = curve_pool_filter;
     let filter = psbc.filter.clone();
     let mut hmt = HashMap::new();
