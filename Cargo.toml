@@ -11,6 +11,13 @@ categories = ["blockchain", "financial"]
 
 [dependencies]
 
+
+# --- Progressive Upgrade ---
+# Alloy 1.0
+# Rm alloy-mev, use the MEV pkgs from alloy
+# New tycho-simulation-new repo, update with pub fields ?
+# Upgrade each tycho crate
+
 # --- Tycho Ecosystem ---
 tycho-simulation = { git = "https://github.com/propeller-heads/tycho-simulation.git", rev = "2ef64b9bcc20de865303efceb3a5d245c34b32c0" }
 tycho-common = "0.66.4"
