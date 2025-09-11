@@ -27,7 +27,7 @@ categories = ["blockchain", "financial"]
 # --- Tycho Ecosystem updated ---
 tycho-common = "0.82.0"
 tycho-client = "0.82.0"
-tycho-simulation = { git = "https://github.com/propeller-heads/tycho-simulation.git", tag = "0.156.1" }
+tycho-simulation = { git = "https://github.com/propeller-heads/tycho-simulation.git", rev = "eb8b5d1ab5099ad216a8bd684d89864d2be734d0" }
 tycho-execution = { version = "0.122.0", features = ["evm"] }
 
 # --- Web3 & Blockchain ---

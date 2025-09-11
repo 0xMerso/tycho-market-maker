@@ -367,15 +367,13 @@ dependencies = [
 [[package]]
 name = "alloy-mev"
 version = "0.5.0"
-source = "git+https://github.com/leruaa/alloy-mev.git?branch=main#f2f7e1cb07bd49d6f5c7a62cb4d6e1c7a0d1829e"
+source = "git+https://github.com/leruaa/alloy-mev.git?branch=main#6ba35d2203b5679ea2979c7a21c57bc1afb79fdd"
 dependencies = [
  "alloy",
  "async-trait",
+ "dyn-clone",
  "futures 0.3.31",
  "pin-project 1.1.10",
- "reqwest",
- "serde_json",
- "tower",
  "url",
 ]
 
@@ -1911,9 +1909,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.9.1"
+version = "1.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3946acbe1ead1301ba6862e712c7903ca9bb230bdf1fbd1b5ac54158ef2ab1f"
+checksum = "4fa63ad37685ceb7762fa4d73d06f1d5493feb88e3f27259b9ed277f4c01b185"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-http",
@@ -2625,7 +2623,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "117725a109d387c937a1533ce01b450cbde6b88abceea8473c4d7a85853cda3c"
 dependencies = [
  "lazy_static",
- "windows-sys 0.48.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -2644,9 +2642,9 @@ dependencies = [
 
 [[package]]
 name = "comfy-table"
-version = "7.2.0"
+version = "7.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f8e18d0dca9578507f13f9803add0df13362b02c501c1c17734f0dbb52eaf0b"
+checksum = "b03b7db8e0b4b2fdad6c551e634134e99ec000e5c8c3b6856c65e8bbaded7a3b"
 dependencies = [
  "crossterm",
  "unicode-segmentation",
@@ -7514,9 +7512,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-webpki"
-version = "0.103.4"
+version = "0.103.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a17884ae0c1b773f1ccd2bd4a8c72f16da897310a98b0e84bf349ad5ead92fc"
+checksum = "b5a37813727b78798e53c2bec3f5e8fe12a6d6f8389bf9ca7802add4c9905ad8"
 dependencies = [
  "ring",
  "rustls-pki-types",
@@ -8204,9 +8202,9 @@ dependencies = [
 
 [[package]]
 name = "solar-data-structures"
-version = "0.1.6"
+version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4022a9a35fb9914f7162ea96f3c6bf00d8066018cc90cf7939b360b1009ce028"
+checksum = "e246a9af3cc34b40e7612b600a5495f70768bdd365f9fa338d64afb33a59a96b"
 dependencies = [
  "bumpalo",
  "index_vec",
@@ -8246,9 +8244,9 @@ dependencies = [
 
 [[package]]
 name = "solar-macros"
-version = "0.1.6"
+version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73ecd98081d2aa15f8747a484a772e059df5359c2936e8caa8fd18ecc51e4a8e"
+checksum = "00b3d7b35daa205064e7965584b3144b73b38acce2257c21d01e351b8f8812d7"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -9568,7 +9566,7 @@ dependencies = [
 [[package]]
 name = "tycho-simulation"
 version = "0.156.1"
-source = "git+https://github.com/propeller-heads/tycho-simulation.git?tag=0.156.1#eb8b5d1ab5099ad216a8bd684d89864d2be734d0"
+source = "git+https://github.com/propeller-heads/tycho-simulation.git?rev=eb8b5d1ab5099ad216a8bd684d89864d2be734d0#eb8b5d1ab5099ad216a8bd684d89864d2be734d0"
 dependencies = [
  "alloy",
  "async-stream",
@@ -10163,7 +10161,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.0",
 ]
 
 [[package]]

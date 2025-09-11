@@ -5,7 +5,7 @@ use tycho_common::Bytes;
 use tycho_common::models::token::Token;
 use tycho_common::simulation::protocol_sim::ProtocolSim;
 use tycho_simulation::protocol::models::ProtocolComponent;
-use tycho_client::feed::component_tracker::ComponentFilter;
+use tycho_simulation::tycho_client::feed::component_tracker::ComponentFilter;
 
 #[derive(Clone)]
 pub struct PsbConfig {

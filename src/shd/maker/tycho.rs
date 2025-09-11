@@ -8,8 +8,8 @@
 /// =============================================================================
 use std::collections::HashMap;
 use std::str::FromStr;
-use tycho_client::rpc::RPCClient;
-use tycho_client::HttpRPCClient;
+use tycho_simulation::tycho_client::rpc::RPCClient;
+use tycho_simulation::tycho_client::HttpRPCClient;
 use tycho_common::dto::{PaginationParams, ProtocolStateRequestBody, ResponseToken, TokensRequestBody, VersionParam};
 use tycho_common::Bytes;
 use tycho_simulation::evm::protocol::filters::{balancer_v2_pool_filter, curve_pool_filter, uniswap_v4_pool_with_hook_filter};

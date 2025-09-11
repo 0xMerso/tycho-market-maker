@@ -28,7 +28,7 @@ use async_trait::async_trait;
 use futures::StreamExt;
 use num_bigint::BigUint;
 use num_traits::cast::ToPrimitive;
-use tycho_client::feed::component_tracker::ComponentFilter;
+use tycho_simulation::tycho_client::feed::component_tracker::ComponentFilter;
 use tycho_execution::encoding::{
     evm::encoder_builders::TychoRouterEncoderBuilder,
     models::{Solution, SwapBuilder, Transaction, UserTransferType},
