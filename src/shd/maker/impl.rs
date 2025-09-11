@@ -392,6 +392,17 @@ impl IMarketMaker for MarketMaker {
 
             // Optimal amount computation using binary search
             let inventory_balance = if base_to_quote { inventory.base_balance } else { inventory.quote_balance };
+
+            // Skip if inventory balance is 0
+            if inventory_balance == 0 {
+                tracing::warn!(
+                    "Skipping trade: No {} balance available (0.00). Cannot execute {} trade.",
+                    selling.symbol,
+                    if base_to_quote { "sell" } else { "buy" }
+                );
+                continue;
+            }
+
             let inventory_balance_normalized = (inventory_balance as f64) / selling_pow;
             let max_alloc = inventory_balance_normalized * self.config.max_inventory_ratio;
 

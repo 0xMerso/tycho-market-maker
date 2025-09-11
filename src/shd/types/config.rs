@@ -237,13 +237,13 @@ impl MarketMakerConfig {
         // Ultra warnings for negative spreads
         if self.min_watch_spread_bps < 0.0 {
             tracing::warn!(
-                "🚨 Target spread is NEGATIVE: {} bps! This will cause unprofitable execution (and drain the inventory) ! 🚨",
+                "Target spread is NEGATIVE: {} bps! This will cause unprofitable execution (and drain the inventory) !",
                 self.min_watch_spread_bps
             );
         }
         if self.min_executable_spread_bps < 0.0 {
             tracing::warn!(
-                "🚨 Min exec spread is NEGATIVE: {} bps! This will cause unprofitable execution (and drain the inventory) ! 🚨",
+                "Min exec spread is NEGATIVE: {} bps! This will cause unprofitable execution (and drain the inventory) !",
                 self.min_executable_spread_bps
             );
         }
@@ -355,7 +355,7 @@ impl MarketMakerConfig {
         // Check if skip_simulation is enabled on mainnet (not yet implemented)
         if let NetworkName::Ethereum = NetworkName::from_str(&self.network_name).unwrap() {
             if !self.skip_simulation {
-                return Err(ConfigError::Config("skip_simulation must be true on mainnet".into()));
+                return Err(ConfigError::Config("skip_simulation must be true on mainnet (bundles)".into()));
             }
         }
 

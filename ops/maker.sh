@@ -10,8 +10,10 @@ NC='\033[0m'
 # 
 # @description: Main entry point for starting the Tycho Market Maker bot
 # @usage: 
-#   sh ops/maker.sh <config_name>    # Start market maker with specified config
+#   sh ops/maker.sh <config_name>              # Start with production config
+#   sh ops/maker.sh --testing <config_name>    # Start with testing config
 #   Example: sh ops/maker.sh base.eth-usdc
+#            sh ops/maker.sh --testing mainnet.eth-usdc
 # 
 # @requirements:
 #   - Rust and Cargo must be installed
@@ -19,11 +21,17 @@ NC='\033[0m'
 #   - Environment variables must be properly configured
 # 
 # @config_files:
+#   Production (config/):
 #   - config/base.eth-usdc.toml      # Base L2 ETH/USDC pair
 #   - config/mainnet.eth-usdc.toml   # Mainnet ETH/USDC pair  
 #   - config/mainnet.usdc-dai.toml   # Mainnet USDC/DAI pair
 #   - config/mainnet.eth-wbtc.toml   # Mainnet ETH/WBTC pair
 #   - config/unichain.eth-usdc.toml  # Unichain ETH/USDC pair
+#   
+#   Testing (config/testing/):
+#   - config/testing/mainnet.eth-usdc.toml   # Testing config for mainnet
+#   - config/testing/unichain.btc-usdc.toml  # Testing config for unichain BTC
+#   - config/testing/unichain.eth-usdc.toml  # Testing config for unichain ETH
 # =============================================================================
 
 # =============================================================================
@@ -40,28 +48,44 @@ cleanup() {
 # =============================================================================
 # @function: start
 # @description: Main startup function that builds and runs the market maker
-# @param: $1 - Config name (e.g., "base.eth-usdc")
+# @param: $1 - Config name (e.g., "base.eth-usdc") or "--testing" flag
+# @param: $2 - Config name when using --testing flag
 # @return: None
 # =============================================================================
 function start() {
-    # Check if config argument is provided
-    if [ -z "$1" ]; then
-        echo -e "${RED}Error: Config argument required${NC}"
-        echo "Usage: sh ops/maker.sh <config_name>"
-        echo "Example: sh ops/maker.sh base.eth-usdc"
-        exit 1
+    # Check for testing flag
+    TESTING_MODE=false
+    CONFIG_NAME=""
+    
+    if [ "$1" = "--testing" ]; then
+        TESTING_MODE=true
+        CONFIG_NAME="$2"
+        if [ -z "$CONFIG_NAME" ]; then
+            echo -e "${RED}Error: Config name required after --testing flag${NC}"
+            echo "Usage: sh ops/maker.sh --testing <config_name>"
+            echo "Example: sh ops/maker.sh --testing mainnet.eth-usdc"
+            exit 1
+        fi
+    else
+        CONFIG_NAME="$1"
+        if [ -z "$CONFIG_NAME" ]; then
+            echo -e "${RED}Error: Config argument required${NC}"
+            echo "Usage: sh ops/maker.sh <config_name>"
+            echo "       sh ops/maker.sh --testing <config_name>"
+            echo "Example: sh ops/maker.sh base.eth-usdc"
+            echo "         sh ops/maker.sh --testing mainnet.eth-usdc"
+            exit 1
+        fi
     fi
 
-    # Set config path
-    CONFIG_PATH="config/$1.toml"
-    SECRET_PATH="config/secrets/.env.$1"
-    
-    # Check if config file exists
-    if [ ! -f "$CONFIG_PATH" ]; then
-        echo -e "${RED}Error: Config file not found: $CONFIG_PATH${NC}"
-        echo "Available configs:"
-        ls config/*.toml | sed 's|config/||' | sed 's|.toml||'
-        exit 1
+    # Set config path based on testing mode
+    if [ "$TESTING_MODE" = true ]; then
+        CONFIG_PATH="config/testing/$CONFIG_NAME.toml"
+        SECRET_PATH="config/testing/secrets/.env.testing.$CONFIG_NAME.toml"
+        echo "🧪 Running in TESTING mode with config: $CONFIG_NAME"
+    else
+        CONFIG_PATH="config/$CONFIG_NAME.toml"
+        SECRET_PATH="config/secrets/.env.$CONFIG_NAME"
     fi
 
     # Set up signal handlers for graceful shutdown
@@ -88,4 +112,4 @@ function start() {
 # =============================================================================
 # Script Execution
 # =============================================================================
-start $1
+start $1 $2
