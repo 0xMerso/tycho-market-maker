@@ -9,6 +9,7 @@ config/secrets
 config/secrets/*
 config/olds
 config/v2/secrets
+config/testing/secrets
 
 dump.rdb
 /src/generated

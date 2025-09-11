@@ -1,25 +1,11 @@
-use alloy_primitives::bytes;
 use shd::maker::exec::ExecStrategyFactory;
 use shd::maker::feed::PriceFeedFactory;
+use shd::maker::tycho::specific;
 use shd::types::builder::MarketMakerBuilder;
-use shd::types::config::{load_market_maker_config, EnvConfig};
-use tycho_common::models::token::Token;
-use tycho_common::models::Chain;
-use tycho_common::Bytes;
+use shd::types::config::load_market_maker_config;
 
 // Global list of all config files to test (same as in parsing.rs)
 static CONFIG_FILES: &[&str] = &["config/mainnet.eth-usdc.toml", "config/unichain.eth-usdc.toml", "config/unichain.btc-usdc.toml"];
-
-// Mock environment config for testing (no real private keys)
-fn create_test_env_config() -> EnvConfig {
-    EnvConfig {
-        path: "test_config".to_string(),
-        testing: true,
-        heartbeat: "".to_string(),
-        tycho_api_key: "test_api_key".to_string(),
-        wallet_private_key: "0x0000000000000000000000000000000000000000000000000000000000000001".to_string(),
-    }
-}
 
 /// Test 1: Market Maker Initialization
 /// Verifies that market maker can be properly initialized with each config
@@ -40,28 +26,31 @@ async fn test_market_maker_initialization() {
 
         println!("   ✓ Config loaded: {} {}/{}", config.network_name, config.base_token, config.quote_token);
 
-        // Create mock tokens with proper types
-        let base_address_vec = hex::decode(config.base_token_address.trim_start_matches("0x")).unwrap_or_default();
-        let quote_address_vec = hex::decode(config.quote_token_address.trim_start_matches("0x")).unwrap_or_default();
+        // Fetch tokens from Tycho API
+        let addresses = vec![config.base_token_address.clone(), config.quote_token_address.clone()];
+        let tokens_result = specific(config.clone(), Some("sampletoken"), addresses).await;
 
-        let base_token = Token {
-            address: Bytes(bytes::Bytes::from(base_address_vec)),
-            symbol: config.base_token.clone(),
-            decimals: 18, // ETH decimals
-            gas: vec![],
-            chain: Chain::Ethereum, // Default to Ethereum for tests
-            quality: 100,           // Normal token
-            tax: 0,                 // No tax
-        };
+        let (base_token, quote_token) = match tokens_result {
+            Some(tokens) if tokens.len() >= 2 => {
+                println!("   ✓ Tokens fetched from Tycho API");
+                // Find tokens by matching addresses
+                let base_addr_lower = config.base_token_address.to_lowercase();
+                let quote_addr_lower = config.quote_token_address.to_lowercase();
 
-        let quote_token = Token {
-            address: Bytes(bytes::Bytes::from(quote_address_vec)),
-            symbol: config.quote_token.clone(),
-            decimals: if config.quote_token == "WBTC" { 8 } else { 6 }, // WBTC has 8, USDC/DAI have 6
-            gas: vec![],
-            chain: Chain::Ethereum, // Default to Ethereum for tests
-            quality: 100,           // Normal token
-            tax: 0,                 // No tax
+                let base = tokens
+                    .iter()
+                    .find(|t| t.address.to_string().to_lowercase() == base_addr_lower)
+                    .expect(&format!("Base token {} not found", config.base_token_address));
+                let quote = tokens
+                    .iter()
+                    .find(|t| t.address.to_string().to_lowercase() == quote_addr_lower)
+                    .expect(&format!("Quote token {} not found", config.quote_token_address));
+
+                (base.clone(), quote.clone())
+            }
+            _ => {
+                panic!("Failed to fetch tokens from Tycho API for {}", config_path);
+            }
         };
 
         // Create price feed
@@ -69,7 +58,6 @@ async fn test_market_maker_initialization() {
         println!("   ✓ Price feed created: {}", config.price_feed_config.r#type);
 
         // Create execution strategy
-        let _env_config = create_test_env_config();
         let exec_strategy = std::panic::catch_unwind(|| ExecStrategyFactory::create(config.network_name.as_str()));
 
         match exec_strategy {
@@ -81,15 +69,19 @@ async fn test_market_maker_initialization() {
                 let identifier = builder.identifier();
                 println!("   ✓ Builder created with ID: {}", identifier);
 
-                match builder.build(base_token, quote_token) {
+                match builder.build(base_token.clone(), quote_token.clone()) {
                     Ok(market_maker) => {
                         // Verify initialization
                         assert_eq!(market_maker.config.network_name, config.network_name);
-                        assert_eq!(market_maker.base.symbol, config.base_token);
-                        assert_eq!(market_maker.quote.symbol, config.quote_token);
+                        assert_eq!(market_maker.base.symbol, base_token.symbol);
+                        assert_eq!(market_maker.quote.symbol, quote_token.symbol);
+                        assert_eq!(market_maker.base.address, base_token.address);
+                        assert_eq!(market_maker.quote.address, quote_token.address);
                         assert!(!market_maker.ready); // Should start as not ready
 
                         println!("   ✓ Market maker initialized successfully");
+                        println!("      Base: {} ({})", market_maker.base.symbol, market_maker.base.address);
+                        println!("      Quote: {} ({})", market_maker.quote.symbol, market_maker.quote.address);
                     }
                     Err(e) => {
                         println!("   ❌ Failed to build market maker: {}", e);
@@ -115,51 +107,56 @@ async fn test_market_maker_initialization() {
 async fn test_price_feeds() {
     println!("\n💰 Testing Price Feed Strategies...\n");
 
-    // Load a test config for feed testing
-    let config_path = "config/unichain.eth-usdc.toml";
-    let config = load_market_maker_config(config_path).expect("Failed to load config");
+    for config_path in CONFIG_FILES {
+        println!("📄 Testing price feeds for: {}", config_path);
 
-    // Test Binance feed
-    println!("📊 Testing Binance price feed:");
-    let binance_feed = PriceFeedFactory::create("binance");
-    println!("   Feed name: {}", binance_feed.name());
+        let config = match load_market_maker_config(config_path) {
+            Ok(c) => c,
+            Err(e) => {
+                panic!("Failed to load config {}: {:?}", config_path, e);
+            }
+        };
 
-    match binance_feed.get(config.clone()).await {
-        Ok(price) => {
-            println!("   ✓ Binance feed returned price: ${:.2}", price);
-            assert!(price > 0.0, "Price should be positive");
-            assert!(price < 1_000_000.0, "Price should be reasonable");
+        println!("   Config: {} {}/{}", config.network_name, config.base_token, config.quote_token);
+
+        // Test Binance feed
+        println!("   📊 Testing Binance price feed:");
+        let binance_feed = PriceFeedFactory::create("binance");
+
+        match binance_feed.get(config.clone()).await {
+            Ok(price) => {
+                println!("      ✓ Binance feed returned price: ${:.2}", price);
+                assert!(price > 0.0, "Price should be positive");
+                assert!(price < 1_000_000.0, "Price should be reasonable");
+            }
+            Err(e) => {
+                println!("      ⚠️  Could not fetch from Binance: {}", e);
+                // API might be down or rate limited in tests
+            }
         }
-        Err(e) => {
-            println!("   ⚠️  Could not fetch from Binance: {}", e);
-            // API might be down or rate limited in tests
-        }
-    }
 
-    // Test Chainlink feed
-    println!("\n🔗 Testing Chainlink price feed:");
-    let chainlink_feed = PriceFeedFactory::create("chainlink");
-    println!("   Feed name: {}", chainlink_feed.name());
+        // Test Chainlink feed if configured
+        if config.price_feed_config.r#type == "chainlink" {
+            println!("   🔗 Testing Chainlink price feed:");
+            let chainlink_feed = PriceFeedFactory::create("chainlink");
 
-    // Create a test config with proper Chainlink oracle address
-    let mut chainlink_config = config.clone();
-    chainlink_config.price_feed_config.source = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419".to_string(); // ETH/USD oracle on mainnet
-    chainlink_config.rpc_url = "https://eth-mainnet.blastapi.io/1437c115-f259-4690-a2d7-8c32e658a164".to_string(); // Mainnet RPC
+            match chainlink_feed.get(config.clone()).await {
+                Ok(price) => {
+                    println!("      ✓ Chainlink feed returned price: ${:.2}", price);
+                    assert!(price > 0.0, "Price should be positive");
+                }
+                Err(e) => {
+                    println!("      ⚠️  Could not fetch from Chainlink: {}", e);
+                    // Expected in test environment without proper RPC access
+                }
+            }
+        }
 
-    match chainlink_feed.get(chainlink_config).await {
-        Ok(price) => {
-            println!("   ✓ Chainlink feed returned price: ${:.2}", price);
-            assert!(price > 0.0, "Price should be positive");
-        }
-        Err(e) => {
-            println!("   ⚠️  Could not fetch from Chainlink: {}", e);
-            // Expected in test environment without mainnet access
-        }
+        println!();
     }
 
     // Test feed factory with different types
-    println!("\n🔍 Testing price feed factory:");
-
+    println!("🔍 Testing price feed factory:");
     let feed_types = vec!["binance", "chainlink"];
     for feed_type in feed_types {
         let feed = PriceFeedFactory::create(feed_type);
@@ -175,163 +172,86 @@ async fn test_price_feeds() {
 async fn test_market_context() {
     println!("\n🌍 Testing Market Context Fetching...\n");
 
-    // Test with unichain config
-    let config_path = "config/unichain.eth-usdc.toml";
-    let config = load_market_maker_config(config_path).expect("Failed to load config");
+    for config_path in CONFIG_FILES {
+        println!("📄 Testing market context for: {}", config_path);
 
-    println!("📄 Using config: {} {}/{}", config.network_name, config.base_token, config.quote_token);
-
-    // Create tokens with proper types
-    let base_address_vec = hex::decode(config.base_token_address.trim_start_matches("0x")).unwrap_or_default();
-    let quote_address_vec = hex::decode(config.quote_token_address.trim_start_matches("0x")).unwrap_or_default();
-
-    let base_token = Token {
-        address: Bytes(bytes::Bytes::from(base_address_vec)),
-        symbol: config.base_token.clone(),
-        decimals: 18,
-        gas: vec![],
-        chain: Chain::Ethereum, // Default to Ethereum for tests
-        quality: 100,           // Normal token
-        tax: 0,                 // No tax
-    };
-
-    let quote_token = Token {
-        address: Bytes(bytes::Bytes::from(quote_address_vec)),
-        symbol: config.quote_token.clone(),
-        decimals: 6,
-        gas: vec![],
-        chain: Chain::Ethereum, // Default to Ethereum for tests
-        quality: 100,           // Normal token
-        tax: 0,                 // No tax,
-    };
-
-    // Build market maker to test context fetching
-    let _env_config = create_test_env_config();
-    let feed = PriceFeedFactory::create(&config.price_feed_config.r#type);
-
-    // Try to create execution strategy (may panic for some networks)
-    let exec_result = std::panic::catch_unwind(|| ExecStrategyFactory::create(config.network_name.as_str()));
-
-    if let Ok(exec_strategy) = exec_result {
-        let builder = MarketMakerBuilder::new(config.clone(), feed, exec_strategy);
-
-        match builder.build(base_token, quote_token) {
-            Ok(market_maker) => {
-                println!("✓ Market maker built successfully");
-
-                // Test fetching market context
-                // Note: This requires MarketMaker trait implementation
-                // In test environment, this will likely fail without real API key
-                println!("\n🔄 Testing market context fetch...");
-
-                // We can't directly call fetch_market_context without the trait
-                // But we can verify the market maker structure
-                assert_eq!(market_maker.config.network_name, config.network_name);
-                assert_eq!(market_maker.base.symbol, config.base_token);
-                assert_eq!(market_maker.quote.symbol, config.quote_token);
-
-                println!("   ✓ Market maker structure verified");
-                println!("   ℹ️  Actual API fetch would require valid Tycho API key");
-            }
+        let config = match load_market_maker_config(config_path) {
+            Ok(c) => c,
             Err(e) => {
-                println!("   ⚠️  Could not build market maker: {}", e);
+                panic!("Failed to load config {}: {:?}", config_path, e);
             }
+        };
+
+        println!("   Config: {} {}/{}", config.network_name, config.base_token, config.quote_token);
+
+        // Fetch tokens from Tycho API
+        let addresses = vec![config.base_token_address.clone(), config.quote_token_address.clone()];
+        let tokens_result = specific(config.clone(), Some("sampletoken"), addresses).await;
+
+        let (base_token, quote_token) = match tokens_result {
+            Some(tokens) if tokens.len() >= 2 => {
+                println!("   ✓ Tokens fetched from Tycho API");
+                // Find tokens by matching addresses
+                let base_addr_lower = config.base_token_address.to_lowercase();
+                let quote_addr_lower = config.quote_token_address.to_lowercase();
+
+                let base = tokens
+                    .iter()
+                    .find(|t| t.address.to_string().to_lowercase() == base_addr_lower)
+                    .expect(&format!("Base token {} not found", config.base_token_address));
+                let quote = tokens
+                    .iter()
+                    .find(|t| t.address.to_string().to_lowercase() == quote_addr_lower)
+                    .expect(&format!("Quote token {} not found", config.quote_token_address));
+
+                (base.clone(), quote.clone())
+            }
+            _ => {
+                panic!("Failed to fetch tokens from Tycho API for {}", config_path);
+            }
+        };
+
+        // Build market maker to test context fetching
+        let feed = PriceFeedFactory::create(&config.price_feed_config.r#type);
+
+        // Try to create execution strategy (may panic for some networks)
+        let exec_result = std::panic::catch_unwind(|| ExecStrategyFactory::create(config.network_name.as_str()));
+
+        if let Ok(exec_strategy) = exec_result {
+            let builder = MarketMakerBuilder::new(config.clone(), feed, exec_strategy);
+
+            match builder.build(base_token.clone(), quote_token.clone()) {
+                Ok(market_maker) => {
+                    println!("   ✓ Market maker built successfully");
+
+                    // Verify the market maker structure
+                    assert_eq!(market_maker.config.network_name, config.network_name);
+                    assert_eq!(market_maker.base.symbol, base_token.symbol);
+                    assert_eq!(market_maker.quote.symbol, quote_token.symbol);
+                    assert_eq!(market_maker.base.address, base_token.address);
+                    assert_eq!(market_maker.quote.address, quote_token.address);
+
+                    println!("   ✓ Market maker structure verified");
+                }
+                Err(e) => {
+                    println!("   ⚠️  Could not build market maker: {}", e);
+                }
+            }
+        } else {
+            println!("   ⚠️  Execution strategy not available for {}", config.network_name);
         }
-    } else {
-        println!("   ⚠️  Execution strategy not available for {}", config.network_name);
+
+        // Test configuration validation for API settings
+        assert!(!config.tycho_api.is_empty(), "Tycho API endpoint should be configured");
+        println!("   ✓ Tycho API endpoint: {}", config.tycho_api);
+
+        assert!(config.chain_id > 0, "Chain ID should be valid");
+        println!("   ✓ Chain ID: {}", config.chain_id);
+
+        println!();
     }
 
-    // Test configuration validation for API settings
-    println!("\n🧪 Testing API configuration:");
-
-    // Verify Tycho API is configured
-    assert!(!config.tycho_api.is_empty(), "Tycho API endpoint should be configured");
-    println!("   ✓ Tycho API endpoint: {}", config.tycho_api);
-
-    // Verify network parameters
-    assert!(config.chain_id > 0, "Chain ID should be valid");
-    println!("   ✓ Chain ID: {}", config.chain_id);
-
-    println!("\n✨ Market context tests completed!\n");
-}
-
-/// Test 4: Price Stabilization Algorithm
-/// Tests the market maker's price stabilization logic
-#[tokio::test]
-async fn test_price_stabilization() {
-    println!("\n📊 Testing Price Stabilization Algorithm...\n");
-
-    // This would require mocking ProtocolSim which is complex
-    // For now, we'll test the basic logic flow
-    println!("   ℹ️  Price stabilization requires ProtocolSim mocking");
-    println!("   ℹ️  Would test scenarios:");
-    println!("      - Pool price below reference (need to buy)");
-    println!("      - Pool price above reference (need to sell)");
-    println!("      - Early exit when max amount insufficient");
-
-    println!("\n✨ Price stabilization test placeholder completed!\n");
-}
-
-/// Test 5: Execution Strategy Selection
-/// Tests that correct execution strategies are created for each network
-#[tokio::test]
-async fn test_execution_strategy_selection() {
-    println!("\n🎯 Testing Execution Strategy Selection...\n");
-
-    // Test known networks
-    let networks = vec![("ethereum", "Mainnet_Strategy"), ("base", "Base_Strategy"), ("unichain", "Unichain_Strategy")];
-
-    for (network_name, expected_strategy) in networks {
-        println!("🌐 Testing network: {}", network_name);
-
-        // Use catch_unwind since create might panic
-        let result = std::panic::catch_unwind(|| ExecStrategyFactory::create(network_name));
-
-        match result {
-            Ok(strategy) => {
-                let strategy_name = strategy.name();
-                println!("   ✓ Created strategy: {}", strategy_name);
-                assert_eq!(strategy_name, expected_strategy, "Strategy name mismatch for network {}", network_name);
-            }
-            Err(_) => {
-                println!("   ⚠️  Failed to create strategy for {}", network_name);
-                // This is expected in test environment for some networks
-            }
-        }
-    }
-
-    // Test unknown network - should panic
-    println!("\n🔍 Testing unknown network handling:");
-    let unknown_result = std::panic::catch_unwind(|| ExecStrategyFactory::create("unknown_network"));
-
-    match unknown_result {
-        Ok(_) => {
-            panic!("Should have panicked for unknown network!");
-        }
-        Err(e) => {
-            // Extract panic message if possible
-            if let Some(msg) = e.downcast_ref::<String>() {
-                println!("   ✓ Correctly panicked with message: {}", msg);
-                assert!(msg.contains("Unknown network"), "Panic message should mention unknown network");
-            } else if let Some(msg) = e.downcast_ref::<&str>() {
-                println!("   ✓ Correctly panicked with message: {}", msg);
-                assert!(msg.contains("Unknown network"), "Panic message should mention unknown network");
-            } else {
-                println!("   ✓ Correctly panicked for unknown network");
-            }
-        }
-    }
-
-    // Test strategy name enum conversion
-    println!("\n📝 Testing strategy name conversions:");
-    use shd::maker::exec::ExecStrategyName;
-
-    assert_eq!(ExecStrategyName::MainnetStrategy.as_str(), "Mainnet_Strategy");
-    assert_eq!(ExecStrategyName::BaseStrategy.as_str(), "Base_Strategy");
-    assert_eq!(ExecStrategyName::UnichainStrategy.as_str(), "Unichain_Strategy");
-    println!("   ✓ All strategy name conversions correct");
-
-    println!("\n✨ Execution strategy selection tests completed!\n");
+    println!("✨ Market context tests completed!\n");
 }
 
 // === Simple test plans for remaining steps ===

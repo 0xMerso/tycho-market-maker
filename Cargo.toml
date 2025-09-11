@@ -28,6 +28,7 @@ categories = ["blockchain", "financial"]
 tycho-common = "0.82.0"
 tycho-client = "0.82.0"
 tycho-simulation = { git = "https://github.com/propeller-heads/tycho-simulation.git" }
+# tycho-simulation = { git = "https://github.com/propeller-heads/tycho-simulation.git", tag = "v0.156.0" }
 tycho-execution = { version = "0.122.0", features = ["evm"] }
 
 # --- Web3 & Blockchain ---

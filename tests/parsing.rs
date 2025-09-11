@@ -4,15 +4,10 @@ use shd::types::config::load_market_maker_config;
 use shd::utils::evm::{create_provider, eip1559_fees, gas_price, latest};
 
 // Global list of all config files to test
-static CONFIG_FILES: &[&str] = &[
-    "config/mainnet.eth-usdc.toml",
-    "config/unichain.eth-usdc.toml",
-    "config/unichain.btc-usdc.toml",
-];
+static CONFIG_FILES: &[&str] = &["config/mainnet.eth-usdc.toml", "config/unichain.eth-usdc.toml", "config/unichain.btc-usdc.toml"];
 
 #[test]
 fn test_parse_all_configs() {
-
     println!("\n🔍 Testing parsing of all config files...\n");
 
     for config_path in CONFIG_FILES {
@@ -161,11 +156,11 @@ async fn test_basic_endpoints() {
         if !config.gas_token_chainlink_price_feed.is_empty() {
             match chainlink(config.rpc_url.clone(), config.gas_token_chainlink_price_feed.clone()).await {
                 Ok(price) => {
-                    assert!(price > 0.0, "Oracle price should be greater than 0 for {}", config_path);
-                    println!("   ✓ Chainlink oracle: ${:.2}", price);
+                    assert!(price > 0.0, "Gas oracle price should be greater than 0 for {}", config_path);
+                    println!("   ✓ Gas Chainlink oracle: ${:.2}", price);
                 }
                 Err(_) => {
-                    println!("   ⚠ Chainlink oracle unavailable");
+                    println!("   ⚠ Gas Chainlink oracle unavailable");
                 }
             }
         } else {
