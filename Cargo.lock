@@ -2625,7 +2625,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "117725a109d387c937a1533ce01b450cbde6b88abceea8473c4d7a85853cda3c"
 dependencies = [
  "lazy_static",
- "windows-sys 0.59.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -9520,9 +9520,9 @@ dependencies = [
 
 [[package]]
 name = "tycho-common"
-version = "0.83.2"
+version = "0.83.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba916ac18a67626f7db54e79d0c8c517e4531a2330ab3ff4bb7052e9a318e909"
+checksum = "75ecbbf6f701a01569e351d19ee3a3e36418e8d1be539fd6ed925137eb84a2b2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9562,13 +9562,13 @@ dependencies = [
  "serde_json",
  "thiserror 1.0.69",
  "tokio",
- "tycho-common 0.83.2",
+ "tycho-common 0.83.4",
 ]
 
 [[package]]
 name = "tycho-simulation"
 version = "0.156.1"
-source = "git+https://github.com/propeller-heads/tycho-simulation.git#eb8b5d1ab5099ad216a8bd684d89864d2be734d0"
+source = "git+https://github.com/propeller-heads/tycho-simulation.git?tag=0.156.1#eb8b5d1ab5099ad216a8bd684d89864d2be734d0"
 dependencies = [
  "alloy",
  "async-stream",
@@ -10163,7 +10163,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]

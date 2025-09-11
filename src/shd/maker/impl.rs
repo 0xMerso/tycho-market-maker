@@ -31,8 +31,8 @@ use num_traits::cast::ToPrimitive;
 use tycho_client::feed::component_tracker::ComponentFilter;
 use tycho_execution::encoding::{
     evm::encoder_builders::TychoRouterEncoderBuilder,
-    models::{Solution, Transaction},
-    // tycho_encoder::TychoEncoder, // Unused due to API compatibility issues
+    models::{Solution, SwapBuilder, Transaction, UserTransferType},
+    tycho_encoder::TychoEncoder,
 };
 use tycho_common::models::token::Token;
 use tycho_common::simulation::protocol_sim::ProtocolSim;
@@ -549,17 +549,51 @@ impl IMarketMaker for MarketMaker {
     /// @param order: Execution order containing adjustment and calculation data
     /// @behavior: Creates Tycho solution struct with proper swap details
     /// =============================================================================
-    fn build_tycho_solution(&self, _order: ExecutionOrder) -> Solution {
-        // TODO: Complete API migration from tycho-common 0.82.0 to 0.83.2
-        // This function is temporarily disabled due to incompatible types between different versions of tycho_common
-        // The main issues are:
-        // 1. tycho_common::Bytes (0.82.0) vs tycho_common::hex_bytes::Bytes (0.83.2)
-        // 2. ProtocolComponent type mismatches between tycho-simulation and tycho-execution
-        // 3. Swap::new API changes (now requires 7 arguments instead of 4)
-        // 4. Solution struct field changes (removed slippage, expected_amount fields)
+    fn build_tycho_solution(&self, order: ExecutionOrder) -> Solution {
+        // Extract data from the execution order
+        let adjustment = order.adjustment;
+        let calculation = order.calculation;
         
-        tracing::warn!("build_tycho_solution temporarily disabled due to API incompatibility");
-        Solution::default()
+        // Determine tokens based on trade direction
+        let (given_token, checked_token) = if calculation.base_to_quote {
+            (adjustment.selling.address.clone(), adjustment.buying.address.clone())
+        } else {
+            (adjustment.buying.address.clone(), adjustment.selling.address.clone())
+        };
+        
+        // Calculate amounts with proper decimal handling
+        let given_amount = BigUint::from(calculation.powered_selling_amount as u128);
+        
+        // Apply slippage to the expected output amount
+        let slippage_bps = (self.config.max_slippage_pct * 100.0) as u128; // Convert percentage to basis points
+        let expected_amount = BigUint::from(calculation.powered_buying_amount as u128);
+        let slippage_adjustment = &expected_amount * slippage_bps / 10000u128;
+        let checked_amount = &expected_amount - slippage_adjustment;
+        
+        // Get the wallet address from config
+        let wallet_address = Address::from_str(&self.config.wallet_public_key)
+            .expect("Invalid wallet address");
+        let wallet_bytes = tycho_common::Bytes::from(wallet_address.as_slice());
+        
+        // Build the swap using SwapBuilder (new API)
+        let swap = SwapBuilder::new(
+            adjustment.psc.component.clone(),  // ProtocolComponent
+            given_token.clone(),                // Token being sold
+            checked_token.clone()                // Token being bought
+        ).build();
+        
+        // Build and return the solution
+        Solution {
+            sender: wallet_bytes.clone(),
+            receiver: wallet_bytes,
+            given_token,
+            given_amount,
+            checked_token,
+            checked_amount,
+            exact_out: false,  // We're doing exact input swaps
+            swaps: vec![swap],
+            ..Default::default()  // Defaults: gas_price = None, simulate = false, internalize = false
+        }
     }
 
     /// =============================================================================
@@ -642,12 +676,15 @@ impl IMarketMaker for MarketMaker {
         let (_, _, chain) = crate::maker::tycho::chain(self.config.network_name.as_str().to_string()).unwrap();
         let mut output: Vec<Trade> = vec![];
         let solutions = orders.iter().map(|order| self.build_tycho_solution(order.clone())).collect::<Vec<Solution>>();
-        // TODO: Fix Tycho API compatibility - the initialize_tycho_router_with_permit2 method no longer exists
-        // let encoder = TychoRouterEncoderBuilder::new().chain(chain).initialize_tycho_router_with_permit2(env.wallet_private_key.clone());
-        let encoder: Result<tycho_execution::encoding::evm::encoder_builders::TychoRouterEncoderBuilder, String> = Err("Tycho encoder initialization temporarily disabled due to API changes".to_string());
+        
+        // Build the encoder with the new API pattern
+        let encoder = TychoRouterEncoderBuilder::new()
+            .chain(chain)
+            .user_transfer_type(UserTransferType::TransferFromPermit2)
+            .build();
+        
         match encoder {
-            Ok(encoder) => match encoder.build() {
-                Ok(encoder) => match encoder.encode_full_calldata(solutions.clone()) {
+            Ok(encoder) => match encoder.encode_solutions(solutions.clone()) {
                     Ok(transactions) => {
                         for i in 0..orders.len() {
                             let _order = &orders[i];
@@ -668,16 +705,9 @@ impl IMarketMaker for MarketMaker {
                             }
                         }
                     }
-                    Err(e) => {
-                        tracing::error!("Failed to encode router calldata: {:?}", e);
-                    }
-                },
-                Err(e) => {
-                    tracing::error!("Failed to build EVMEncoder #2: {:?}", e);
-                }
             },
             Err(e) => {
-                tracing::error!("Failed to build EVMEncoder #1: {:?}", e);
+                tracing::error!("Failed to build encoder or encode solutions: {:?}", e);
             }
         };
         output
