@@ -90,12 +90,12 @@ pub fn find_optimal_swap_amount(
 
     // If max amount doesn't reach target, use it as best effort
     if !overshoots && max_diff > 0.0001 {
-        tracing::info!(
-            "Max amount insufficient to reach target. Using max as best effort. Pool: {:.2} → {:.2}, Target: {:.2}",
-            initial_spot_price,
-            max_post_swap_price,
-            reference_price
-        );
+        // tracing::info!(
+        //     "Max amount insufficient to reach target. Using max as best effort. Pool: {:.2} → {:.2}, Target: {:.2}",
+        //     initial_spot_price,
+        //     max_post_swap_price,
+        //     reference_price
+        // );
         // Return max amount as the best we can do
         let optimal_qty_powered = BigUint::from((max_amount * selling_pow).floor() as u128);
         let price_impact_bps = max_diff / reference_price * BASIS_POINT_DENO;

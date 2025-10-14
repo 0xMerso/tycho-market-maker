@@ -273,7 +273,11 @@ impl IMarketMaker for MarketMaker {
     /// =============================================================================
     fn evaluate(&self, targets: &Vec<ProtoSimComp>, sps: Vec<f64>, reference: f64) -> Vec<CompReadjustment> {
         let mut orders = vec![];
-        if sps.is_empty() || (targets.len() != sps.len()) {
+        if sps.is_empty() {
+            tracing::warn!("No spot prices available to evaluate (targets: {})", targets.len());
+            return vec![];
+        }
+        if targets.len() != sps.len() {
             tracing::warn!("Components targets and spot prices length mismatch ({} != {})", targets.len(), sps.len());
             return vec![];
         }
@@ -413,14 +417,14 @@ impl IMarketMaker for MarketMaker {
 
             let selling_amount = match optimization_result {
                 Ok(opt) => {
-                    tracing::info!(
-                        "   => Optimization complete: Optimal qty: {:.5} {} | Exec price: {:.5} | Impact: {:.2} bps | Simulations: {}",
-                        opt.optimal_qty,
-                        selling.symbol,
-                        opt.execution_price,
-                        opt.price_impact_bps,
-                        opt.simulation_count,
-                    );
+                    // tracing::info!(
+                    //     "   => Optimization complete: Optimal qty: {:.5} {} | Exec price: {:.5} | Impact: {:.2} bps | Simulations: {}",
+                    //     opt.optimal_qty,
+                    //     selling.symbol,
+                    //     opt.execution_price,
+                    //     opt.price_impact_bps,
+                    //     opt.simulation_count,
+                    // );
                     opt.optimal_qty
                 }
                 Err(e) => {
@@ -441,7 +445,7 @@ impl IMarketMaker for MarketMaker {
                 adjustment.spread_bps,
             );
             let inventory_msg = format!(
-                " - Inventory: {:.2} {} | Max: {:.5} | Selling {:.5} {} for {:.5} {}",
+                " - Inventory: {:.2} {} | Max: {:.5} | Optimal selling {:.5} {} for {:.5} {}",
                 inventory_balance_normalized, selling.symbol, max_alloc, selling_amount, selling.symbol, buying_amount, buying.symbol
             );
             tracing::debug!("{} | {}", pool_msg, inventory_msg);
@@ -812,7 +816,7 @@ impl IMarketMaker for MarketMaker {
                                                                 );
                                                             } else {
                                                                 filtered_out += 1;
-                                                                tracing::warn!(
+                                                                tracing::debug!(
                                                                     "⚠️  Filtered out: {} | Price: {:.5} | Deviation: {:.2}% (>{:.1}%) | Tokens: {:?}",
                                                                     cpname(comp.clone()),
                                                                     spot_price,
@@ -824,7 +828,7 @@ impl IMarketMaker for MarketMaker {
                                                         }
                                                         Err(e) => {
                                                             filtered_out += 1;
-                                                            tracing::warn!(" - ❌ Could not get spot price for {}: {:?}", cpname(comp.clone()), e);
+                                                            tracing::debug!(" - ❌ Could not get spot price for {}: {:?}", cpname(comp.clone()), e);
                                                         }
                                                     }
                                                 }
@@ -905,6 +909,17 @@ impl IMarketMaker for MarketMaker {
 
                                         // ===== Publish Price event =====
                                         let threshold = price_move_bps > PRICE_MOVE_THRESHOLD;
+
+                                        tracing::info!(
+                                            "{} | Price movement {} threshold ({} bps), of {:.2} bps, from {} to {}",
+                                            intro,
+                                            if threshold { "above" } else { "below" },
+                                            PRICE_MOVE_THRESHOLD,
+                                            price_move_bps,
+                                            previous_reference_price,
+                                            reference_price
+                                        );
+
                                         if threshold {
                                             if self.config.publish_events {
                                                 let now = std::time::Instant::now();
@@ -924,16 +939,6 @@ impl IMarketMaker for MarketMaker {
                                         } else {
                                             continue;
                                         }
-
-                                        tracing::info!(
-                                            "{} | Price movement {} threshold ({} bps), of {:.2} bps, from {} to {}",
-                                            intro,
-                                            if threshold { "above" } else { "below" },
-                                            PRICE_MOVE_THRESHOLD,
-                                            price_move_bps,
-                                            previous_reference_price,
-                                            reference_price
-                                        );
 
                                         // --- Evaluate ---
                                         let spot_prices = cpds.iter().map(|x| x.price).collect::<Vec<f64>>();
