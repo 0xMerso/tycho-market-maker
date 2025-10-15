@@ -5,17 +5,22 @@
 /// @description: Mainnet execution strategy optimized for Ethereum mainnet with
 /// Flashbots support. This strategy provides MEV protection and bundle submission
 /// capabilities for secure and efficient transaction execution on Ethereum mainnet.
+///
+/// @changelog:
+/// - 2025-01: Upgraded from Alloy 0.5.4 → 1.0.30 + alloy-mev 0.5 → 1.0
+/// - Changed: No more BundleSigner wrapper - pass PrivateKeySigner directly
+/// - Changed: Use provider.bundle_builder() instead of manual EthSendBundle construction
+/// - Changed: .add_transaction_request() instead of .encode_request()
 /// =============================================================================
 use async_trait::async_trait;
 use std::str::FromStr;
 
 use alloy::{
-    network::TransactionBuilder,
+    network::{EthereumWallet, TransactionBuilder},
     providers::{Provider, ProviderBuilder},
-    rpc::types::mev::EthSendBundle,
     signers::local::PrivateKeySigner,
 };
-use alloy_mev::{BundleSigner, EthMevProviderExt};
+use alloy_mev::EthMevProviderExt;  // Provides bundle_builder() and send_eth_bundle()
 use alloy_primitives::B256;
 
 use crate::{
@@ -35,11 +40,6 @@ use super::super::ExecStrategy;
 /// =============================================================================
 pub struct MainnetExec;
 
-/// =============================================================================
-/// @function: new
-/// @description: Create a new Mainnet execution strategy instance
-/// @return Self: New MainnetExec instance
-/// =============================================================================
 impl Default for MainnetExec {
     fn default() -> Self {
         Self::new()
@@ -58,7 +58,7 @@ impl MainnetExec {
 /// OVERRIDDEN FUNCTIONS:
 /// - name(): Returns "Mainnet_Strategy"
 /// - broadcast(): Custom implementation using Flashbots bundles for MEV protection
-/// 
+///
 /// INHERITED FUNCTIONS (using default implementation):
 /// - pre_hook(): Default logging
 /// - post_hook(): Default event publishing
@@ -73,48 +73,68 @@ impl ExecStrategy for MainnetExec {
     }
 
     /// =============================================================================
-    /// OVERRIDDEN: Custom broadcast implementation
+    /// OVERRIDDEN: Custom broadcast implementation - Flashbots Bundle Submission
     /// @description: Replaces default mempool broadcast with Flashbots bundle submission
-    /// @param prepared: Vector of trades to broadcast
+    /// @param prepared: Vector of trades to broadcast (each can have approval + swap)
     /// @param mmc: Market maker configuration
     /// @param env: Environment configuration
     /// @return Result<Vec<BroadcastData>, String>: Broadcast results or error
-    /// @behavior: Submits transactions as bundles to Flashbots for MEV protection
+    ///
+    /// @behavior:
+    /// - Submits transactions as bundles to multiple builders (Flashbots, Beaverbuild, Titan, Rsync)
+    /// - Handles approval transactions if infinite_approval is disabled
+    /// - Targets inclusion at current_block + inclusion_block_delay
+    /// - Provides MEV protection via private mempool
+    ///
     /// @differs_from_default: Uses private mempool via Flashbots instead of public mempool
     /// =============================================================================
     async fn broadcast(&self, prepared: Vec<Trade>, mmc: MarketMakerConfig, env: EnvConfig) -> Result<Vec<BroadcastData>, String> {
-        tracing::info!("{}: broadcasting {} transactions on Mainnet via bundle", self.name(), prepared.len());
+        tracing::info!("{}: broadcasting {} transactions on Mainnet via Flashbots bundle", self.name(), prepared.len());
 
-        let ac = get_alloy_chain(mmc.network_name.as_str().to_string()).expect("Failed to get alloy chain");
-        let rpc = mmc.rpc_url.parse::<url::Url>().unwrap().clone();
+        // Setup provider with wallet
+        let _ac = get_alloy_chain(mmc.network_name.as_str().to_string()).expect("Failed to get alloy chain");
+        let rpc = mmc.rpc_url.parse::<url::Url>().unwrap();
         let pk = env.wallet_private_key.clone();
-        let wallet = PrivateKeySigner::from_bytes(&B256::from_str(&pk).expect("Failed to convert swapper pk to B256")).expect("Failed to private key signer");
-        let signer = alloy::network::EthereumWallet::from(wallet.clone());
-        let provider = ProviderBuilder::new().with_chain(ac).wallet(signer.clone()).on_http(rpc.clone());
+        let wallet = PrivateKeySigner::from_bytes(&B256::from_str(&pk).expect("Failed to convert wallet pk to B256"))
+            .expect("Failed to create private key signer");
+        let signer = EthereumWallet::from(wallet.clone());
 
-        let buildernet = "https://direct-us.buildernet.org:443".to_string();
-        let bsigner = PrivateKeySigner::random();
+        let provider = ProviderBuilder::new()
+            .with_chain_id(mmc.chain_id)
+            .wallet(signer.clone())
+            .connect_http(rpc);
+
+        // Create a signer for Flashbots authentication
+        // TODO: In production, this should be a persistent key loaded from config, not random
+        let bundle_signer = PrivateKeySigner::random();
+
+        // Build endpoints for multiple builders (Flashbots + alternatives)
+        // NEW API: No more BundleSigner::flashbots() wrapper - pass PrivateKeySigner directly
         let endpoints = provider
             .endpoints_builder()
-            .authenticated_endpoint(buildernet.parse::<url::Url>().unwrap(), BundleSigner::flashbots(bsigner.clone()))
-            .titan(BundleSigner::flashbots(bsigner.clone()))
             .beaverbuild()
-            .flashbots(BundleSigner::flashbots(bsigner.clone()))
+            .titan(bundle_signer.clone())      // Pass signer directly
+            .flashbots(bundle_signer.clone())  // Pass signer directly
             .rsync()
             .build();
 
         let mut results = Vec::new();
 
+        // Skip actual broadcast in testing mode
         if env.testing {
-            tracing::info!("🧪 Skipping broadcast ! Testing mode enabled");
+            tracing::info!("🧪 Testing mode: Skipping bundle broadcast");
             return Ok(results);
         }
 
+        // Process each trade (each may contain approval + swap)
         for trade in prepared.iter() {
-            let bnum = provider.get_block_number().await.expect("Failed to get block number");
+            // Get current block and calculate target inclusion block
+            let bnum = provider.get_block_number().await
+                .map_err(|e| format!("Failed to get block number: {:?}", e))?;
             let target_block = bnum + mmc.inclusion_block_delay;
+
             tracing::info!(
-                "{}: Current block: {}, target inclusion block: {} (inclusion_block_delay: {})",
+                "{}: Current block: {}, target inclusion: {} (delay: {})",
                 self.name(),
                 bnum,
                 target_block,
@@ -124,73 +144,167 @@ impl ExecStrategy for MainnetExec {
             let mut bd = BroadcastData::default();
             let time = std::time::SystemTime::now();
 
+            // Record broadcast timestamp
             let now = std::time::SystemTime::now();
-            let broadcasted_at_ms = now.duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis();
+            let broadcasted_at_ms = now.duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis();
             bd.broadcasted_at_ms = broadcasted_at_ms;
 
+            // Build and get expected transaction hash (for tracking)
             match trade.swap.clone().build(&signer).await {
                 Ok(tx) => {
                     let hash = tx.tx_hash().to_string();
-                    tracing::info!("{}: Expected hash: {:?}", self.name(), hash);
+                    tracing::info!("{}: Expected swap tx hash: {}", self.name(), hash);
                     bd.hash = hash;
                 }
                 Err(e) => {
-                    tracing::error!("{}: Failed to build transaction: {:?}", self.name(), e);
+                    tracing::error!("{}: Failed to build swap transaction: {:?}", self.name(), e);
                 }
             }
 
-            let mut txs = vec![];
-            match provider.encode_request(trade.swap.clone()).await {
-                Ok(swap) => {
-                    if let Some(approval) = &trade.approve {
-                        match provider.encode_request(approval.clone()).await {
-                            Ok(approval) => {
-                                txs.push(approval);
-                            }
-                            Err(e) => {
-                                tracing::error!("{}: Failed to encode approval: {:?}", self.name(), e);
-                            }
-                        }
-                    }
-                    txs.push(swap);
-                }
-                Err(e) => {
-                    let msg = format!("Failed to encode swap: {:?}", e);
-                    tracing::error!("{}: {}", self.name(), msg.clone());
-                    bd.broadcast_error = Some(msg.clone());
-                    return Err(msg.clone());
-                }
+            // Build bundle using the new bundle_builder() API
+            let mut bundle_builder = provider
+                .bundle_builder()
+                .on_block(target_block);
+
+            // Add approval transaction if needed (when infinite_approval is false)
+            if let Some(approval) = &trade.approve {
+                bundle_builder = bundle_builder
+                    .add_transaction_request(approval.clone())
+                    .await
+                    .map_err(|e| format!("Failed to add approval to bundle: {:?}", e))?;
+                tracing::info!("{}: Added approval tx to bundle", self.name());
             }
+
+            // Add the swap transaction
+            bundle_builder = bundle_builder
+                .add_transaction_request(trade.swap.clone())
+                .await
+                .map_err(|e| format!("Failed to add swap to bundle: {:?}", e))?;
+
+            // Finalize the bundle
+            let bundle = bundle_builder.build();
+
+            tracing::info!("{}: Sending bundle to builders (targeting block {})...", self.name(), target_block);
+
+            // Send bundle to multiple builders using alloy-mev
             let responses = provider
-                .send_eth_bundle(
-                    EthSendBundle {
-                        txs,
-                        block_number: target_block,
-                        min_timestamp: None,
-                        max_timestamp: None,
-                        reverting_tx_hashes: vec![],
-                        replacement_uuid: None,
-                    },
-                    &endpoints,
-                )
+                .send_eth_bundle(bundle, &endpoints)
                 .await;
 
-            tracing::info!("Bundle sent successfully. Got {} responses", responses.len());
+            let took = time.elapsed().unwrap_or_default().as_millis();
+            bd.broadcasted_took_ms = took;
+
+            tracing::info!("{}: Bundle submission complete. Got {} responses in {}ms",
+                self.name(), responses.len(), took);
+
+            // Process responses from each builder
+            let mut successful_builders = 0;
+            let mut failed_builders = 0;
+
             for response in responses.iter() {
-                let took = time.elapsed().unwrap_or_default().as_millis();
-                bd.broadcasted_took_ms = took;
                 match response {
                     Ok(response) => {
-                        tracing::info!("    =>  Bundle sent successfully ({})", response.bundle_hash);
+                        successful_builders += 1;
+                        tracing::info!("    ✅ Builder accepted bundle: {}", response.bundle_hash);
                     }
                     Err(e) => {
-                        tracing::warn!("    =>  Failed to send bundle: {:?}", e);
+                        failed_builders += 1;
+                        tracing::warn!("    ❌ Builder rejected bundle: {:?}", e);
+
+                        // Store first error (if not already set)
+                        if bd.broadcast_error.is_none() {
+                            bd.broadcast_error = Some(format!("Bundle submission failed: {:?}", e));
+                        }
                     }
                 }
             }
+
+            tracing::info!(
+                "{}: Bundle results: {}/{} builders accepted",
+                self.name(),
+                successful_builders,
+                successful_builders + failed_builders
+            );
+
+            // Consider broadcast successful if at least one builder accepted
+            if successful_builders == 0 {
+                tracing::error!("{}: All builders rejected the bundle!", self.name());
+                return Err(bd.broadcast_error.unwrap_or_else(|| "All builders rejected bundle".to_string()));
+            }
+
             results.push(bd);
         }
 
         Ok(results)
     }
 }
+
+/* =============================================================================
+ * OLD IMPLEMENTATION (alloy-mev 0.5) - KEPT FOR REFERENCE
+ * =============================================================================
+ *
+ * Key API changes in alloy-mev 1.0:
+ *
+ * 1. NO BundleSigner wrapper:
+ *    OLD: .flashbots(BundleSigner::flashbots(bundle_signer))
+ *    NEW: .flashbots(bundle_signer.clone())
+ *
+ * 2. Bundle construction via builder pattern:
+ *    OLD: Manual EthSendBundle { txs, block_number, ... }
+ *    NEW: provider.bundle_builder().on_block(...).add_transaction_request(...).build()
+ *
+ * 3. Adding transactions:
+ *    OLD: provider.encode_request(tx) → manual Vec<Bytes> txs
+ *    NEW: bundle_builder.add_transaction_request(tx).await
+ *
+ * 4. Import changes:
+ *    OLD: use alloy::rpc::types::mev::EthSendBundle;
+ *    NEW: No manual import needed - use bundle_builder() API
+ *
+ * OLD CODE:
+ *
+ * use alloy_mev::{BundleSigner, EthMevProviderExt};
+ * use alloy::rpc::types::mev::EthSendBundle;
+ *
+ * let bundle_signer = PrivateKeySigner::random();
+ *
+ * let endpoints = provider
+ *     .endpoints_builder()
+ *     .beaverbuild()
+ *     .titan(BundleSigner::flashbots(bundle_signer.clone()))  // ← OLD: wrapper needed
+ *     .flashbots(BundleSigner::flashbots(bundle_signer.clone()))
+ *     .rsync()
+ *     .build();
+ *
+ * let mut txs = vec![];
+ * if let Some(approval) = &trade.approve {
+ *     match provider.encode_request(approval.clone()).await {  // ← OLD: manual encoding
+ *         Ok(encoded) => txs.push(encoded),
+ *         Err(e) => tracing::error!("Failed to encode approval: {:?}", e),
+ *     }
+ * }
+ * match provider.encode_request(trade.swap.clone()).await {
+ *     Ok(encoded) => txs.push(encoded),
+ *     Err(e) => return Err(format!("Failed to encode swap: {:?}", e)),
+ * }
+ *
+ * let bundle = EthSendBundle {  // ← OLD: manual construction
+ *     txs,
+ *     block_number: target_block,
+ *     min_timestamp: None,
+ *     max_timestamp: None,
+ *     reverting_tx_hashes: vec![],
+ *     replacement_uuid: None,
+ *     dropping_tx_hashes: vec![],
+ *     refund_percent: None,
+ *     refund_recipient: None,
+ *     refund_tx_hashes: vec![],
+ *     extra_fields: Default::default(),
+ * };
+ *
+ * let responses = provider.send_eth_bundle(bundle, &endpoints).await;
+ *
+ * =============================================================================
+ */

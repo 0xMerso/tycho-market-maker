@@ -20,7 +20,7 @@ use shd::{
 use tokio::sync::RwLock;
 use tracing::Level;
 use tracing_subscriber::EnvFilter;
-use tycho_simulation::models::Token;
+use tycho_common::models::token::Token; // Changed from tycho_simulation::models in 0.181.3
 
 /// =============================================================================
 /// @function: init_allowance

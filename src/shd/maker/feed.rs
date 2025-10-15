@@ -162,9 +162,9 @@ pub async fn chainlink(rpc: String, pfeed: String) -> Result<f64, String> {
     let precision = oracle.decimals().call().await;
     match (price, precision) {
         (Ok(price), Ok(precision)) => {
-            let power = 10f64.powi(precision._0 as i32);
-            // Ok(price._0.as_u64() as f64 / power)
-            let price = price._0.to_string().parse::<u128>().unwrap() as f64 / power;
+            // Alloy 1.0: decimals() returns u8 directly, latestAnswer() returns I256 directly
+            let power = 10f64.powi(precision as i32);
+            let price = price.to_string().parse::<u128>().unwrap() as f64 / power;
             // tracing::debug!("Price fetched from {}: {}", pfeed, price);
             Ok(price)
         }

@@ -13,10 +13,9 @@ use alloy::rpc::types::TransactionRequest;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use tycho_execution::encoding::models::{Solution, Transaction};
-use tycho_simulation::{
-    models::Token,
-    protocol::{models::ProtocolComponent, state::ProtocolSim},
-};
+use tycho_common::models::token::Token;
+use tycho_common::simulation::protocol_sim::ProtocolSim; // ProtocolSim trait for protocol simulation
+use tycho_simulation::protocol::models::ProtocolComponent;
 
 use crate::maker::{exec::ExecStrategy, feed::PriceFeed};
 

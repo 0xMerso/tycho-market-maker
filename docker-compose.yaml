@@ -52,26 +52,26 @@ services:
     networks:
       - tmm
 
-  unichain-btc-usdc:
-    build: 
-      context: .
-      dockerfile: ops/Dockerfile
-      args:
-        - PROGRAM=maker
-        - BUILD_TYPE=debug #!
-    depends_on:
-      redis:
-        condition: service_healthy
-      monitor: # Important to have the monitor running before the maker, else the publish action will fail
-        condition: service_started
-    environment:
-      - REDIS_HOST=redis
-      - RUST_LOG=off,maker=trace,shd=trace,monitor=trace
-      - CONFIG_PATH=config/unichain.btc-usdc.toml
-      - SECRET_PATH=config/secrets/.env.unichain.btc-usdc
-    restart: always
-    networks:
-      - tmm
+  # unichain-btc-usdc:
+  #   build: 
+  #     context: .
+  #     dockerfile: ops/Dockerfile
+  #     args:
+  #       - PROGRAM=maker
+  #       - BUILD_TYPE=debug #!
+  #   depends_on:
+  #     redis:
+  #       condition: service_healthy
+  #     monitor: # Important to have the monitor running before the maker, else the publish action will fail
+  #       condition: service_started
+  #   environment:
+  #     - REDIS_HOST=redis
+  #     - RUST_LOG=off,maker=trace,shd=trace,monitor=trace
+  #     - CONFIG_PATH=config/unichain.btc-usdc.toml
+  #     - SECRET_PATH=config/secrets/.env.unichain.btc-usdc
+  #   restart: always
+  #   networks:
+  #     - tmm
 
   # ============================== MONITOR & REDIS ==============================
 

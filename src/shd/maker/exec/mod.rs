@@ -196,7 +196,7 @@ pub trait ExecStrategy: Send + Sync {
         let wallet = PrivateKeySigner::from_bytes(&B256::from_str(&pk).expect("Failed to convert swapper pk to B256")).expect("Failed to private key signer");
         tracing::debug!("Wallet configured: {:?}", wallet.address().to_string().to_lowercase());
         let signer = alloy::network::EthereumWallet::from(wallet.clone());
-        let provider = ProviderBuilder::new().with_chain(chain).wallet(signer.clone()).on_http(rpc.clone());
+        let provider = ProviderBuilder::new().with_chain(chain).wallet(signer.clone()).connect_http(rpc.clone());
 
         let mut output = vec![];
         for tx in trades.iter() {
@@ -237,7 +237,7 @@ pub trait ExecStrategy: Send + Sync {
 
                                 if !swap.status {
                                     let reason = swap.error.clone().unwrap().message;
-                                    tracing::error!("   => Simulation failed on swap call. No broadcast. Reason: {}", reason);
+                                    tracing::error!("   => Simulation failed on swap-only call. No broadcast. Reason: {}", reason);
                                     smd.error = Some(reason);
                                 } else {
                                     tracing::info!("    => Swap simulation: Gas: {} | Status: {}", swap.gas_used, swap.status);
@@ -255,6 +255,7 @@ pub trait ExecStrategy: Send + Sync {
                                 smd.status = swap.status;
                                 if !swap.status {
                                     let reason = swap.error.clone().unwrap().message;
+                                    dbg!(&swap);
                                     tracing::error!("   => Simulation failed on swap call. No broadcast. Reason: {}", reason);
                                     smd.error = Some(reason);
                                 } else {

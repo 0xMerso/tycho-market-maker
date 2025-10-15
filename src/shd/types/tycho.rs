@@ -1,10 +1,11 @@
 use num_bigint::BigUint;
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
+use tycho_common::models::token::Token;
+use tycho_common::simulation::protocol_sim::ProtocolSim; // ProtocolSim trait for protocol simulation
 use tycho_simulation::tycho_core::Bytes;
 use tycho_simulation::{
-    models::Token,
-    protocol::{models::ProtocolComponent, state::ProtocolSim},
+    protocol::models::ProtocolComponent,
     tycho_client::feed::component_tracker::ComponentFilter,
 };
 
@@ -33,9 +34,9 @@ pub fn chain(name: String) -> Option<(ChainCommon, ChainSimCore, ChainSimu)> {
 
 use std::{collections::HashMap, str::FromStr, sync::Arc};
 use strum::VariantNames;
-use strum_macros::{Display, EnumString};
+use strum_macros::{Display, EnumString, VariantNames as VariantNamesMacro};
 
-#[derive(Display, VariantNames, EnumString)]
+#[derive(Display, VariantNamesMacro, EnumString)]
 pub enum TychoSupportedProtocol {
     #[strum(serialize = "pancakeswap_v2")]
     PancakeswapV2,
@@ -130,9 +131,10 @@ impl From<Token> for SrzToken {
     fn from(token: Token) -> Self {
         SrzToken {
             address: token.address.to_string(),
-            decimals: token.decimals,
+            decimals: token.decimals as usize, // Convert u32 to usize for serialization
             symbol: token.symbol,
-            gas: token.gas.to_string(), // Convert BigUint to String
+            // CONSERVATIVE: Extract first gas value from Vec for serialization
+            gas: token.gas.first().and_then(|g| *g).unwrap_or(0).to_string(),
         }
     }
 }
@@ -141,9 +143,14 @@ impl From<SrzToken> for Token {
     fn from(serialized: SrzToken) -> Self {
         Token {
             address: Bytes::from_str(serialized.address.to_lowercase().as_str()).unwrap(),
-            decimals: serialized.decimals,
+            decimals: serialized.decimals as u32, // Convert usize to u32
             symbol: serialized.symbol,
-            gas: BigUint::parse_bytes(serialized.gas.as_bytes(), 10).expect("Failed to parse BigUint"), // Convert String back to BigUint
+            // CONSERVATIVE: Parse gas as u64 and wrap in Vec
+            gas: vec![serialized.gas.parse::<u64>().ok()],
+            // CONSERVATIVE DEFAULTS - New required fields (not Option):
+            chain: tycho_common::dto::Chain::Ethereum.into(), // TODO: Serialize/deserialize chain
+            quality: 100,    // High quality default
+            tax: 0,          // Assume no tax
         }
     }
 }

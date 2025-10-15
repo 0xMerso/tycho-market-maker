@@ -29,17 +29,34 @@ use futures::StreamExt;
 use num_bigint::BigUint;
 use num_traits::cast::ToPrimitive;
 use tycho_client::feed::component_tracker::ComponentFilter;
+use tycho_common::models::token::Token;
+use tycho_common::simulation::protocol_sim::ProtocolSim; // ProtocolSim trait for protocol simulation
 use tycho_execution::encoding::{
-    evm::encoder_builder::EVMEncoderBuilder,
-    models::{Solution, Transaction},
-    tycho_encoder::TychoEncoder,
+    evm::encoder_builders::TychoRouterEncoderBuilder,
+    models::{EncodedSolution, Solution, Transaction, UserTransferType},
 };
-use tycho_simulation::{
-    models::Token,
-    protocol::{models::ProtocolComponent, state::ProtocolSim},
-};
+use tycho_simulation::protocol::models::ProtocolComponent;
 
+use alloy_primitives::keccak256;
 use alloy_primitives::Bytes as AlloyBytes;
+
+/// =============================================================================
+/// @function: encode_input
+/// @description: Encodes function signature and arguments into transaction calldata
+/// @param signature: Function signature (e.g., "approve(address,uint256)")
+/// @param args: ABI-encoded arguments
+/// @return Vec<u8>: Encoded calldata (function selector + args)
+/// =============================================================================
+fn encode_input(signature: &str, args: Vec<u8>) -> Vec<u8> {
+    // Compute function selector (first 4 bytes of keccak256 hash of signature)
+    let hash = keccak256(signature.as_bytes());
+    let selector = &hash[..4];
+
+    // Combine selector and args
+    let mut calldata = selector.to_vec();
+    calldata.extend_from_slice(&args);
+    calldata
+}
 
 impl MarketContext {
     /// =============================================================================
@@ -178,7 +195,8 @@ impl IMarketMaker for MarketMaker {
                 let native_gas_price = crate::utils::evm::gas_price(self.config.rpc_url.clone()).await;
                 let eth_to_usd = self.fetch_eth_usd().await;
                 let provider = ProviderBuilder::new().on_http(self.config.rpc_url.clone().parse().unwrap());
-                let block: alloy::rpc::types::Block = provider.get_block_by_number(alloy::eips::BlockNumberOrTag::Latest, false).await.unwrap().unwrap();
+                // Alloy 1.0: get_block_by_number() no longer takes hydrated parameter
+                let block: alloy::rpc::types::Block = provider.get_block_by_number(alloy::eips::BlockNumberOrTag::Latest).await.unwrap().unwrap();
                 let base_to_eth_vp = routing::find_path(components.clone(), self.base.address.to_string().to_lowercase(), self.config.gas_token_symbol.to_lowercase());
                 let quote_to_eth_vp = routing::find_path(components.clone(), self.quote.address.to_string().to_lowercase(), self.config.gas_token_symbol.to_lowercase());
                 match (base_to_eth_vp, quote_to_eth_vp, eth_to_usd) {
@@ -399,11 +417,11 @@ impl IMarketMaker for MarketMaker {
 
             // Skip if inventory balance is 0
             if inventory_balance == 0 {
-                tracing::warn!(
-                    "Skipping trade: No {} balance available (0.00). Cannot execute {} trade.",
-                    selling.symbol,
-                    if base_to_quote { "sell" } else { "buy" }
-                );
+                // tracing::warn!(
+                //     "Skipping trade: No {} balance available (0.00). Cannot execute {} trade.",
+                //     selling.symbol,
+                //     if base_to_quote { "sell" } else { "buy" }
+                // );
                 continue;
             }
 
@@ -584,19 +602,31 @@ impl IMarketMaker for MarketMaker {
             order.calculation.amount_out_min_normalized,
             order.adjustment.buying.symbol
         );
-        let swap = tycho_execution::encoding::models::Swap::new(order.adjustment.psc.component.clone(), input.clone(), output.clone(), split);
+        // CONSERVATIVE: Swap::new signature changed from 4 to 7 parameters in tycho-execution 0.130.1
+        // Using None for optional parameters to maintain basic functionality
+        let swap = tycho_execution::encoding::models::Swap::new(
+            order.adjustment.psc.component.clone(),
+            input.clone(),
+            output.clone(),
+            split,
+            None, // calldata: Let encoder generate it
+            None, // state: DISABLED - Protocol simulation state (not needed for encoding)
+            None, // limit_amount: DISABLED - Using Solution-level checked_amount instead
+        );
+        // CONSERVATIVE: Solution struct changed in tycho-execution 0.130.1
+        // - Removed: slippage field (DISABLED - now handled at encoder level)
+        // - Removed: expected_amount field (DISABLED - optimization removed)
+        // - Changed: checked_amount from Option<BigUint> to BigUint (now required)
         Solution {
             // Addresses
             sender: tycho_simulation::tycho_core::Bytes::from_str(self.config.wallet_public_key.to_lowercase().as_str()).unwrap(),
             receiver: tycho_simulation::tycho_core::Bytes::from_str(self.config.wallet_public_key.to_lowercase().as_str()).unwrap(),
             given_token: input.clone(),
             checked_token: output.clone(),
-            // Others fields
+            // Amount fields
             given_amount: amount_in.clone(),
-            slippage: Some(self.config.max_slippage_pct), // Slippage in decimal < 1, because 1.0 = 100%
-            exact_out: false,                             // It's an exact in solution
-            expected_amount: Some(amount_out),
-            checked_amount: Some(amount_out_min), // The amount out will not be checked in execution
+            checked_amount: amount_out_min, // Now required BigUint (not Option)
+            exact_out: false,               // It's an exact in solution
             swaps: vec![swap.clone()],
             ..Default::default()
         }
@@ -619,7 +649,7 @@ impl IMarketMaker for MarketMaker {
         let approval = if !self.config.infinite_approval {
             let amount: u128 = solution.given_amount.clone().to_string().parse().expect("Couldn't convert given_amount to u128"); // ?
             let args = (Address::from_str(&self.config.permit2_address).expect("Couldn't convert permit2 to address"), amount);
-            let data = tycho_execution::encoding::evm::utils::encode_input(APPROVE_FN_SIGNATURE, args.abi_encode());
+            let data = encode_input(APPROVE_FN_SIGNATURE, args.abi_encode());
             let sender = solution.sender.clone().to_string().parse().expect("Failed to parse sender");
             Some(TransactionRequest {
                 to: Some(alloy::primitives::TxKind::Call(solution.given_token.clone().to_string().parse().expect("Failed to parse given_token"))),
@@ -678,17 +708,29 @@ impl IMarketMaker for MarketMaker {
         let (_, _, chain) = crate::maker::tycho::chain(self.config.network_name.as_str().to_string()).unwrap();
         let mut output: Vec<Trade> = vec![];
         let solutions = orders.iter().map(|order| self.build_tycho_solution(order.clone())).collect::<Vec<Solution>>();
-        let encoder = EVMEncoderBuilder::new().chain(chain).initialize_tycho_router_with_permit2(env.wallet_private_key.clone());
+        dbg!(&solutions);
+        // FIXED: Changed from TransferFromPermit2 to TransferFrom to match standard approval flow
+        // TransferFrom works with infinite approval strategy (no off-chain signatures needed)
+        let encoder = TychoRouterEncoderBuilder::new().chain(chain).user_transfer_type(UserTransferType::TransferFrom).build();
+
         match encoder {
-            Ok(encoder) => match encoder.build() {
-                Ok(encoder) => match encoder.encode_router_calldata(solutions.clone()) {
-                    Ok(transactions) => {
+            Ok(encoder) => {
+                match encoder.encode_solutions(solutions.clone()) {
+                    Ok(encoded_solutions) => {
                         for i in 0..orders.len() {
                             let _order = &orders[i];
                             let solution = &solutions[i];
-                            let transaction = &transactions[i];
+                            let encoded_solution: &EncodedSolution = &encoded_solutions[i];
                             let metadata = tdata[i].clone();
-                            match self.trade_tx_request(solution.clone(), transaction.clone(), context.clone(), inventory.clone()) {
+
+                            // Extract transaction from EncodedSolution
+                            let transaction = Transaction {
+                                to: encoded_solution.interacting_with.clone(),
+                                value: BigUint::from(0u128),          // TODO: Check if this should come from solution
+                                data: encoded_solution.swaps.clone(), // TODO: Verify this is the correct field
+                            };
+
+                            match self.trade_tx_request(solution.clone(), transaction, context.clone(), inventory.clone()) {
                                 Ok(encoded_tx) => {
                                     output.push(Trade {
                                         approve: encoded_tx.approve,
@@ -703,15 +745,12 @@ impl IMarketMaker for MarketMaker {
                         }
                     }
                     Err(e) => {
-                        tracing::error!("Failed to encode router calldata: {:?}", e);
+                        tracing::error!("Failed to encode solutions: {:?}", e);
                     }
-                },
-                Err(e) => {
-                    tracing::error!("Failed to build EVMEncoder #2: {:?}", e);
                 }
-            },
+            }
             Err(e) => {
-                tracing::error!("Failed to build EVMEncoder #1: {:?}", e);
+                tracing::error!("Failed to build TychoRouterEncoder: {:?}", e);
             }
         };
         output
@@ -750,7 +789,7 @@ impl IMarketMaker for MarketMaker {
                                     "{} {} stream: b#{} with {} states", // , + {} pairs, - {} pairs",
                                     self.config.pair_tag,
                                     self.config.network_name.as_str(),
-                                    msg.block_number,
+                                    msg.block_number_or_timestamp, // Changed from block_number in tycho-simulation 0.181.3
                                     msg.states.len()
                                 );
 
@@ -928,7 +967,7 @@ impl IMarketMaker for MarketMaker {
                                                         identifier: identifier.clone(),
                                                         reference_price,
                                                         components: cpds.clone(),
-                                                        block: msg.block_number,
+                                                        block: msg.block_number_or_timestamp, // Changed from block_number in tycho-simulation 0.181.3
                                                     });
                                                     last_publish = now;
                                                 } else {

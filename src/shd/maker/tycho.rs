@@ -11,12 +11,14 @@ use std::str::FromStr;
 use tycho_client::rpc::RPCClient;
 use tycho_client::HttpRPCClient;
 use tycho_common::dto::{PaginationParams, ProtocolStateRequestBody, ResponseToken, TokensRequestBody, VersionParam};
+use tycho_common::models::token::Token;
 use tycho_common::Bytes;
-use tycho_simulation::evm::protocol::filters::{balancer_pool_filter, curve_pool_filter, uniswap_v4_pool_with_hook_filter};
-use tycho_simulation::models::Token;
-
+use tycho_simulation::evm::engine_db::tycho_db::PreCachedDB;
+use tycho_simulation::evm::protocol::ekubo::state::EkuboState;
+use tycho_simulation::evm::protocol::filters::{balancer_v2_pool_filter, curve_pool_filter, uniswap_v4_pool_with_hook_filter};
 use tycho_simulation::evm::protocol::uniswap_v3::state::UniswapV3State;
 use tycho_simulation::evm::protocol::uniswap_v4::state::UniswapV4State;
+use tycho_simulation::evm::protocol::vm::state::EVMPoolState;
 
 use tycho_simulation::evm::{protocol::uniswap_v2::state::UniswapV2State, stream::ProtocolStreamBuilder};
 
@@ -114,9 +116,10 @@ pub fn cpname(cp: ProtocolComponent) -> String {
 /// @function: sanitize
 /// @description: Filters and converts ResponseToken array to valid Token array
 /// @param input: Vector of ResponseToken from API response
+/// @param chain: Chain type to assign to tokens (Ethereum, Base, Unichain)
 /// @behavior: Removes tokens with invalid symbols, addresses, or control characters
 /// =============================================================================
-fn sanitize(input: Vec<ResponseToken>) -> Vec<Token> {
+fn sanitize(input: Vec<ResponseToken>, chain: ChainCommon) -> Vec<Token> {
     let mut tokens = vec![];
     for t in input.iter() {
         let g = t.gas.first().unwrap_or(&Some(0u64)).unwrap_or_default();
@@ -126,9 +129,14 @@ fn sanitize(input: Vec<ResponseToken>) -> Vec<Token> {
         if let Ok(addr) = tycho_simulation::tycho_core::Bytes::from_str(t.address.clone().to_string().as_str()) {
             tokens.push(Token {
                 address: addr,
-                decimals: t.decimals as usize,
+                decimals: t.decimals, // Now u32, not usize
                 symbol: t.symbol.clone(),
-                gas: BigUint::from(g),
+                // CONSERVATIVE: Token.gas changed from BigUint to Vec<Option<u64>> in tycho-common 0.96.1
+                gas: vec![Some(g)], // Wrap in Vec for new API
+                // FIXED: Extract chain from network instead of hardcoding Ethereum
+                chain: chain.into(), // Use actual network chain
+                quality: 100,        // High quality since we filter by quality
+                tax: 0,              // Assume no tax by default
             });
         }
     }
@@ -195,7 +203,7 @@ pub async fn specific(mmc: MarketMakerConfig, key: Option<&str>, addresses: Vec<
 
     match client.get_tokens(&req.clone()).await {
         Ok(result) => {
-            let tokens = sanitize(result.tokens);
+            let tokens = sanitize(result.tokens, chain); // Pass chain to sanitize
             Some(tokens)
         }
         Err(e) => {
@@ -225,7 +233,7 @@ pub async fn tokens(mmc: MarketMakerConfig, key: Option<&str>) -> Option<Vec<Tok
 
     match client.get_all_tokens(chain, Some(100), Some(7), 3000).await {
         Ok(result) => {
-            let tokens = sanitize(result);
+            let tokens = sanitize(result, chain); // Pass chain to sanitize
             let elapsed = start_time.elapsed().unwrap_or_default().as_millis();
             tracing::info!("Got {} tokens in {} ms", tokens.len(), elapsed);
             Some(tokens)
@@ -249,7 +257,7 @@ pub async fn tokens(mmc: MarketMakerConfig, key: Option<&str>) -> Option<Vec<Tok
 pub async fn psb(mmc: MarketMakerConfig, key: String, psbc: PsbConfig, tokens: Vec<Token>) -> ProtocolStreamBuilder {
     let (_, _, chain) = crate::types::tycho::chain(mmc.network_name.clone().as_str().to_string()).expect("Invalid chain");
     let _u4 = uniswap_v4_pool_with_hook_filter;
-    let _balancer = balancer_pool_filter;
+    let _balancer = balancer_v2_pool_filter;
     let _curve = curve_pool_filter;
     let filter = psbc.filter.clone();
     let mut hmt = HashMap::new();
@@ -257,7 +265,7 @@ pub async fn psb(mmc: MarketMakerConfig, key: String, psbc: PsbConfig, tokens: V
         hmt.insert(t.address.clone(), t.clone());
     });
     tracing::debug!("Tycho endpoint: {} and chain: {}", mmc.tycho_api, chain);
-    let psb = ProtocolStreamBuilder::new(&mmc.tycho_api, chain)
+    let mut psb = ProtocolStreamBuilder::new(&mmc.tycho_api, chain)
         .exchange::<UniswapV2State>(TychoSupportedProtocol::UniswapV2.to_string().as_str(), filter.clone(), None)
         .exchange::<UniswapV3State>(TychoSupportedProtocol::UniswapV3.to_string().as_str(), filter.clone(), None)
         .exchange::<UniswapV4State>(TychoSupportedProtocol::UniswapV4.to_string().as_str(), filter.clone(), None) // Some(u4))
@@ -266,16 +274,16 @@ pub async fn psb(mmc: MarketMakerConfig, key: String, psbc: PsbConfig, tokens: V
         .set_tokens(hmt.clone()) // ALL Tokens
         .await;
 
-    // if mmc.network_name.as_str() == "ethereum" {
-    //     tracing::trace!("Adding mainnet-specific exchanges");
-    //     psb = psb
-    //         .exchange::<UniswapV2State>(TychoSupportedProtocol::Sushiswap.to_string().as_str(), filter.clone(), None)
-    //         .exchange::<UniswapV2State>(TychoSupportedProtocol::PancakeswapV2.to_string().as_str(), filter.clone(), None)
-    //         .exchange::<UniswapV3State>(TychoSupportedProtocol::PancakeswapV3.to_string().as_str(), filter.clone(), None)
-    //         .exchange::<EkuboState>(TychoSupportedProtocol::EkuboV2.to_string().as_str(), filter.clone(), None)
-    //         .exchange::<EVMPoolState<PreCachedDB>>(TychoSupportedProtocol::BalancerV2.to_string().as_str(), filter.clone(), Some(balancer))
-    //         .exchange::<EVMPoolState<PreCachedDB>>(TychoSupportedProtocol::Curve.to_string().as_str(), filter.clone(), Some(curve));
-    // }
+    if mmc.network_name.as_str() == "ethereum" {
+        tracing::trace!("Adding mainnet-specific exchanges");
+        psb = psb
+            .exchange::<UniswapV2State>(TychoSupportedProtocol::Sushiswap.to_string().as_str(), filter.clone(), None)
+            .exchange::<UniswapV2State>(TychoSupportedProtocol::PancakeswapV2.to_string().as_str(), filter.clone(), None)
+            .exchange::<UniswapV3State>(TychoSupportedProtocol::PancakeswapV3.to_string().as_str(), filter.clone(), None)
+            .exchange::<EkuboState>(TychoSupportedProtocol::EkuboV2.to_string().as_str(), filter.clone(), None)
+            .exchange::<EVMPoolState<PreCachedDB>>(TychoSupportedProtocol::BalancerV2.to_string().as_str(), filter.clone(), Some(_balancer))
+            .exchange::<EVMPoolState<PreCachedDB>>(TychoSupportedProtocol::Curve.to_string().as_str(), filter.clone(), Some(_curve));
+    }
 
     psb
 }

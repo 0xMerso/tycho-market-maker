@@ -1,10 +1,9 @@
 use alloy_primitives::bytes;
-use num_bigint::BigUint;
 use shd::maker::exec::ExecStrategyFactory;
 use shd::maker::feed::PriceFeedFactory;
 use shd::types::builder::MarketMakerBuilder;
 use shd::types::config::{load_market_maker_config, EnvConfig};
-use tycho_simulation::models::Token;
+use tycho_common::models::token::Token; // Changed from tycho_simulation::models in 0.181.3
 use tycho_simulation::tycho_common::Bytes;
 
 // Global list of all config files to test (same as in parsing.rs)
@@ -48,14 +47,21 @@ async fn test_market_maker_initialization() {
             address: Bytes(bytes::Bytes::from(base_address_vec)),
             symbol: config.base_token.clone(),
             decimals: 18, // ETH decimals
-            gas: BigUint::from(0u64),
+            // CONSERVATIVE: Token struct changed in tycho-common 0.96.1
+            gas: vec![Some(0)],
+            chain: tycho_common::dto::Chain::Ethereum.into(), // TODO: Extract from config
+            quality: 100,
+            tax: 0,
         };
 
         let quote_token = Token {
             address: Bytes(bytes::Bytes::from(quote_address_vec)),
             symbol: config.quote_token.clone(),
             decimals: if config.quote_token == "WBTC" { 8 } else { 6 }, // WBTC has 8, USDC/DAI have 6
-            gas: BigUint::from(0u64),
+            gas: vec![Some(0)],
+            chain: tycho_common::dto::Chain::Ethereum.into(),
+            quality: 100,
+            tax: 0,
         };
 
         // Create price feed
@@ -183,14 +189,20 @@ async fn test_market_context() {
         address: Bytes(bytes::Bytes::from(base_address_vec)),
         symbol: config.base_token.clone(),
         decimals: 18,
-        gas: BigUint::from(0u64),
+        gas: vec![Some(0)],
+        chain: tycho_common::dto::Chain::Ethereum.into(),
+        quality: 100,
+        tax: 0,
     };
 
     let quote_token = Token {
         address: Bytes(bytes::Bytes::from(quote_address_vec)),
         symbol: config.quote_token.clone(),
         decimals: 6,
-        gas: BigUint::from(0u64),
+        gas: vec![Some(0)],
+        chain: tycho_common::dto::Chain::Ethereum.into(),
+        quality: 100,
+        tax: 0,
     };
 
     // Build market maker to test context fetching

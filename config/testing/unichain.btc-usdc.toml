@@ -25,7 +25,7 @@ permit2_address = "0x000000000022D473030F116dDEE9F6B43aC78BA3"
 tycho_router_address = "0xFfA5ec2e444e4285108e4a17b82dA495c178427B"
 
 # === Misc ===
-poll_interval_ms = 500
+poll_interval_ms = 2500
 publish_events = false # ! PROD
 skip_simulation = false 
 infinite_approval = false
