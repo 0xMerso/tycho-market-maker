@@ -38,30 +38,21 @@ async fn init_allowance(config: MarketMakerConfig, env: EnvConfig) {
         return;
     }
 
+    let spender = config.tycho_router_address.clone();
+    // let spender = config.permit2_address.clone();
+
     tracing::info!(
         "Checking allowance for {} on Permit2 {} | For {} and {}",
         config.wallet_public_key.clone(),
-        config.permit2_address.clone(),
+        spender.clone(),
         config.base_token.clone(),
         config.quote_token.clone()
     );
 
     // Allowance
-    let base_allowance = shd::utils::evm::allowance(
-        config.rpc_url.clone(),
-        config.wallet_public_key.clone(),
-        config.permit2_address.clone(),
-        config.base_token_address.clone(),
-    )
-    .await;
+    let base_allowance = shd::utils::evm::allowance(config.rpc_url.clone(), config.wallet_public_key.clone(), spender.clone(), config.base_token_address.clone()).await;
 
-    let quote_allowance = shd::utils::evm::allowance(
-        config.rpc_url.clone(),
-        config.wallet_public_key.clone(),
-        config.permit2_address.clone(),
-        config.quote_token_address.clone(),
-    )
-    .await;
+    let quote_allowance = shd::utils::evm::allowance(config.rpc_url.clone(), config.wallet_public_key.clone(), spender.clone(), config.quote_token_address.clone()).await;
 
     match (base_allowance, quote_allowance) {
         (Ok(base_allowance), Ok(quote_allowance)) => {
@@ -71,13 +62,13 @@ async fn init_allowance(config: MarketMakerConfig, env: EnvConfig) {
             let amount = u128::MAX;
             if base_allowance < target {
                 tracing::warn!("Base allowance is not enough: {} < {}", base_allowance, target);
-                let _ = shd::utils::evm::approve(config.clone(), env.clone(), config.permit2_address.clone(), config.base_token_address.clone(), amount).await;
+                let _ = shd::utils::evm::approve(config.clone(), env.clone(), spender.clone(), config.base_token_address.clone(), amount).await;
             } else {
                 tracing::info!("Base allowance is enough: {} >= {}", base_allowance, target);
             }
             if quote_allowance < target {
                 tracing::warn!("Quote allowance is not enough: {} < {}", quote_allowance, target);
-                let _ = shd::utils::evm::approve(config.clone(), env.clone(), config.permit2_address.clone(), config.quote_token_address.clone(), amount).await;
+                let _ = shd::utils::evm::approve(config.clone(), env.clone(), spender.clone(), config.quote_token_address.clone(), amount).await;
             } else {
                 tracing::info!("Quote allowance is enough: {} >= {}", quote_allowance, target);
             }

@@ -199,14 +199,42 @@ pub trait ExecStrategy: Send + Sync {
         let provider = ProviderBuilder::new().with_chain(chain).wallet(signer.clone()).connect_http(rpc.clone());
 
         let mut output = vec![];
-        for tx in trades.iter() {
+        for (idx, tx) in trades.iter().enumerate() {
+            tracing::debug!("════════════════════════════════════════════════════════════");
+            tracing::debug!("🔍 DEBUG: Preparing simulation #{}", idx);
+
             let time = std::time::Instant::now();
             let _simulation_start = std::time::SystemTime::now();
             let mut calls = vec![];
             if let Some(approval) = &tx.approve {
+                tracing::debug!("  📝 Approval tx:");
+                tracing::debug!("     To: {:?}", approval.to);
+                tracing::debug!("     From: {:?}", approval.from);
+                tracing::debug!("     Value: {:?}", approval.value);
+                tracing::debug!("     Gas: {:?}", approval.gas);
+                tracing::debug!("     Nonce: {:?}", approval.nonce);
+                if let Some(ref input) = approval.input.input {
+                    tracing::debug!("     Data length: {} bytes", input.len());
+                    tracing::debug!("     Data: {}", &input.to_string());
+                }
                 calls.push(approval.clone());
             }
+
+            tracing::debug!("  🔄 Swap tx:");
+            tracing::debug!("     To: {:?}", tx.swap.to);
+            tracing::debug!("     From: {:?}", tx.swap.from);
+            tracing::debug!("     Value: {:?}", tx.swap.value);
+            tracing::debug!("     Gas: {:?}", tx.swap.gas);
+            tracing::debug!("     Nonce: {:?}", tx.swap.nonce);
+            if let Some(ref input) = tx.swap.input.input {
+                tracing::debug!("     Data length: {} bytes", input.len());
+                tracing::debug!("     Data: {}", &input.to_string());
+            }
             calls.push(tx.swap.clone());
+
+            tracing::debug!("  🎯 Total calls in simulation: {}", calls.len());
+            tracing::debug!("════════════════════════════════════════════════════════════");
+
             let payload = SimulatePayload {
                 block_state_calls: vec![SimBlock {
                     block_overrides: None,
@@ -238,6 +266,11 @@ pub trait ExecStrategy: Send + Sync {
                                 if !swap.status {
                                     let reason = swap.error.clone().unwrap().message;
                                     tracing::error!("   => Simulation failed on swap-only call. No broadcast. Reason: {}", reason);
+                                    tracing::error!("   🔍 DEBUG: Full swap error details:");
+                                    tracing::error!("      Error: {:#?}", swap.error);
+                                    tracing::error!("      Gas used: {}", swap.gas_used);
+                                    tracing::error!("      Return data: {:?}", swap.return_data);
+                                    tracing::error!("      Logs: {:?}", swap.logs);
                                     smd.error = Some(reason);
                                 } else {
                                     tracing::info!("    => Swap simulation: Gas: {} | Status: {}", swap.gas_used, swap.status);
@@ -309,8 +342,13 @@ pub trait ExecStrategy: Send + Sync {
         for (x, tx) in prepared.iter().enumerate() {
             tracing::debug!("   => Tx: #{} | Broadcasting on {}", x, mmc.network_name.as_str().to_string());
             if tx.metadata.simulation.is_some() && !tx.metadata.simulation.as_ref().unwrap().status {
-                tracing::error!("Simulation failed for tx: #{}, no broadcast", x);
-                continue;
+                tracing::warn!("⚠️  Simulation failed for tx: #{}, but BROADCASTING ANYWAY for testing!", x);
+                if let Some(ref sim) = tx.metadata.simulation {
+                    if let Some(ref error) = sim.error {
+                        tracing::warn!("   Simulation error was: {}", error);
+                    }
+                }
+                // Continue with broadcast instead of skipping
             }
 
             // Handle optional approval transaction

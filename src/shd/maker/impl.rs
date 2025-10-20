@@ -20,10 +20,10 @@ use crate::{
 use alloy::{
     providers::{Provider, ProviderBuilder},
     rpc::types::{TransactionInput, TransactionRequest},
-    sol_types::SolValue,
+    sol_types::{SolValue, SolCall},
 };
 
-use alloy_primitives::{Address, U256};
+use alloy_primitives::{Address, U256, aliases::{U48, U160}};
 use async_trait::async_trait;
 use futures::StreamExt;
 use num_bigint::BigUint;
@@ -33,12 +33,59 @@ use tycho_common::models::token::Token;
 use tycho_common::simulation::protocol_sim::ProtocolSim; // ProtocolSim trait for protocol simulation
 use tycho_execution::encoding::{
     evm::encoder_builders::TychoRouterEncoderBuilder,
-    models::{EncodedSolution, Solution, Transaction, UserTransferType},
+    models::{EncodedSolution, Solution, SwapBuilder, Transaction, UserTransferType},
 };
 use tycho_simulation::protocol::models::ProtocolComponent;
 
 use alloy_primitives::keccak256;
 use alloy_primitives::Bytes as AlloyBytes;
+
+// Tycho Router ABI interface using Alloy's sol! macro
+use alloy::sol;
+
+sol! {
+    #[derive(Debug)]
+    struct PermitDetails {
+        address token;
+        uint160 amount;
+        uint48 expiration;
+        uint48 nonce;
+    }
+
+    #[derive(Debug)]
+    struct PermitSingle {
+        PermitDetails details;
+        address spender;
+        uint256 sigDeadline;
+    }
+
+    interface ITychoRouter {
+        function singleSwapPermit2(
+            uint256 amountIn,
+            address tokenIn,
+            address tokenOut,
+            uint256 minAmountOut,
+            bool wrapEth,
+            bool unwrapEth,
+            address receiver,
+            PermitSingle permitSingle,
+            bytes signature,
+            bytes swapData
+        ) external payable returns (uint256 amountOut);
+
+        function singleSwap(
+            uint256 amountIn,
+            address tokenIn,
+            address tokenOut,
+            uint256 minAmountOut,
+            bool wrapEth,
+            bool unwrapEth,
+            address receiver,
+            bool isTransferFromAllowed,
+            bytes swapData
+        ) external payable returns (uint256 amountOut);
+    }
+}
 
 /// =============================================================================
 /// @function: encode_input
@@ -584,7 +631,6 @@ impl IMarketMaker for MarketMaker {
     /// @behavior: Creates Tycho solution struct with proper swap details
     /// =============================================================================
     fn build_tycho_solution(&self, order: ExecutionOrder) -> Solution {
-        let split = 0.;
         let input = order.adjustment.selling.address;
         let output = order.adjustment.buying.address;
 
@@ -602,17 +648,15 @@ impl IMarketMaker for MarketMaker {
             order.calculation.amount_out_min_normalized,
             order.adjustment.buying.symbol
         );
-        // CONSERVATIVE: Swap::new signature changed from 4 to 7 parameters in tycho-execution 0.130.1
-        // Using None for optional parameters to maintain basic functionality
-        let swap = tycho_execution::encoding::models::Swap::new(
-            order.adjustment.psc.component.clone(),
-            input.clone(),
-            output.clone(),
-            split,
-            None, // calldata: Let encoder generate it
-            None, // state: DISABLED - Protocol simulation state (not needed for encoding)
-            None, // limit_amount: DISABLED - Using Solution-level checked_amount instead
-        );
+        // Following official tycho-simulation example exactly:
+        // https://github.com/propeller-heads/tycho-simulation/blob/main/examples/quickstart/main.rs
+        // Simple SwapBuilder with 3 parameters, no manual user_data
+        let swap = SwapBuilder::new(
+            order.adjustment.psc.component.clone(), // component
+            input.clone(),                          // token_in (sell token)
+            output.clone(),                         // token_out (buy token)
+        )
+        .build();
         // CONSERVATIVE: Solution struct changed in tycho-execution 0.130.1
         // - Removed: slippage field (DISABLED - now handled at encoder level)
         // - Removed: expected_amount field (DISABLED - optimization removed)
@@ -645,12 +689,23 @@ impl IMarketMaker for MarketMaker {
         let max_priority_fee_per_gas = context.max_priority_fee_per_gas; // 1 Gwei, not suited for L2s.
         let max_fee_per_gas = context.max_fee_per_gas;
 
-        // 1. Approvals (Tycho router) with Permit2 - only if infinite_approval is false
+        // 1. Approvals - only if infinite_approval is false
+        // FIXED: Direct router approval (not Permit2)
+        // Approval flow: Token.approve(Router, amount) → Router transfers directly
         let approval = if !self.config.infinite_approval {
-            let amount: u128 = solution.given_amount.clone().to_string().parse().expect("Couldn't convert given_amount to u128"); // ?
-            let args = (Address::from_str(&self.config.permit2_address).expect("Couldn't convert permit2 to address"), amount);
+            let amount: u128 = solution.given_amount.clone().to_string().parse().expect("Couldn't convert given_amount to u128");
+            let router_address: Address = self.config.tycho_router_address.parse().expect("Failed to parse Router address");
+            let args = (router_address, amount);
             let data = encode_input(APPROVE_FN_SIGNATURE, args.abi_encode());
             let sender = solution.sender.clone().to_string().parse().expect("Failed to parse sender");
+
+            tracing::debug!(
+                "  📝 Building approval tx: Token {} approves Router {} for amount {}",
+                solution.given_token.clone().to_string(),
+                router_address.to_string(),
+                amount
+            );
+
             Some(TransactionRequest {
                 to: Some(alloy::primitives::TxKind::Call(solution.given_token.clone().to_string().parse().expect("Failed to parse given_token"))),
                 from: Some(sender),
@@ -708,26 +763,119 @@ impl IMarketMaker for MarketMaker {
         let (_, _, chain) = crate::maker::tycho::chain(self.config.network_name.as_str().to_string()).unwrap();
         let mut output: Vec<Trade> = vec![];
         let solutions = orders.iter().map(|order| self.build_tycho_solution(order.clone())).collect::<Vec<Solution>>();
-        dbg!(&solutions);
-        // FIXED: Changed from TransferFromPermit2 to TransferFrom to match standard approval flow
-        // TransferFrom works with infinite approval strategy (no off-chain signatures needed)
-        let encoder = TychoRouterEncoderBuilder::new().chain(chain).user_transfer_type(UserTransferType::TransferFrom).build();
+
+        // ===== DEBUG: Solution Details =====
+        tracing::debug!("╔══════════════════════════════════════════════════════════════");
+        tracing::debug!("║ DEBUG: Built {} Solution(s)", solutions.len());
+        tracing::debug!("╚══════════════════════════════════════════════════════════════");
+        for (i, sol) in solutions.iter().enumerate() {
+            tracing::debug!("┌─ Solution #{} ─────────────────────────────────────────────", i);
+            tracing::debug!("│ Sender: {}", sol.sender);
+            tracing::debug!("│ Receiver: {}", sol.receiver);
+            tracing::debug!("│ Given Token: {}", sol.given_token);
+            tracing::debug!("│ Checked Token: {}", sol.checked_token);
+            tracing::debug!("│ Given Amount: {}", sol.given_amount);
+            tracing::debug!("│ Checked Amount: {}", sol.checked_amount);
+            tracing::debug!("│ Exact Out: {}", sol.exact_out);
+            tracing::debug!("│ Swaps count: {}", sol.swaps.len());
+
+            for (j, swap) in sol.swaps.iter().enumerate() {
+                tracing::debug!("│ ├─ Swap #{} ─────────────────────────────────────────", j);
+                tracing::debug!("│ │  Component ID: {}", swap.component.id);
+                tracing::debug!("│ │  Component Protocol: {}", swap.component.protocol_system);
+                tracing::debug!("│ │  Component Type: {}", swap.component.protocol_type_name);
+                tracing::debug!("│ │  Component Tokens: {}", swap.component.tokens.len());
+                for (k, token_addr) in swap.component.tokens.iter().enumerate() {
+                    tracing::debug!("│ │    Token {}: {}", k, token_addr);
+                }
+                tracing::debug!("│ │  Static Attributes: {}", swap.component.static_attributes.len());
+                for (key, val) in swap.component.static_attributes.iter() {
+                    tracing::debug!("│ │    {}: {}", key, val);
+                }
+                tracing::debug!("│ │  Token In: {}", swap.token_in);
+                tracing::debug!("│ │  Token Out: {}", swap.token_out);
+                tracing::debug!("│ │  Split: {}", swap.split);
+                tracing::debug!("│ │  User Data present: {}", if swap.user_data.is_some() { "Yes" } else { "None" });
+                if let Some(ref ud) = swap.user_data {
+                    tracing::debug!("│ │  User Data length: {} bytes", ud.len());
+                    if ud.len() <= 100 {
+                        tracing::debug!("│ │  User Data: 0x{}", hex::encode(ud));
+                    } else {
+                        tracing::debug!("│ │  User Data (first 100 bytes): 0x{}", hex::encode(&ud[0..100]));
+                    }
+                }
+            }
+            tracing::debug!("└────────────────────────────────────────────────────────────");
+        }
+
+        // Always use TransferFrom (direct router approval)
+        // - infinite_approval = true:  Router already approved infinitely, no approval TX
+        // - infinite_approval = false: Approval TX approves router, then router transfers directly
+        let user_transfer_type = UserTransferType::TransferFrom;
+
+        tracing::debug!("🔧 Building TychoRouterEncoder with UserTransferType::TransferFrom (direct router approval)");
+        let encoder = TychoRouterEncoderBuilder::new().chain(chain).user_transfer_type(user_transfer_type).build();
 
         match encoder {
             Ok(encoder) => {
+                tracing::debug!("✅ Encoder built successfully");
                 match encoder.encode_solutions(solutions.clone()) {
                     Ok(encoded_solutions) => {
+                        tracing::debug!("✅ Encoded {} solution(s) successfully", encoded_solutions.len());
                         for i in 0..orders.len() {
                             let _order = &orders[i];
                             let solution = &solutions[i];
                             let encoded_solution: &EncodedSolution = &encoded_solutions[i];
                             let metadata = tdata[i].clone();
 
-                            // Extract transaction from EncodedSolution
+                            tracing::debug!("🔍 DEBUG: EncodedSolution #{}:", i);
+                            tracing::debug!("   Router address: {:?}", encoded_solution.interacting_with);
+                            tracing::debug!("   Function signature: {:?}", encoded_solution.function_signature);
+                            tracing::debug!("   N tokens: {}", encoded_solution.n_tokens);
+                            tracing::debug!("   Permit present: {}", if encoded_solution.permit.is_some() { "Yes" } else { "None" });
+                            tracing::debug!("   Swaps data length: {} bytes", encoded_solution.swaps.len());
+                            if encoded_solution.swaps.len() >= 4 {
+                                let function_selector = &encoded_solution.swaps[0..4];
+                                tracing::debug!("   Function selector (first 4 bytes): 0x{}", hex::encode(function_selector));
+                            }
+                            tracing::debug!("   Full swaps bytes: 0x{}", hex::encode(&encoded_solution.swaps));
+
+                            // Build proper router function call with ABI encoding
+                            // encoded_solution.swaps is just the swap routing data (105 bytes)
+                            // We need to construct the full singleSwap call with all parameters
+                            //
+                            // Always use singleSwap() with direct router approval:
+                            // - infinite_approval = true:  Router already approved infinitely
+                            // - infinite_approval = false: Approval TX approves router before swap
+
+                            let amount_in_u256 = U256::from_str(&solution.given_amount.to_string()).expect("Failed to convert given_amount");
+                            let min_amount_out_u256 = U256::from_str(&solution.checked_amount.to_string()).expect("Failed to convert checked_amount");
+                            let token_in = Address::from_slice(&solution.given_token);
+                            let token_out = Address::from_slice(&solution.checked_token);
+                            let receiver = Address::from_slice(&solution.receiver);
+
+                            // Always use singleSwap() - direct router approval flow
+                            tracing::debug!("   🔧 Using singleSwap() - direct router approval flow");
+                            let call = ITychoRouter::singleSwapCall {
+                                amountIn: amount_in_u256,
+                                tokenIn: token_in,
+                                tokenOut: token_out,
+                                minAmountOut: min_amount_out_u256,
+                                wrapEth: false,
+                                unwrapEth: false,
+                                receiver,
+                                isTransferFromAllowed: true,  // Router has approval (infinite or per-swap)
+                                swapData: AlloyBytes::from(encoded_solution.swaps.clone()),
+                            };
+                            let calldata = call.abi_encode();
+
+                            tracing::debug!("   📦 Encoded full router call: {} bytes", calldata.len());
+                            tracing::debug!("   📦 Full calldata: 0x{}", hex::encode(&calldata));
+
                             let transaction = Transaction {
                                 to: encoded_solution.interacting_with.clone(),
-                                value: BigUint::from(0u128),          // TODO: Check if this should come from solution
-                                data: encoded_solution.swaps.clone(), // TODO: Verify this is the correct field
+                                value: BigUint::from(0u128),
+                                data: calldata,
                             };
 
                             match self.trade_tx_request(solution.clone(), transaction, context.clone(), inventory.clone()) {
