@@ -26,7 +26,7 @@ use crate::types::sol::IERC20;
 /// @return impl Provider: Configured provider instance
 /// =============================================================================
 pub fn create_provider(rpc: &str) -> impl Provider {
-    ProviderBuilder::new().on_http(rpc.parse().expect("Failed to parse RPC URL"))
+    ProviderBuilder::new().connect_http(rpc.parse().expect("Failed to parse RPC URL"))
 }
 
 /// =============================================================================
@@ -138,7 +138,7 @@ pub async fn approve(mmc: MarketMakerConfig, env: EnvConfig, spender: String, to
     let pk = env.wallet_private_key.clone();
     let wallet = PrivateKeySigner::from_bytes(&B256::from_str(&pk).expect("Failed to convert swapper pk to B256")).expect("Failed to private key signer");
     let signer = alloy::network::EthereumWallet::from(wallet.clone());
-    let provider = ProviderBuilder::new().with_chain_id(mmc.chain_id).wallet(signer.clone()).on_http(rpc.clone());
+    let provider = ProviderBuilder::new().with_chain_id(mmc.chain_id).wallet(signer.clone()).connect_http(rpc.clone());
     let client = Arc::new(provider);
     let contract = IERC20::new(token.parse().unwrap(), client.clone());
     // Alloy 1.0: symbol() returns String directly, not wrapped

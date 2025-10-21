@@ -331,7 +331,7 @@ pub trait ExecStrategy: Send + Sync {
         let pk = env.wallet_private_key.clone();
         let wallet = PrivateKeySigner::from_bytes(&B256::from_str(&pk).expect("Failed to convert swapper pk to B256")).expect("Failed to private key signer");
         let signer = alloy::network::EthereumWallet::from(wallet.clone());
-        let provider = ProviderBuilder::new().with_chain(alloy_chain).wallet(signer.clone()).on_http(rpc.clone());
+        let provider = ProviderBuilder::new().with_chain(alloy_chain).wallet(signer.clone()).connect_http(rpc.clone());
 
         if env.testing {
             tracing::info!("Skipping broadcast ! Testing mode enabled");

@@ -154,7 +154,7 @@ impl PriceFeed for ChainlinkPriceFeed {
 /// @behavior: Calls latestAnswer() and decimals() on oracle, returns normalized price
 /// =============================================================================
 pub async fn chainlink(rpc: String, pfeed: String) -> Result<f64, String> {
-    let provider = ProviderBuilder::new().on_http(rpc.parse().unwrap());
+    let provider = ProviderBuilder::new().connect_http(rpc.parse().unwrap());
     let pfeed: Address = pfeed.clone().parse().unwrap();
     let client = Arc::new(provider);
     let oracle = IChainLinkPF::new(pfeed, client.clone());

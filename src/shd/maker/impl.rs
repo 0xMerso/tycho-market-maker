@@ -196,7 +196,7 @@ impl IMarketMaker for MarketMaker {
     /// @behavior: Queries blockchain for base/quote token balances and transaction nonce
     /// =============================================================================
     async fn fetch_inventory(&self, _env: EnvConfig) -> Result<Inventory, String> {
-        let provider = ProviderBuilder::new().on_http(self.config.rpc_url.clone().parse().expect("Failed to parse RPC_URL"));
+        let provider = ProviderBuilder::new().connect_http(self.config.rpc_url.clone().parse().expect("Failed to parse RPC_URL"));
         let tokens = [self.base.clone(), self.quote.clone()];
         let addresses = tokens.iter().map(|t| t.address.to_string()).collect::<Vec<String>>();
         match crate::utils::evm::balances(&provider, self.config.wallet_public_key.clone(), addresses).await {
@@ -241,7 +241,7 @@ impl IMarketMaker for MarketMaker {
             Ok(eip1559_fees) => {
                 let native_gas_price = crate::utils::evm::gas_price(self.config.rpc_url.clone()).await;
                 let eth_to_usd = self.fetch_eth_usd().await;
-                let provider = ProviderBuilder::new().on_http(self.config.rpc_url.clone().parse().unwrap());
+                let provider = ProviderBuilder::new().connect_http(self.config.rpc_url.clone().parse().unwrap());
                 // Alloy 1.0: get_block_by_number() no longer takes hydrated parameter
                 let block: alloy::rpc::types::Block = provider.get_block_by_number(alloy::eips::BlockNumberOrTag::Latest).await.unwrap().unwrap();
                 let base_to_eth_vp = routing::find_path(components.clone(), self.base.address.to_string().to_lowercase(), self.config.gas_token_symbol.to_lowercase());
