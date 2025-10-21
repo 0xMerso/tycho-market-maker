@@ -20,10 +20,10 @@ use crate::{
 use alloy::{
     providers::{Provider, ProviderBuilder},
     rpc::types::{TransactionInput, TransactionRequest},
-    sol_types::{SolValue, SolCall},
+    sol_types::{SolCall, SolValue},
 };
 
-use alloy_primitives::{Address, U256, aliases::{U48, U160}};
+use alloy_primitives::{Address, U256};
 use async_trait::async_trait;
 use futures::StreamExt;
 use num_bigint::BigUint;
@@ -755,7 +755,7 @@ impl IMarketMaker for MarketMaker {
     /// @param env: Environment configuration
     /// @behavior: Encodes orders into transactions and prepares them for execution
     /// =============================================================================
-    fn prepare(&self, orders: Vec<ExecutionOrder>, tdata: Vec<TradeData>, context: MarketContext, inventory: Inventory, env: EnvConfig) -> Vec<Trade> {
+    fn prepare(&self, orders: Vec<ExecutionOrder>, tdata: Vec<TradeData>, context: MarketContext, inventory: Inventory, _env: EnvConfig) -> Vec<Trade> {
         tracing::debug!(">>>>>>> Preparing the execution of {} trades <<<<<<<", orders.len());
         unsafe {
             std::env::set_var("RPC_URL", self.config.rpc_url.clone());
@@ -864,13 +864,13 @@ impl IMarketMaker for MarketMaker {
                                 wrapEth: false,
                                 unwrapEth: false,
                                 receiver,
-                                isTransferFromAllowed: true,  // Router has approval (infinite or per-swap)
+                                isTransferFromAllowed: true, // Router has approval (infinite or per-swap)
                                 swapData: AlloyBytes::from(encoded_solution.swaps.clone()),
                             };
                             let calldata = call.abi_encode();
 
                             tracing::debug!("   📦 Encoded full router call: {} bytes", calldata.len());
-                            tracing::debug!("   📦 Full calldata: 0x{}", hex::encode(&calldata));
+                            // tracing::debug!("   📦 Full calldata: 0x{}", hex::encode(&calldata));
 
                             let transaction = Transaction {
                                 to: encoded_solution.interacting_with.clone(),

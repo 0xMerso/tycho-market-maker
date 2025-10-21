@@ -18,7 +18,7 @@ tycho_api = "tycho-unichain-beta.propellerheads.xyz"
 
 # === Execution ===
 min_watch_spread_bps = 1.0
-min_executable_spread_bps = -25.0 # <---- !
+min_executable_spread_bps = -10.0 # <---- !
 max_slippage_pct = 0.0025
 max_inventory_ratio = 0.99 # <---- !
 tx_gas_limit = 500000

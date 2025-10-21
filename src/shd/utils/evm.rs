@@ -2,14 +2,11 @@ use crate::types::config::{EnvConfig, MarketMakerConfig};
 use std::{str::FromStr, sync::Arc};
 
 use alloy::{
-    network::Ethereum,
-    providers::{utils::Eip1559Estimation, Provider, ProviderBuilder, RootProvider},
+    providers::{utils::Eip1559Estimation, Provider, ProviderBuilder},
     rpc::types::TransactionReceipt,
     signers::local::PrivateKeySigner,
-    transports::http::Http,
 };
 use alloy_primitives::{B256, U256};
-use reqwest::Client;
 use url;
 
 use crate::types::sol::IERC20;

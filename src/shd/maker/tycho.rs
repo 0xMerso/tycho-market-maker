@@ -23,7 +23,6 @@ use tycho_simulation::evm::protocol::vm::state::EVMPoolState;
 use tycho_simulation::evm::{protocol::uniswap_v2::state::UniswapV2State, stream::ProtocolStreamBuilder};
 
 use alloy_chains::NamedChain;
-use num_bigint::BigUint;
 use tycho_simulation::protocol::models::ProtocolComponent;
 
 use crate::types::config::MarketMakerConfig;
