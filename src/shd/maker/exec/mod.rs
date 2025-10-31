@@ -215,7 +215,7 @@ pub trait ExecStrategy: Send + Sync {
                 tracing::debug!("     Nonce: {:?}", approval.nonce);
                 if let Some(ref input) = approval.input.input {
                     tracing::debug!("     Data length: {} bytes", input.len());
-                    tracing::debug!("     Data: {}", &input.to_string());
+                    // tracing::debug!("     Data: {}", &input.to_string());
                 }
                 calls.push(approval.clone());
             }
@@ -228,7 +228,7 @@ pub trait ExecStrategy: Send + Sync {
             tracing::debug!("     Nonce: {:?}", tx.swap.nonce);
             if let Some(ref input) = tx.swap.input.input {
                 tracing::debug!("     Data length: {} bytes", input.len());
-                tracing::debug!("     Data: {}", &input.to_string());
+                // tracing::debug!("     Data: {}", &input.to_string());
             }
             calls.push(tx.swap.clone());
 
@@ -269,7 +269,7 @@ pub trait ExecStrategy: Send + Sync {
                                     tracing::error!("   🔍 DEBUG: Full swap error details:");
                                     tracing::error!("      Error: {:#?}", swap.error);
                                     tracing::error!("      Gas used: {}", swap.gas_used);
-                                    tracing::error!("      Return data: {:?}", swap.return_data);
+                                    // tracing::error!("      Return data: {:?}", swap.return_data);
                                     tracing::error!("      Logs: {:?}", swap.logs);
                                     smd.error = Some(reason);
                                 } else {
