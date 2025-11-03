@@ -19,8 +19,8 @@ explorer_url = "https://uniscan.xyz/"
 tycho_api = "tycho-unichain-beta.propellerheads.xyz"
 
 # === Execution ===
-min_watch_spread_bps = 1.0
-min_executable_spread_bps = -1.0 # ! For quickstart only, spread tolerance
+min_watch_spread_bps = 3.0
+min_executable_spread_bps = 1.0 # ! For quickstart only, spread tolerance
 max_slippage_pct = 0.0025
 max_inventory_ratio = 0.99 # 0.99
 tx_gas_limit = 500000
@@ -30,7 +30,7 @@ permit2_address = "0x000000000022D473030F116dDEE9F6B43aC78BA3"
 tycho_router_address = "0xFfA5ec2e444e4285108e4a17b82dA495c178427B"
 
 # === Misc ===
-poll_interval_ms = 500
+poll_interval_ms = 1000
 publish_events = true 
 skip_simulation = false 
 infinite_approval = true
