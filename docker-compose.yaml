@@ -1,6 +1,14 @@
 # This is a docker-compose file for the Tycho Market Maker
 # To validate it, run: docker compose config
 
+# Usage:
+# By default, only maker instances run when executing: docker compose up
+# To include monitor and Redis services, use the monitoring profile:
+#   docker compose --profile monitoring up --build
+#
+# This allows running monitor/Redis locally while makers run in Docker
+
+
 networks:
   tmm: 
     external: true
@@ -52,32 +60,11 @@ services:
     networks:
       - tmm
 
-  # unichain-btc-usdc:
-  #   build: 
-  #     context: .
-  #     dockerfile: ops/Dockerfile
-  #     args:
-  #       - PROGRAM=maker
-  #       - BUILD_TYPE=debug #!
-  #   depends_on:
-  #     redis:
-  #       condition: service_healthy
-  #     monitor: # Important to have the monitor running before the maker, else the publish action will fail
-  #       condition: service_started
-  #   environment:
-  #     - REDIS_HOST=redis
-  #     - RUST_LOG=off,maker=trace,shd=trace,monitor=trace
-  #     - CONFIG_PATH=config/unichain.btc-usdc.toml
-  #     - SECRET_PATH=config/secrets/.env.unichain.btc-usdc
-  #   restart: always
-  #   networks:
-  #     - tmm
-
   # ============================== MONITOR & REDIS ==============================
 
   # One monitor for all market maker instances
   monitor:
-    build: 
+    build:
       context: .
       dockerfile: ops/Dockerfile
       args:
@@ -92,6 +79,8 @@ services:
     restart: always
     networks:
       - tmm
+    profiles:
+      - monitoring
 
   # One Redis server for all market maker instances and the monitor
   redis:
@@ -111,3 +100,6 @@ services:
       retries: 5
     networks:
       - tmm
+    profiles:
+      - monitoring
+

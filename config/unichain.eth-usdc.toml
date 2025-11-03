@@ -15,7 +15,7 @@ tycho_api = "tycho-unichain-beta.propellerheads.xyz"
 
 # === Execution ===
 min_watch_spread_bps = 2.0
-min_executable_spread_bps = -10.0 # 5.0
+min_executable_spread_bps = 0.0 # 5.0
 max_slippage_pct = 0.0025
 max_inventory_ratio = 0.99 # 0.99
 tx_gas_limit = 500000
@@ -23,8 +23,6 @@ block_offset = 1
 inclusion_block_delay = 0
 permit2_address = "0x000000000022D473030F116dDEE9F6B43aC78BA3"
 tycho_router_address = "0xFfA5ec2e444e4285108e4a17b82dA495c178427B"
-
-# ! --- PROD --- !
 
 # === Misc ===
 poll_interval_ms = 500

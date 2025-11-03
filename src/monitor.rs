@@ -1,11 +1,11 @@
-/// =============================================================================
+///   =============================================================================
 /// Market Maker Monitoring Service
-/// =============================================================================
+///   =============================================================================
 ///
 /// @description: Standalone monitoring service that listens to market maker events
 /// and stores them in the database for analysis and tracking. This service provides
 /// real-time monitoring capabilities for market maker performance and trade execution.
-/// =============================================================================
+///   =============================================================================
 ///
 /// @features:
 /// - Connects to Neon PostgreSQL database
@@ -17,12 +17,12 @@
 /// - Neon PostgreSQL database connection
 /// - Redis pub/sub channel (CHANNEL_REDIS)
 /// - Environment configuration (.env.monitor.global)
-/// =============================================================================
+///   =============================================================================
 use shd::{types::config::MoniEnvConfig, utils::constants::CHANNEL_REDIS};
 use tracing::Level;
 use tracing_subscriber::EnvFilter;
 
-/// =============================================================================
+///   =============================================================================
 /// @function: main
 /// @description: Main entry point for the monitoring service
 /// @behavior:
@@ -31,7 +31,7 @@ use tracing_subscriber::EnvFilter;
 /// - Establishes database connection
 /// - Validates database connectivity
 /// - Starts Redis pub/sub listening loop
-/// =============================================================================
+///   =============================================================================
 #[tokio::main]
 async fn main() {
     // Initialize logging with environment-based configuration

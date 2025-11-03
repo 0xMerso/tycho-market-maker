@@ -2,12 +2,12 @@ use std::{process::Command, time::Duration};
 
 use crate::utils::constants::HEARTBEAT_DELAY;
 
-/// =============================================================================
+///   =============================================================================
 /// @function: alive
 /// @description: Sends HTTP GET heartbeat request to check endpoint health
 /// @param endpoint: URL endpoint to send heartbeat request to
 /// @behavior: Returns true if request succeeds, false on error
-/// =============================================================================
+///   =============================================================================
 pub async fn alive(endpoint: String) -> bool {
     let client = reqwest::Client::new();
 
@@ -23,6 +23,12 @@ pub async fn alive(endpoint: String) -> bool {
     }
 }
 
+///   =============================================================================
+/// @function: ghead
+/// @description: Retrieves the current Git commit hash
+/// @return `Option<String>`: Git commit hash or None if git command fails
+/// @behavior: Executes `git rev-parse HEAD` and logs the result
+///   =============================================================================
 pub fn ghead() -> Option<String> {
     let output = Command::new("git").args(["rev-parse", "HEAD"]).output().expect("Failed to execute git command");
     if output.status.success() {
@@ -36,6 +42,12 @@ pub fn ghead() -> Option<String> {
     }
 }
 
+///   =============================================================================
+/// @function: heartbeat
+/// @description: Sends a heartbeat ping to a specified endpoint for monitoring
+/// @param endpoint: URL endpoint to send the heartbeat request to
+/// @behavior: Calls ghead() to log git commit, then sends GET request to endpoint
+///   =============================================================================
 pub async fn heartbeat(endpoint: String) {
     ghead();
     let client = reqwest::Client::new();
@@ -51,13 +63,13 @@ pub async fn heartbeat(endpoint: String) {
     };
 }
 
-/// =============================================================================
+///   =============================================================================
 /// @function: heartbeats
 /// @description: Spawns background task for periodic heartbeat monitoring
 /// @param testing: Whether the system is in testing mode
 /// @param heartbeat_endpoint: URL endpoint to send heartbeat requests to
 /// @behavior: Spawns async task that ticks every HEARTBEAT_DELAY/2 seconds (skipped in testing mode)
-/// =============================================================================
+///   =============================================================================
 pub async fn heartbeats(testing: bool, heartbeat_endpoint: String) {
     if testing {
         tracing::info!("Testing mode, heartbeat task not spawned.");

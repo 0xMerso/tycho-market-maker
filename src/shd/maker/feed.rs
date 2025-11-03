@@ -1,26 +1,27 @@
-/// =============================================================================
+///   =============================================================================
 /// Price Feed Module
-/// =============================================================================
+///   =============================================================================
 ///
 /// @description: Price feed implementations for fetching external market prices.
 /// Supports multiple price sources including Chainlink oracles and Binance API
 /// for real-time price discovery in market making operations.
-/// =============================================================================
+///   =============================================================================
 use alloy::providers::ProviderBuilder;
 use alloy_primitives::Address;
 use async_trait::async_trait;
 use serde::Deserialize;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::types::{config::MarketMakerConfig, sol::IChainLinkPF};
 
 // === SHARED/TRAITS ===
 
-/// =============================================================================
+///   =============================================================================
 /// @trait: PriceFeed
 /// @description: Interface for external price feed implementations
 /// @behavior: Provides standardized methods for fetching market prices
-/// =============================================================================
+///   =============================================================================
 #[async_trait]
 pub trait PriceFeed: Send + Sync {
     /// =============================================================================
@@ -39,11 +40,11 @@ pub trait PriceFeed: Send + Sync {
     fn name(&self) -> &'static str;
 }
 
-/// =============================================================================
+///   =============================================================================
 /// @struct: PriceFeedFactory
 /// @description: Factory for creating price feed instances dynamically
 /// @behavior: Creates appropriate price feed based on configuration
-/// =============================================================================
+///   =============================================================================
 pub struct PriceFeedFactory;
 
 impl PriceFeedFactory {
@@ -54,7 +55,7 @@ impl PriceFeedFactory {
     /// @behavior: Returns boxed trait object of appropriate price feed implementation
     /// =============================================================================
     pub fn create(feed: &str) -> Box<dyn PriceFeed> {
-        let feed = PriceFeedType::from_str(feed);
+        let feed = PriceFeedType::from_str(feed).expect("Invalid price feed type");
         match feed {
             PriceFeedType::Binance => {
                 tracing::info!("📊 Creating BinancePriceFeed");
@@ -68,32 +69,37 @@ impl PriceFeedFactory {
     }
 }
 
-/// =============================================================================
+///   =============================================================================
 /// @enum: PriceFeedType
 /// @description: Enumeration of available price feed types
 /// @variants:
 /// - Chainlink: On-chain oracle price feed
 /// - Binance: Centralized exchange price feed
-/// =============================================================================
+///   =============================================================================
 pub enum PriceFeedType {
     Chainlink,
     Binance,
 }
 
-impl PriceFeedType {
+impl FromStr for PriceFeedType {
+    type Err = String;
+
     /// =============================================================================
     /// @function: from_str
     /// @description: Parses string to PriceFeedType enum
     /// @param s: String to parse ("chainlink" or "binance")
-    /// @behavior: Returns corresponding enum variant, panics on unknown type
+    /// @behavior: Returns corresponding enum variant or error on unknown type
     /// =============================================================================
-    pub fn from_str(s: &str) -> Self {
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "chainlink" => PriceFeedType::Chainlink,
-            "binance" => PriceFeedType::Binance,
-            _ => panic!("Unknown price feed type: {}", s),
+            "chainlink" => Ok(PriceFeedType::Chainlink),
+            "binance" => Ok(PriceFeedType::Binance),
+            _ => Err(format!("Unknown price feed type: {}", s)),
         }
     }
+}
+
+impl PriceFeedType {
     /// =============================================================================
     /// @function: as_str
     /// @description: Converts PriceFeedType enum to string representation
@@ -109,11 +115,11 @@ impl PriceFeedType {
 
 // === CHAINLINK ===
 
-/// =============================================================================
+///   =============================================================================
 /// @struct: ChainlinkPriceFeed
 /// @description: Chainlink oracle price feed implementation
 /// @behavior: Fetches prices from on-chain Chainlink price feed contracts
-/// =============================================================================
+///   =============================================================================
 pub struct ChainlinkPriceFeed;
 
 #[async_trait]
@@ -146,13 +152,13 @@ impl PriceFeed for ChainlinkPriceFeed {
     }
 }
 
-/// =============================================================================
+///   =============================================================================
 /// @function: chainlink
 /// @description: Fetches price from a Chainlink oracle contract
 /// @param rpc: RPC endpoint URL for blockchain connection
 /// @param pfeed: Chainlink price feed contract address
 /// @behavior: Calls latestAnswer() and decimals() on oracle, returns normalized price
-/// =============================================================================
+///   =============================================================================
 pub async fn chainlink(rpc: String, pfeed: String) -> Result<f64, String> {
     let provider = ProviderBuilder::new().connect_http(rpc.parse().unwrap());
     let pfeed: Address = pfeed.clone().parse().unwrap();
@@ -165,7 +171,6 @@ pub async fn chainlink(rpc: String, pfeed: String) -> Result<f64, String> {
             // Alloy 1.0: decimals() returns u8 directly, latestAnswer() returns I256 directly
             let power = 10f64.powi(precision as i32);
             let price = price.to_string().parse::<u128>().unwrap() as f64 / power;
-            // tracing::debug!("Price fetched from {}: {}", pfeed, price);
             Ok(price)
         }
         _ => {
@@ -178,20 +183,20 @@ pub async fn chainlink(rpc: String, pfeed: String) -> Result<f64, String> {
 
 // ToDo === Pyth ===
 
-/// =============================================================================
+///   =============================================================================
 /// @struct: PythPriceFeed
 /// @description: Pyth network price feed implementation (placeholder)
 /// @behavior: Future implementation for Pyth oracle integration
-/// =============================================================================
+///   =============================================================================
 pub struct PythPriceFeed;
 
 // === BINANCE ===
 
-/// =============================================================================
+///   =============================================================================
 /// @struct: BinancePriceFeed
 /// @description: Binance exchange price feed implementation
 /// @behavior: Fetches spot prices from Binance REST API
-/// =============================================================================
+///   =============================================================================
 pub struct BinancePriceFeed;
 
 #[async_trait]
@@ -219,12 +224,12 @@ impl PriceFeed for BinancePriceFeed {
     }
 }
 
-/// =============================================================================
+///   =============================================================================
 /// @function: binance
 /// @description: Fetches token price from Binance API
 /// @param endpoint: Full Binance API endpoint URL with symbol parameter
 /// @behavior: Makes HTTP request to Binance and parses price from JSON response
-/// =============================================================================
+///   =============================================================================
 async fn binance(endpoint: String) -> Result<f64, String> {
     let response = reqwest::get(&endpoint).await.map_err(|e| format!("Failed to fetch from Binance: {}", e))?;
     let data: serde_json::Value = response.json().await.map_err(|e| format!("Failed to parse Binance response: {}", e))?;
@@ -233,33 +238,33 @@ async fn binance(endpoint: String) -> Result<f64, String> {
 
 // === COINGECKO ===
 
-/// =============================================================================
+///   =============================================================================
 /// @struct: CoinGeckoResponse
 /// @description: Response structure for CoinGecko API price data
 /// @behavior: Used as fallback for gas price when Chainlink feed unavailable
-/// =============================================================================
+///   =============================================================================
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct CoinGeckoResponse {
     pub ethereum: CryptoPrice,
 }
 
-/// =============================================================================
+///   =============================================================================
 /// @struct: CryptoPrice
 /// @description: Price structure containing USD value
 /// @fields: usd - Price in USD
-/// =============================================================================
+///   =============================================================================
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct CryptoPrice {
     pub usd: f64,
 }
 
-/// =============================================================================
+///   =============================================================================
 /// @function: coingecko_eth_usd
 /// @description: Fetches ETH/USD price from CoinGecko API as fallback
 /// @behavior: Queries CoinGecko simple price endpoint and returns ETH price in USD
-/// =============================================================================
+///   =============================================================================
 pub async fn coingecko_eth_usd() -> Option<f64> {
     let endpoint = "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd";
     let Ok(response) = reqwest::get(endpoint).await else {

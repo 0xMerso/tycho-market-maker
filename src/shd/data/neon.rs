@@ -14,9 +14,14 @@ use crate::{
 };
 use sea_orm::prelude::Uuid;
 
-// The whole database URL string follows the following format:
-// "protocol://username:password@host:port/database"
-// We put the database name (that last bit) in a separate variable simply for convenience.
+///   =============================================================================
+/// @function: connect
+/// @description: Establishes a connection to PostgreSQL database using SeaORM
+/// @param env: Monitoring environment configuration containing database URL
+/// @return Result<DatabaseConnection, DbErr>: Database connection or error
+/// @behavior: Connects to database and logs success/failure
+/// @note: Database URL format: "protocol://username:password@host:port/database"
+///   =============================================================================
 pub async fn connect(env: MoniEnvConfig) -> Result<DatabaseConnection, DbErr> {
     tracing::info!("Connecting to database: {}", env.database_url);
     match Database::connect(env.database_url.clone()).await {
@@ -181,7 +186,7 @@ pub async fn handle(msg: &ParsedMessage, env: MoniEnvConfig) {
                         }
                     }
                     None => {
-                        tracing::error!("No broadcast struct found for trade on instance: {}", instance.id);
+                        tracing::warn!("No broadcast struct found for trade on instance: {}", instance.id);
                     }
                 }
 

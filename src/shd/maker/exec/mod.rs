@@ -1,11 +1,11 @@
-/// =============================================================================
+///   =============================================================================
 /// Execution Strategy Module
-/// =============================================================================
+///   =============================================================================
 ///
 /// @description: Execution strategies for different blockchain networks. This module
 /// provides network-specific execution logic including simulation, broadcasting,
 /// and transaction management for Ethereum, Base, and Unichain networks.
-/// =============================================================================
+///   =============================================================================
 use async_trait::async_trait;
 use std::result::Result;
 use std::str::FromStr;
@@ -28,14 +28,14 @@ use crate::{
 
 pub mod chain;
 
-/// =============================================================================
+///   =============================================================================
 /// @enum: ExecStrategyName
 /// @description: Enumeration of available execution strategy names
 /// @variants:
 /// - MainnetStrategy: Ethereum mainnet execution strategy
 /// - BaseStrategy: Base L2 execution strategy
 /// - UnichainStrategy: Unichain execution strategy
-/// =============================================================================
+///   =============================================================================
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExecStrategyName {
     MainnetStrategy,
@@ -43,11 +43,11 @@ pub enum ExecStrategyName {
     UnichainStrategy,
 }
 
-/// =============================================================================
+///   =============================================================================
 /// @function: as_str
 /// @description: Convert execution strategy name to string representation
 /// @return &'static str: String representation of the strategy name
-/// =============================================================================
+///   =============================================================================
 impl ExecStrategyName {
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -58,31 +58,31 @@ impl ExecStrategyName {
     }
 }
 
-/// =============================================================================
+///   =============================================================================
 /// @struct: ExecStrategyFactory
 /// @description: Factory for creating execution strategies based on network configuration
-/// =============================================================================
+///   =============================================================================
 pub struct ExecStrategyFactory;
 
-/// =============================================================================
+///   =============================================================================
 /// @function: create
 /// @description: Create the appropriate execution strategy based on network name
 /// @param network: Network name as string (e.g., "ethereum", "base", "unichain")
-/// @return Box<dyn ExecStrategy>: Boxed execution strategy instance
+/// @return `Box<dyn ExecStrategy>`: Boxed execution strategy instance
 /// @behavior: Panics if network name is not recognized
-/// =============================================================================
+///   =============================================================================
 impl ExecStrategyFactory {
     pub fn create(network: &str) -> Box<dyn ExecStrategy> {
         match NetworkName::from_str(network) {
-            Some(NetworkName::Ethereum) => Box::new(chain::mainnet::MainnetExec::new()),
-            Some(NetworkName::Base) => Box::new(chain::base::BaseExec::new()),
-            Some(NetworkName::Unichain) => Box::new(chain::unichain::UnichainExec::new()),
-            None => panic!("Unknown network '{}', please check the network name in the config file", network),
+            Ok(NetworkName::Ethereum) => Box::new(chain::mainnet::MainnetExec::new()),
+            Ok(NetworkName::Base) => Box::new(chain::base::BaseExec::new()),
+            Ok(NetworkName::Unichain) => Box::new(chain::unichain::UnichainExec::new()),
+            Err(_) => panic!("Unknown network '{}', please check the network name in the config file", network),
         }
     }
 }
 
-/// =============================================================================
+///   =============================================================================
 /// @trait: ExecStrategy
 /// @description: Trait defining the interface for execution strategies
 /// @methods:
@@ -92,7 +92,7 @@ impl ExecStrategyFactory {
 /// - execute: Main execution orchestration
 /// - simulate: Transaction simulation
 /// - broadcast: Transaction broadcasting
-/// =============================================================================
+///   =============================================================================
 #[async_trait]
 pub trait ExecStrategy: Send + Sync {
     /// =============================================================================
@@ -140,7 +140,7 @@ pub trait ExecStrategy: Send + Sync {
     /// @param prepared: Vector of trades to execute
     /// @param env: Environment configuration
     /// @param identifier: Instance identifier
-    /// @return Result<Vec<Trade>, String>: Executed trades or error
+    /// @return `Result<Vec<Trade>, String>`: Executed trades or error
     /// @behavior: Orchestrates simulation, broadcasting, and status updates
     /// =============================================================================
     async fn execute(&self, config: MarketMakerConfig, prepared: Vec<Trade>, env: EnvConfig, identifier: String) -> Result<Vec<Trade>, String> {
@@ -183,13 +183,12 @@ pub trait ExecStrategy: Send + Sync {
     /// @param config: Market maker configuration
     /// @param trades: Vector of trades to simulate
     /// @param env: Environment configuration
-    /// @return Result<Vec<SimulatedData>, String>: Simulated results or error (for swap, not for approval)
+    /// @return `Result<Vec<SimulatedData>, String>`: Simulated results or error (for swap, not for approval)
     /// @behavior: Performs EVM simulation for each trade
     /// =============================================================================
     /// Pure EVM simulation, no bundle, etc.
     async fn simulate(&self, config: MarketMakerConfig, trades: Vec<Trade>, env: EnvConfig) -> Result<Vec<SimulatedData>, String> {
         tracing::info!("{}: Simulating {} trades", self.name(), trades.len());
-        // tracing::debug!("default_simulate: {} trades", trades.len());
         let chain = get_alloy_chain(config.network_name.as_str().to_string()).expect("Failed to get alloy chain");
         let rpc = config.rpc_url.parse::<url::Url>().unwrap().clone(); // ! Custom per network
         let pk = env.wallet_private_key.clone();
@@ -200,40 +199,15 @@ pub trait ExecStrategy: Send + Sync {
 
         let mut output = vec![];
         for (idx, tx) in trades.iter().enumerate() {
-            tracing::debug!("════════════════════════════════════════════════════════════");
-            tracing::debug!("🔍 DEBUG: Preparing simulation #{}", idx);
-
             let time = std::time::Instant::now();
             let _simulation_start = std::time::SystemTime::now();
             let mut calls = vec![];
             if let Some(approval) = &tx.approve {
-                tracing::debug!("  📝 Approval tx:");
-                tracing::debug!("     To: {:?}", approval.to);
-                tracing::debug!("     From: {:?}", approval.from);
-                tracing::debug!("     Value: {:?}", approval.value);
-                tracing::debug!("     Gas: {:?}", approval.gas);
-                tracing::debug!("     Nonce: {:?}", approval.nonce);
-                if let Some(ref input) = approval.input.input {
-                    tracing::debug!("     Data length: {} bytes", input.len());
-                    // tracing::debug!("     Data: {}", &input.to_string());
-                }
                 calls.push(approval.clone());
-            }
-
-            tracing::debug!("  🔄 Swap tx:");
-            tracing::debug!("     To: {:?}", tx.swap.to);
-            tracing::debug!("     From: {:?}", tx.swap.from);
-            tracing::debug!("     Value: {:?}", tx.swap.value);
-            tracing::debug!("     Gas: {:?}", tx.swap.gas);
-            tracing::debug!("     Nonce: {:?}", tx.swap.nonce);
-            if let Some(ref input) = tx.swap.input.input {
-                tracing::debug!("     Data length: {} bytes", input.len());
-                // tracing::debug!("     Data: {}", &input.to_string());
             }
             calls.push(tx.swap.clone());
 
-            tracing::debug!("  🎯 Total calls in simulation: {}", calls.len());
-            tracing::debug!("════════════════════════════════════════════════════════════");
+            tracing::debug!("Preparing simulation #{} with {} call(s)", idx, calls.len());
 
             let payload = SimulatePayload {
                 block_state_calls: vec![SimBlock {
@@ -321,7 +295,7 @@ pub trait ExecStrategy: Send + Sync {
     /// @param prepared: Vector of trades to broadcast
     /// @param mmc: Market maker configuration
     /// @param env: Environment configuration
-    /// @return Result<Vec<BroadcastData>, String>: Broadcast results or error
+    /// @return `Result<Vec<BroadcastData>, String>`: Broadcast results or error
     /// @behavior: Sends approval and swap transactions for each trade (unless infinite_approval is true)
     /// =============================================================================
     async fn broadcast(&self, prepared: Vec<Trade>, mmc: MarketMakerConfig, env: EnvConfig) -> Result<Vec<BroadcastData>, String> {

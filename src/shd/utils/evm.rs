@@ -11,52 +11,51 @@ use url;
 
 use crate::types::sol::IERC20;
 
-/// =============================================================================
+///   =============================================================================
 /// EVM Blockchain Utilities
-/// =============================================================================
+///   =============================================================================
 ///
 /// @description: Collection of utility functions for interacting with EVM-compatible
 /// blockchains including Ethereum, Base, and other L2 networks
-/// =============================================================================
-
-/// =============================================================================
+///   =============================================================================
+///   =============================================================================
 /// @function: create_provider
 /// @description: Create an HTTP provider instance from RPC URL
 /// @param rpc: RPC endpoint URL as string
 /// @return impl Provider: Configured provider instance
-/// =============================================================================
+///   =============================================================================
 pub fn create_provider(rpc: &str) -> impl Provider {
     ProviderBuilder::new().connect_http(rpc.parse().expect("Failed to parse RPC URL"))
 }
 
-/// =============================================================================
+///   =============================================================================
 /// @function: latest
 /// @description: Retrieve the latest block number from the specified RPC endpoint
 /// @param provider: RPC endpoint URL as string
 /// @return u64: Latest block number (returns 0 if failed)
-/// =============================================================================
+///   =============================================================================
 pub async fn latest(provider: String) -> u64 {
     let provider = create_provider(&provider);
     provider.get_block_number().await.unwrap_or_default()
 }
 
-/// =============================================================================
+///   =============================================================================
 /// @function: gas_price
 /// @description: Retrieve the current gas price from the specified RPC endpoint
 /// @param provider: RPC endpoint URL as string
 /// @return u128: Current gas price in wei (returns 0 if failed)
-/// =============================================================================
+///   =============================================================================
 pub async fn gas_price(provider: String) -> u128 {
     let provider = create_provider(&provider);
     provider.get_gas_price().await.unwrap_or_default()
 }
 
-/// =============================================================================
+///   =============================================================================
 /// @function: eip1559_fees
 /// @description: Estimate EIP-1559 gas fees (max fee and priority fee) for the network
 /// @param provider: RPC endpoint URL as string
 /// @return Result<Eip1559Estimation, String>: EIP-1559 fee estimation or error
-/// =============================================================================
+///   =============================================================================
 pub async fn eip1559_fees(provider: String) -> Result<Eip1559Estimation, String> {
     let provider = create_provider(&provider);
 
@@ -70,14 +69,14 @@ pub async fn eip1559_fees(provider: String) -> Result<Eip1559Estimation, String>
     }
 }
 
-/// =============================================================================
+///   =============================================================================
 /// @function: balances
 /// @description: Get token balances for a specific owner address across multiple tokens
 /// @param provider: Alloy provider instance
 /// @param owner: Owner address as string
 /// @param tokens: Vector of token contract addresses
-/// @return Result<Vec<u128>, String>: Vector of token balances in wei or error
-/// =============================================================================
+/// @return `Result<Vec<u128>, String>`: Vector of token balances in wei or error
+///   =============================================================================
 pub async fn balances(provider: &impl Provider, owner: String, tokens: Vec<String>) -> Result<Vec<u128>, String> {
     let mut balances = vec![];
     let client = Arc::new(provider);
@@ -101,7 +100,7 @@ pub async fn balances(provider: &impl Provider, owner: String, tokens: Vec<Strin
     Ok(balances)
 }
 
-/// =============================================================================
+///   =============================================================================
 /// @function: allowance
 /// @description: Get the allowance amount for a specific token between owner and spender
 /// @param provider: Alloy provider instance
@@ -109,7 +108,7 @@ pub async fn balances(provider: &impl Provider, owner: String, tokens: Vec<Strin
 /// @param spender: Spender address
 /// @param token: Token contract address
 /// @return Result<u128, String>: Allowance amount in wei or error
-/// =============================================================================
+///   =============================================================================
 pub async fn allowance(rpc: String, owner: String, spender: String, token: String) -> Result<u128, String> {
     let provider = create_provider(&rpc);
     let client = Arc::new(provider);
@@ -126,7 +125,7 @@ pub async fn allowance(rpc: String, owner: String, spender: String, token: Strin
     }
 }
 
-/// =============================================================================
+///   =============================================================================
 /// @function: approve
 /// @description: Approve a spender to spend a specific amount of tokens
 /// @param mmc: Market maker configuration
@@ -175,7 +174,7 @@ pub async fn approve(mmc: MarketMakerConfig, env: EnvConfig, spender: String, to
     }
 }
 
-/// =============================================================================
+///   =============================================================================
 /// @function: wallet
 /// @description: Initialize the wallet by checking token balances, nonce, and wallet state
 /// @param config: Market maker configuration containing RPC URL and token addresses
@@ -186,7 +185,7 @@ pub async fn approve(mmc: MarketMakerConfig, env: EnvConfig, spender: String, to
 /// - Fetches balances for base and quote tokens
 /// - Gets current nonce for transaction ordering
 /// - Logs wallet state for debugging
-/// =============================================================================
+///   =============================================================================
 pub async fn fetch_wallet_state(config: MarketMakerConfig) {
     let provider = create_provider(&config.rpc_url);
     let tokens = vec![config.base_token_address.clone(), config.quote_token_address.clone()];
@@ -199,13 +198,13 @@ pub async fn fetch_wallet_state(config: MarketMakerConfig) {
     tracing::debug!("Nonce of sender {}: {}", config.wallet_public_key.clone(), nonce);
 }
 
-/// =============================================================================
+///   =============================================================================
 /// @function: fetch_receipt
 /// @description: Fetch the receipt for a specific transaction hash
 /// @param rpc: RPC endpoint URL as string
 /// @param hash: Transaction hash as string
 /// @return Result<TransactionReceipt, String>: Receipt or error
-/// =============================================================================
+///   =============================================================================
 pub async fn fetch_receipt(rpc: String, hash: String) -> Result<TransactionReceipt, String> {
     // If it doesn't contain 0x, return error
     if !hash.starts_with("0x") {

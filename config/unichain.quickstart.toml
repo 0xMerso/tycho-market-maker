@@ -11,7 +11,7 @@ quote_token = "USDC"
 quote_token_address = "0x078D782b760474a361dDA0AF3839290b0EF57AD6"
 network_name = "unichain"
 chain_id = 130
-wallet_public_key = "0x32bf8C1dB9887e296Ccd24A8Ba29Df760F39F886" # ! Update it, and make sure there is base/quote assets in wallet + ETH for gas fees
+wallet_public_key = "0xA61E420c6FB54F04c5D7a4818bA2DBAAC0120669" # ! Update it, and make sure there is base/quote assets in wallet + ETH for gas fees
 gas_token_symbol = "0x4200000000000000000000000000000000000006"
 gas_token_chainlink_price_feed = "0x5b0cf2b36a65a6BB085D501B971e4c102B9Cd473"
 rpc_url = "https://unichain.drpc.org" # or https://0xrpc.io/uni
@@ -20,7 +20,7 @@ tycho_api = "tycho-unichain-beta.propellerheads.xyz"
 
 # === Execution ===
 min_watch_spread_bps = 1.0
-min_executable_spread_bps = -5.0 # 5.0
+min_executable_spread_bps = -1.0 # ! For quickstart only, spread tolerance
 max_slippage_pct = 0.0025
 max_inventory_ratio = 0.99 # 0.99
 tx_gas_limit = 500000
@@ -31,9 +31,9 @@ tycho_router_address = "0xFfA5ec2e444e4285108e4a17b82dA495c178427B"
 
 # === Misc ===
 poll_interval_ms = 500
-publish_events = false 
+publish_events = true 
 skip_simulation = false 
-infinite_approval = false
+infinite_approval = true
 min_publish_timeframe_ms = 60000
 
 [price_feed_config]

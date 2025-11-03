@@ -4,15 +4,14 @@ use tycho_simulation::protocol::models::ProtocolComponent;
 
 use crate::types::tycho::{ProtoSimComp, ValorisationPath};
 
-/// =============================================================================
+///   =============================================================================
 /// Token Routing and Pricing Utilities
-/// =============================================================================
+///   =============================================================================
 ///
 /// @description: Graph-based routing algorithms for finding token conversion paths
 /// and calculating prices across multiple DEX protocols
-/// =============================================================================
-
-/// =============================================================================
+///   =============================================================================
+///   =============================================================================
 /// @description: DFS graph traversal method that explores as far as possible along each branch before backtracking.
 /// Used to price any token to ETH equivalent value, to reflect gas cost.
 /// But can be used to price any token to any other token.
@@ -27,7 +26,7 @@ use crate::types::tycho::{ProtoSimComp, ValorisationPath};
 /// 1. Build adjacency graph from protocol components
 /// 2. Use BFS to find shortest path from input to target
 /// 3. Return both token path and component path for pricing
-/// =============================================================================
+///    =============================================================================
 pub fn find_path(cps: Vec<ProtocolComponent>, input: String, target: String) -> Result<ValorisationPath, String> {
     // Build adjacency graph: (destination token address, component id that provides this conversion)
     let mut graph: HashMap<String, Vec<(String, String)>> = HashMap::new();
@@ -77,7 +76,7 @@ pub fn find_path(cps: Vec<ProtocolComponent>, input: String, target: String) -> 
     Err(format!("No path found from {} to {}", input, target))
 }
 
-/// =============================================================================
+///   =============================================================================
 /// @function: quote
 /// @description: Quote a path of tokens, using components and protosim Tycho functions.
 /// Used to calculate the price of a path of tokens, mostly to ETH.
@@ -85,7 +84,7 @@ pub fn find_path(cps: Vec<ProtocolComponent>, input: String, target: String) -> 
 /// @param pts: Vector of protocol simulation components with their states
 /// @param atks: Vector of all available tokens
 /// @param path: Vector of token addresses representing the conversion path
-/// @return Option<f64>: Price quote or None if path cannot be priced
+/// @return `Option<f64>`: Price quote or None if path cannot be priced
 ///
 /// @algorithm:
 /// 1. Handle special case for ETH (return 1.0)
@@ -94,7 +93,7 @@ pub fn find_path(cps: Vec<ProtocolComponent>, input: String, target: String) -> 
 ///    - Get spot price from protocol simulation
 ///    - Multiply cumulative price by the conversion rate
 /// 3. Return final cumulative price
-/// =============================================================================
+///    =============================================================================
 pub fn quote(pts: Vec<ProtoSimComp>, atks: Vec<Token>, path: Vec<String>) -> Option<f64> {
     // If ETH, return 1. Else, if the path is empty, return None.
     if path.len() == 1 {

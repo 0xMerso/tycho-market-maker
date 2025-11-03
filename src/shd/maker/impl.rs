@@ -87,13 +87,13 @@ sol! {
     }
 }
 
-/// =============================================================================
+///   =============================================================================
 /// @function: encode_input
 /// @description: Encodes function signature and arguments into transaction calldata
 /// @param signature: Function signature (e.g., "approve(address,uint256)")
 /// @param args: ABI-encoded arguments
 /// @return Vec<u8>: Encoded calldata (function selector + args)
-/// =============================================================================
+///   =============================================================================
 fn encode_input(signature: &str, args: Vec<u8>) -> Vec<u8> {
     // Compute function selector (first 4 bytes of keccak256 hash of signature)
     let hash = keccak256(signature.as_bytes());
@@ -128,7 +128,6 @@ impl MarketContext {
 #[async_trait]
 impl IMarketMaker for MarketMaker {
     /// Market Maker main functions
-
     /// =============================================================================
     /// @function: fetch_market_price
     /// @description: Fetches current market price from configured price feed
@@ -162,7 +161,7 @@ impl IMarketMaker for MarketMaker {
     /// @param psc: Vector of protocol simulation components
     /// @behavior: Returns spot price for base/quote pair in each component
     /// =============================================================================
-    fn prices(&self, psc: &Vec<ProtoSimComp>) -> Vec<ComponentPriceData> {
+    fn prices(&self, psc: &[ProtoSimComp]) -> Vec<ComponentPriceData> {
         let mut ss = Vec::new();
         for proto in psc.iter() {
             let token0 = proto.component.tokens[0].address.to_string().to_lowercase();
@@ -336,7 +335,7 @@ impl IMarketMaker for MarketMaker {
     /// @param reference: Reference price
     /// @behavior: Returns vector of readjustment orders if pools are out of range
     /// =============================================================================
-    fn evaluate(&self, targets: &Vec<ProtoSimComp>, sps: Vec<f64>, reference: f64) -> Vec<CompReadjustment> {
+    fn evaluate(&self, targets: &[ProtoSimComp], sps: Vec<f64>, reference: f64) -> Vec<CompReadjustment> {
         let mut orders = vec![];
         if sps.is_empty() {
             tracing::warn!("No spot prices available to evaluate (targets: {})", targets.len());
@@ -478,7 +477,7 @@ impl IMarketMaker for MarketMaker {
             // Run optimization to find optimal swap amount
 
             // tracing::info!("Pool {}: find_optimal_swap_amount ...", cpname(adjustment.psc.component.clone()),);
-            let optimization_result = crate::opti::math::find_optimal_swap_amount(&adjustment.psc.protosim, selling, buying, adjustment.reference, base_to_quote, max_alloc);
+            let optimization_result = crate::opti::math::find_optimal_swap_amount(&*adjustment.psc.protosim, selling, buying, adjustment.reference, base_to_quote, max_alloc);
 
             let selling_amount = match optimization_result {
                 Ok(opt) => {
@@ -764,49 +763,7 @@ impl IMarketMaker for MarketMaker {
         let mut output: Vec<Trade> = vec![];
         let solutions = orders.iter().map(|order| self.build_tycho_solution(order.clone())).collect::<Vec<Solution>>();
 
-        // ===== DEBUG: Solution Details =====
-        tracing::debug!("╔══════════════════════════════════════════════════════════════");
-        tracing::debug!("║ DEBUG: Built {} Solution(s)", solutions.len());
-        tracing::debug!("╚══════════════════════════════════════════════════════════════");
-        for (i, sol) in solutions.iter().enumerate() {
-            tracing::debug!("┌─ Solution #{} ─────────────────────────────────────────────", i);
-            tracing::debug!("│ Sender: {}", sol.sender);
-            tracing::debug!("│ Receiver: {}", sol.receiver);
-            tracing::debug!("│ Given Token: {}", sol.given_token);
-            tracing::debug!("│ Checked Token: {}", sol.checked_token);
-            tracing::debug!("│ Given Amount: {}", sol.given_amount);
-            tracing::debug!("│ Checked Amount: {}", sol.checked_amount);
-            tracing::debug!("│ Exact Out: {}", sol.exact_out);
-            tracing::debug!("│ Swaps count: {}", sol.swaps.len());
-
-            for (j, swap) in sol.swaps.iter().enumerate() {
-                tracing::debug!("│ ├─ Swap #{} ─────────────────────────────────────────", j);
-                tracing::debug!("│ │  Component ID: {}", swap.component.id);
-                tracing::debug!("│ │  Component Protocol: {}", swap.component.protocol_system);
-                tracing::debug!("│ │  Component Type: {}", swap.component.protocol_type_name);
-                tracing::debug!("│ │  Component Tokens: {}", swap.component.tokens.len());
-                for (k, token_addr) in swap.component.tokens.iter().enumerate() {
-                    tracing::debug!("│ │    Token {}: {}", k, token_addr);
-                }
-                tracing::debug!("│ │  Static Attributes: {}", swap.component.static_attributes.len());
-                for (key, val) in swap.component.static_attributes.iter() {
-                    tracing::debug!("│ │    {}: {}", key, val);
-                }
-                tracing::debug!("│ │  Token In: {}", swap.token_in);
-                tracing::debug!("│ │  Token Out: {}", swap.token_out);
-                tracing::debug!("│ │  Split: {}", swap.split);
-                tracing::debug!("│ │  User Data present: {}", if swap.user_data.is_some() { "Yes" } else { "None" });
-                if let Some(ref ud) = swap.user_data {
-                    tracing::debug!("│ │  User Data length: {} bytes", ud.len());
-                    if ud.len() <= 100 {
-                        tracing::debug!("│ │  User Data: 0x{}", hex::encode(ud));
-                    } else {
-                        tracing::debug!("│ │  User Data (first 100 bytes): 0x{}", hex::encode(&ud[0..100]));
-                    }
-                }
-            }
-            tracing::debug!("└────────────────────────────────────────────────────────────");
-        }
+        tracing::debug!("Built {} solution(s) for execution", solutions.len());
 
         // Always use TransferFrom (direct router approval)
         // - infinite_approval = true:  Router already approved infinitely, no approval TX
@@ -870,7 +827,6 @@ impl IMarketMaker for MarketMaker {
                             let calldata = call.abi_encode();
 
                             tracing::debug!("   📦 Encoded full router call: {} bytes", calldata.len());
-                            // tracing::debug!("   📦 Full calldata: 0x{}", hex::encode(&calldata));
 
                             let transaction = Transaction {
                                 to: encoded_solution.interacting_with.clone(),
@@ -975,7 +931,6 @@ impl IMarketMaker for MarketMaker {
                                                 components.push(comp.clone());
                                                 // If the component contains both config tokens, add it to the monitored list
                                                 let tks = comp.tokens.iter().map(|t| t.address.to_string().to_lowercase()).collect::<Vec<String>>();
-                                                // tracing::debug!("Tokens in component: {:?}", tks);
                                                 if tks.contains(&self.base.address.to_string().to_lowercase()) && tks.contains(&self.quote.address.to_string().to_lowercase()) {
                                                     // Calculate spot price for this pool
                                                     let token0 = comp.tokens[0].address.to_string().to_lowercase();

@@ -1,12 +1,12 @@
-/// =============================================================================
+///   =============================================================================
 /// Market Maker Types and Data Structures
-/// =============================================================================
+///   =============================================================================
 ///
 /// @description: Core type definitions for market making operations including
 /// the main market maker trait, data structures for trades, orders, and market
 /// context. This module defines the fundamental interfaces and data models
 /// used throughout the market making system.
-/// =============================================================================
+///   =============================================================================
 use std::collections::HashMap;
 
 use alloy::rpc::types::TransactionRequest;
@@ -24,7 +24,7 @@ use super::{
     tycho::{ProtoSimComp, SharedTychoStreamState},
 };
 
-/// =============================================================================
+///   =============================================================================
 /// @trait: IMarketMaker
 /// @description: Core market maker interface defining all required operations
 /// @methods:
@@ -40,16 +40,16 @@ use super::{
 /// - trade_tx_request: Create transaction requests
 /// - prepare: Prepare transactions for execution
 /// - run: Main market maker loop
-/// =============================================================================
+///   =============================================================================
 #[async_trait]
 pub trait IMarketMaker: Send + Sync {
     /// =============================================================================
     /// @function: prices
     /// @description: Retrieve prices for protocol simulation components
     /// @param psc: Vector of protocol simulation components
-    /// @return Vec<ComponentPriceData>: Vector of component price data
+    /// @return `Vec<ComponentPriceData>`: Vector of component price data
     /// =============================================================================
-    fn prices(&self, psc: &Vec<ProtoSimComp>) -> Vec<ComponentPriceData>;
+    fn prices(&self, psc: &[ProtoSimComp]) -> Vec<ComponentPriceData>;
 
     /// =============================================================================
     /// @function: evaluate
@@ -57,9 +57,9 @@ pub trait IMarketMaker: Send + Sync {
     /// @param psc: Vector of protocol simulation components
     /// @param sps: Vector of spot prices
     /// @param reference: Reference price for comparison
-    /// @return Vec<CompReadjustment>: Vector of profitable readjustment opportunities
+    /// @return `Vec<CompReadjustment>`: Vector of profitable readjustment opportunities
     /// =============================================================================
-    fn evaluate(&self, psc: &Vec<ProtoSimComp>, sps: Vec<f64>, reference: f64) -> Vec<CompReadjustment>;
+    fn evaluate(&self, psc: &[ProtoSimComp], sps: Vec<f64>, reference: f64) -> Vec<CompReadjustment>;
 
     /// =============================================================================
     /// @function: readjust
@@ -68,7 +68,7 @@ pub trait IMarketMaker: Send + Sync {
     /// @param inventory: Current token inventory
     /// @param crs: Vector of component readjustments
     /// @param env: Environment configuration
-    /// @return Vec<ExecutionOrder>: Vector of execution orders
+    /// @return `Vec<ExecutionOrder>`: Vector of execution orders
     /// =============================================================================
     async fn readjust(&self, context: MarketContext, inventory: Inventory, crs: Vec<CompReadjustment>, env: EnvConfig) -> Vec<ExecutionOrder>;
 
@@ -86,7 +86,7 @@ pub trait IMarketMaker: Send + Sync {
     /// @param components: Vector of protocol components
     /// @param protosims: HashMap of protocol simulations
     /// @param tokens: Vector of available tokens
-    /// @return Option<MarketContext>: Market context if available
+    /// @return `Option<MarketContext>`: Market context if available
     /// =============================================================================
     async fn fetch_market_context(&self, components: Vec<ProtocolComponent>, protosims: &HashMap<std::string::String, Box<dyn ProtocolSim>>, tokens: Vec<Token>) -> Option<MarketContext>;
 
@@ -141,7 +141,7 @@ pub trait IMarketMaker: Send + Sync {
     /// @param context: Market context
     /// @param inventory: Current inventory
     /// @param env: Environment configuration
-    /// @return Vec<Trade>: Vector of prepared trades
+    /// @return `Vec<Trade>`: Vector of prepared trades
     /// =============================================================================
     fn prepare(&self, orders: Vec<ExecutionOrder>, tdata: Vec<TradeData>, context: MarketContext, inventory: Inventory, env: EnvConfig) -> Vec<Trade>;
 
@@ -155,7 +155,7 @@ pub trait IMarketMaker: Send + Sync {
     async fn run(&mut self, mtx: SharedTychoStreamState, env: EnvConfig);
 }
 
-/// =============================================================================
+///   =============================================================================
 /// @struct: MarketMaker
 /// @description: Main market maker implementation struct
 /// @fields:
@@ -168,7 +168,7 @@ pub trait IMarketMaker: Send + Sync {
 /// - quote: Quote token from Tycho client
 /// - single: Testing flag for single swap execution
 /// - execution: Dynamic execution strategy
-/// =============================================================================
+///   =============================================================================
 pub struct MarketMaker {
     // Ready when the ProtocolStreamBuilder is initialised
     pub ready: bool,
@@ -194,14 +194,14 @@ pub struct MarketMaker {
     pub execution: Box<dyn ExecStrategy>,
 }
 
-/// =============================================================================
+///   =============================================================================
 /// @struct: PriceFeedConfig
 /// @description: Configuration for price feed sources
 /// @fields:
 /// - r#type: Price feed type ("binance" or "chainlink")
 /// - source: Source URL or contract address
 /// - reverse: Whether to reverse the price (1 / price)
-/// =============================================================================
+///   =============================================================================
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PriceFeedConfig {
     pub r#type: String, // "binance" or "chainlink"
@@ -209,27 +209,27 @@ pub struct PriceFeedConfig {
     pub reverse: bool,  // true if the price is to be reversed (e.g. 1 / price), only used for chainlink
 }
 
-/// =============================================================================
+///   =============================================================================
 /// @enum: TradeDirection
 /// @description: Direction of trade execution
 /// @variants:
 /// - Buy: Buy order (quote to base)
 /// - Sell: Sell order (base to quote)
-/// =============================================================================
+///   =============================================================================
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum TradeDirection {
     Buy,
     Sell,
 }
 
-/// =============================================================================
+///   =============================================================================
 /// @struct: ComponentPriceData
 /// @description: Price data for a specific component
 /// @fields:
 /// - address: Component contract address
 /// - r#type: Component type
 /// - price: Current price
-/// =============================================================================
+///   =============================================================================
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComponentPriceData {
     pub address: String,
@@ -237,7 +237,7 @@ pub struct ComponentPriceData {
     pub price: f64,
 }
 
-/// =============================================================================
+///   =============================================================================
 /// @struct: CompReadjustment
 /// @description: Component readjustment opportunity
 /// @fields:
@@ -248,7 +248,7 @@ pub struct ComponentPriceData {
 /// - reference: Reference price
 /// - spread: Price spread
 /// - spread_bps: Spread in basis points
-/// =============================================================================
+///   =============================================================================
 #[derive(Debug, Clone)]
 pub struct CompReadjustment {
     // Tycho
@@ -263,14 +263,14 @@ pub struct CompReadjustment {
     pub spread_bps: f64,
 }
 
-/// =============================================================================
+///   =============================================================================
 /// @struct: Inventory
 /// @description: Current token inventory and wallet state
 /// @fields:
 /// - base_balance: Base token balance in wei
 /// - quote_balance: Quote token balance in wei
 /// - nonce: Current wallet nonce
-/// =============================================================================
+///   =============================================================================
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Inventory {
     pub base_balance: u128,  // Divided
@@ -278,7 +278,7 @@ pub struct Inventory {
     pub nonce: u64,
 }
 
-/// =============================================================================
+///   =============================================================================
 /// @struct: MarketContext
 /// @description: Current market context and pricing information
 /// @fields:
@@ -289,7 +289,7 @@ pub struct Inventory {
 /// - max_priority_fee_per_gas: Maximum priority fee in wei
 /// - native_gas_price: Current gas price in wei
 /// - block: Current block number
-/// =============================================================================
+///   =============================================================================
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MarketContext {
     pub base_to_eth: f64,
@@ -302,13 +302,13 @@ pub struct MarketContext {
     pub block: u64,
 }
 
-/// =============================================================================
+///   =============================================================================
 /// @struct: ExecutionOrder
 /// @description: Complete execution order with adjustment and calculation
 /// @fields:
 /// - adjustment: Component readjustment opportunity
 /// - calculation: Swap calculation details
-/// =============================================================================
+///   =============================================================================
 #[derive(Debug, Clone)]
 pub struct ExecutionOrder {
     pub adjustment: CompReadjustment,
@@ -316,7 +316,7 @@ pub struct ExecutionOrder {
     // pub bribing: BribeCalculation,
 }
 
-/// =============================================================================
+///   =============================================================================
 /// @struct: SwapCalculation
 /// @description: Detailed swap calculation with profitability analysis
 /// @fields:
@@ -339,7 +339,7 @@ pub struct ExecutionOrder {
 /// - buying_worth_usd: USD value of buying amount
 /// - profit_delta_bps: Profit delta in basis points
 /// - profitable: Whether the trade is profitable
-/// =============================================================================
+///   =============================================================================
 #[derive(Debug, Clone)]
 pub struct SwapCalculation {
     pub base_to_quote: bool,
@@ -367,27 +367,27 @@ pub struct SwapCalculation {
     pub profitable: bool,
 }
 
-/// =============================================================================
+///   =============================================================================
 /// @struct: TradeTxRequest
 /// @description: Transaction request for trade execution
 /// @fields:
 /// - approve: Optional approval transaction request
 /// - swap: Swap transaction request
-/// =============================================================================
+///   =============================================================================
 #[derive(Debug, Clone)]
 pub struct TradeTxRequest {
     pub approve: Option<TransactionRequest>,
     pub swap: TransactionRequest,
 }
 
-/// =============================================================================
+///   =============================================================================
 /// @struct: Trade
 /// @description: Complete trade with transactions and metadata
 /// @fields:
 /// - approve: Optional approval transaction
 /// - swap: Swap transaction
 /// - metadata: Trade metadata and analysis data
-/// =============================================================================
+///   =============================================================================
 #[derive(Debug, Clone)]
 pub struct Trade {
     pub approve: Option<TransactionRequest>,
@@ -395,7 +395,7 @@ pub struct Trade {
     pub metadata: TradeData,
 }
 
-/// =============================================================================
+///   =============================================================================
 /// @enum: TradeStatus
 /// @description: Status of trade execution
 /// @variants:
@@ -407,7 +407,7 @@ pub struct Trade {
 /// - BroadcastFailed: Transaction broadcast failed
 /// - Confirmed: Transaction confirmed on blockchain
 /// - Failed: Trade execution failed
-/// =============================================================================
+///   =============================================================================
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum TradeStatus {
     Pending,
@@ -419,7 +419,7 @@ pub enum TradeStatus {
     BroadcastFailed,
 }
 
-/// =============================================================================
+///   =============================================================================
 /// @struct: TradeData
 /// @description: Complete trade data with all execution information
 /// @fields:
@@ -430,7 +430,7 @@ pub enum TradeStatus {
 /// - inventory: Inventory at trade time
 /// - simulation: Optional simulation results
 /// - broadcast: Optional broadcast results
-/// =============================================================================
+///   =============================================================================
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TradeData {
     // Core trade info
@@ -445,7 +445,7 @@ pub struct TradeData {
     pub broadcast: Option<BroadcastData>,
 }
 
-/// =============================================================================
+///   =============================================================================
 /// @struct: SimulatedData
 /// @description: Transaction simulation results
 /// @fields:
@@ -454,7 +454,7 @@ pub struct TradeData {
 /// - estimated_gas: Estimated gas usage
 /// - status: Simulation success status
 /// - error: Optional simulation error message
-/// =============================================================================
+///   =============================================================================
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct SimulatedData {
     pub simulated_at_ms: u128,
@@ -464,7 +464,7 @@ pub struct SimulatedData {
     pub error: Option<String>,
 }
 
-/// =============================================================================
+///   =============================================================================
 /// @struct: BroadcastData
 /// @description: Transaction broadcast results
 /// @fields:
@@ -473,7 +473,7 @@ pub struct SimulatedData {
 /// - hash: Transaction hash
 /// - broadcast_error: Optional broadcast error message
 /// - receipt: Optional transaction receipt data
-/// =============================================================================
+///   =============================================================================
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct BroadcastData {
     pub broadcasted_at_ms: u128,
@@ -483,7 +483,7 @@ pub struct BroadcastData {
     pub receipt: Option<ReceiptData>, // Fetched in monitor program
 }
 
-/// =============================================================================
+///   =============================================================================
 /// @struct: ReceiptData
 /// @description: Transaction receipt data from blockchain
 /// @fields:
@@ -494,7 +494,7 @@ pub struct BroadcastData {
 /// - transaction_index: Transaction index in block
 /// - block_number: Block number
 /// - effective_gas_price: Effective gas price
-/// =============================================================================
+///   =============================================================================
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReceiptData {
     pub status: bool,
@@ -506,7 +506,7 @@ pub struct ReceiptData {
     pub effective_gas_price: u128,
 }
 
-/// =============================================================================
+///   =============================================================================
 /// @struct: PreTradeData
 /// @description: Pre-trade analysis and planning data
 /// @fields:
@@ -520,7 +520,7 @@ pub struct ReceiptData {
 /// - slippage_tolerance_bps: Slippage tolerance in basis points
 /// - profit_delta_bps: Expected profit in basis points
 /// - gas_cost_usd: Estimated gas cost in USD
-/// =============================================================================
+///   =============================================================================
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PreTradeData {
     pub pool: String,

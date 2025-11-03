@@ -1,6 +1,6 @@
 use crate::utils::{self, constants::BASIS_POINT_DENO};
 use serde::{Deserialize, Serialize};
-use std::{fs, time::Duration};
+use std::{fs, str::FromStr, time::Duration};
 
 // Define local error types since we're not using the global error module
 #[derive(Debug, thiserror::Error)]
@@ -55,6 +55,25 @@ pub enum NetworkName {
     Unichain,
 }
 
+impl FromStr for NetworkName {
+    type Err = String;
+
+    /// =============================================================================
+    /// @function: from_str
+    /// @description: Parses a string into NetworkName enum variant
+    /// @param s: String to parse (e.g., "ethereum", "base", "unichain")
+    /// @behavior: Returns Ok(NetworkName) if valid, Err otherwise
+    /// =============================================================================
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "ethereum" => Ok(NetworkName::Ethereum),
+            "base" => Ok(NetworkName::Base),
+            "unichain" => Ok(NetworkName::Unichain),
+            _ => Err(format!("Unknown network name: {}", s)),
+        }
+    }
+}
+
 impl NetworkName {
     /// =============================================================================
     /// @function: as_str
@@ -66,20 +85,6 @@ impl NetworkName {
             NetworkName::Ethereum => "ethereum",
             NetworkName::Base => "base",
             NetworkName::Unichain => "unichain",
-        }
-    }
-    /// =============================================================================
-    /// @function: from_str
-    /// @description: Parses a string into NetworkName enum variant
-    /// @param s: String to parse (e.g., "ethereum", "base", "unichain")
-    /// @behavior: Returns Some(NetworkName) if valid, None otherwise
-    /// =============================================================================
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s {
-            "ethereum" => Some(NetworkName::Ethereum),
-            "base" => Some(NetworkName::Base),
-            "unichain" => Some(NetworkName::Unichain),
-            _ => None,
         }
     }
 }
@@ -363,12 +368,12 @@ impl MarketMakerConfig {
     }
 }
 
-/// =============================================================================
+///   =============================================================================
 /// @function: load_market_maker_config
 /// @description: Loads and validates market maker configuration from TOML file
 /// @param path: Path to the TOML configuration file
 /// @behavior: Reads file, parses TOML, validates config, and returns MarketMakerConfig
-/// =============================================================================
+///   =============================================================================
 pub fn load_market_maker_config(path: &str) -> Result<MarketMakerConfig> {
     let contents = match fs::read_to_string(path) {
         Ok(contents) => contents,

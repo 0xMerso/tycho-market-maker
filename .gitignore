@@ -1,6 +1,7 @@
 /target
 .env*
 .env.prod*
+.DS_Store
 
 # *.env*
 config/.env.*
@@ -9,7 +10,6 @@ config/secrets
 config/secrets/*
 config/olds
 config/v2/secrets
-
 
 dump.rdb
 /src/generated

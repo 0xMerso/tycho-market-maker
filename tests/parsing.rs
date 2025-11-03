@@ -7,7 +7,6 @@ use shd::utils::evm::{create_provider, eip1559_fees, gas_price, latest};
 static CONFIG_FILES: &[&str] = &[
     "config/mainnet.eth-usdc.toml",
     "config/unichain.eth-usdc.toml",
-    "config/unichain.btc-usdc.toml",
 ];
 
 #[test]

@@ -6,8 +6,8 @@ use shd::types::config::{load_market_maker_config, EnvConfig};
 use tycho_common::models::token::Token; // Changed from tycho_simulation::models in 0.181.3
 use tycho_simulation::tycho_common::Bytes;
 
-// Global list of all config files to test (same as in parsing.rs)
-static CONFIG_FILES: &[&str] = &["config/mainnet.eth-usdc.toml", "config/unichain.eth-usdc.toml", "config/unichain.btc-usdc.toml"];
+// Global list of all config files to test
+static CONFIG_FILES: &[&str] = &["config/mainnet.eth-usdc.toml", "config/unichain.eth-usdc.toml"];
 
 // Mock environment config for testing (no real private keys)
 fn create_test_env_config() -> EnvConfig {

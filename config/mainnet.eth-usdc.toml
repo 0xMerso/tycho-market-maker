@@ -15,7 +15,7 @@ tycho_api = "tycho-beta.propellerheads.xyz"
 
 # === Execution ===
 min_watch_spread_bps = 5.0
-min_executable_spread_bps = -10.0 # -10
+min_executable_spread_bps = 0.0 # -10
 max_slippage_pct = 0.0005
 max_inventory_ratio = 0.99
 
@@ -25,13 +25,11 @@ inclusion_block_delay = 1
 permit2_address = "0x000000000022D473030F116dDEE9F6B43aC78BA3"
 tycho_router_address = "0xfD0b31d2E955fA55e3fa641Fe90e08b677188d35"
 
-# ! --- PROD --- !
-
 # === Misc ===
 poll_interval_ms = 6000
-publish_events = true
+publish_events = false
 skip_simulation = true
-infinite_approval = true
+infinite_approval = false
 min_publish_timeframe_ms = 60000
 
 [price_feed_config]

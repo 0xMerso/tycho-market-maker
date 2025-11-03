@@ -1,6 +1,6 @@
-/// =============================================================================
+///   =============================================================================
 /// Mainnet Execution Strategy
-/// =============================================================================
+///   =============================================================================
 ///
 /// @description: Mainnet execution strategy optimized for Ethereum mainnet with
 /// Flashbots support. This strategy provides MEV protection and bundle submission
@@ -11,7 +11,7 @@
 /// - Changed: No more BundleSigner wrapper - pass PrivateKeySigner directly
 /// - Changed: Use provider.bundle_builder() instead of manual EthSendBundle construction
 /// - Changed: .add_transaction_request() instead of .encode_request()
-/// =============================================================================
+///   =============================================================================
 use async_trait::async_trait;
 use std::str::FromStr;
 
@@ -20,7 +20,7 @@ use alloy::{
     providers::{Provider, ProviderBuilder},
     signers::local::PrivateKeySigner,
 };
-use alloy_mev::EthMevProviderExt;  // Provides bundle_builder() and send_eth_bundle()
+use alloy_mev::EthMevProviderExt; // Provides bundle_builder() and send_eth_bundle()
 use alloy_primitives::B256;
 
 use crate::{
@@ -33,11 +33,11 @@ use crate::{
 
 use super::super::ExecStrategy;
 
-/// =============================================================================
+///   =============================================================================
 /// @struct: MainnetExec
 /// @description: Mainnet execution strategy implementation
 /// @behavior: Optimized for Ethereum mainnet with Flashbots MEV protection
-/// =============================================================================
+///   =============================================================================
 pub struct MainnetExec;
 
 impl Default for MainnetExec {
@@ -52,9 +52,9 @@ impl MainnetExec {
     }
 }
 
-/// =============================================================================
+///   =============================================================================
 /// TRAIT IMPLEMENTATION: ExecStrategy
-/// =============================================================================
+///   =============================================================================
 /// OVERRIDDEN FUNCTIONS:
 /// - name(): Returns "Mainnet_Strategy"
 /// - broadcast(): Custom implementation using Flashbots bundles for MEV protection
@@ -64,7 +64,7 @@ impl MainnetExec {
 /// - post_hook(): Default event publishing
 /// - execute(): Default orchestration flow
 /// - simulate(): Default EVM simulation
-/// =============================================================================
+///   =============================================================================
 #[async_trait]
 impl ExecStrategy for MainnetExec {
     /// OVERRIDDEN: Custom strategy name
@@ -78,7 +78,7 @@ impl ExecStrategy for MainnetExec {
     /// @param prepared: Vector of trades to broadcast (each can have approval + swap)
     /// @param mmc: Market maker configuration
     /// @param env: Environment configuration
-    /// @return Result<Vec<BroadcastData>, String>: Broadcast results or error
+    /// @return `Result<Vec<BroadcastData>, String>`: Broadcast results or error
     ///
     /// @behavior:
     /// - Submits transactions as bundles to multiple builders (Flashbots, Beaverbuild, Titan, Rsync)
@@ -95,17 +95,17 @@ impl ExecStrategy for MainnetExec {
         let _ac = get_alloy_chain(mmc.network_name.as_str().to_string()).expect("Failed to get alloy chain");
         let rpc = mmc.rpc_url.parse::<url::Url>().unwrap();
         let pk = env.wallet_private_key.clone();
-        let wallet = PrivateKeySigner::from_bytes(&B256::from_str(&pk).expect("Failed to convert wallet pk to B256"))
-            .expect("Failed to create private key signer");
+        let wallet = PrivateKeySigner::from_bytes(&B256::from_str(&pk).expect("Failed to convert wallet pk to B256")).expect("Failed to create private key signer");
         let signer = EthereumWallet::from(wallet.clone());
 
-        let provider = ProviderBuilder::new()
-            .with_chain_id(mmc.chain_id)
-            .wallet(signer.clone())
-            .connect_http(rpc);
+        let provider = ProviderBuilder::new().with_chain_id(mmc.chain_id).wallet(signer.clone()).connect_http(rpc);
 
-        // Create a signer for Flashbots authentication
-        // TODO: In production, this should be a persistent key loaded from config, not random
+        // Flashbots bundle signer for MEV protection and block builder authentication
+        // Note: Using a random key (no persistent reputation) for simplicity
+        // This is NOT a security risk - the bundle signer authenticates bundle submissions,
+        // it does NOT control any funds (the wallet private key above handles actual transactions)
+        // Production users may configure a persistent key to maintain builder reputation across restarts
+        // TODO: Add optional persistent bundle signer config
         let bundle_signer = PrivateKeySigner::random();
 
         // Build endpoints for multiple builders (Flashbots + alternatives)
@@ -113,8 +113,8 @@ impl ExecStrategy for MainnetExec {
         let endpoints = provider
             .endpoints_builder()
             .beaverbuild()
-            .titan(bundle_signer.clone())      // Pass signer directly
-            .flashbots(bundle_signer.clone())  // Pass signer directly
+            .titan(bundle_signer.clone()) // Pass signer directly
+            .flashbots(bundle_signer.clone()) // Pass signer directly
             .rsync()
             .build();
 
@@ -129,26 +129,17 @@ impl ExecStrategy for MainnetExec {
         // Process each trade (each may contain approval + swap)
         for trade in prepared.iter() {
             // Get current block and calculate target inclusion block
-            let bnum = provider.get_block_number().await
-                .map_err(|e| format!("Failed to get block number: {:?}", e))?;
+            let bnum = provider.get_block_number().await.map_err(|e| format!("Failed to get block number: {:?}", e))?;
             let target_block = bnum + mmc.inclusion_block_delay;
 
-            tracing::info!(
-                "{}: Current block: {}, target inclusion: {} (delay: {})",
-                self.name(),
-                bnum,
-                target_block,
-                mmc.inclusion_block_delay
-            );
+            tracing::info!("{}: Current block: {}, target inclusion: {} (delay: {})", self.name(), bnum, target_block, mmc.inclusion_block_delay);
 
             let mut bd = BroadcastData::default();
             let time = std::time::SystemTime::now();
 
             // Record broadcast timestamp
             let now = std::time::SystemTime::now();
-            let broadcasted_at_ms = now.duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis();
+            let broadcasted_at_ms = now.duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis();
             bd.broadcasted_at_ms = broadcasted_at_ms;
 
             // Build and get expected transaction hash (for tracking)
@@ -164,9 +155,7 @@ impl ExecStrategy for MainnetExec {
             }
 
             // Build bundle using the new bundle_builder() API
-            let mut bundle_builder = provider
-                .bundle_builder()
-                .on_block(target_block);
+            let mut bundle_builder = provider.bundle_builder().on_block(target_block);
 
             // Add approval transaction if needed (when infinite_approval is false)
             if let Some(approval) = &trade.approve {
@@ -189,15 +178,12 @@ impl ExecStrategy for MainnetExec {
             tracing::info!("{}: Sending bundle to builders (targeting block {})...", self.name(), target_block);
 
             // Send bundle to multiple builders using alloy-mev
-            let responses = provider
-                .send_eth_bundle(bundle, &endpoints)
-                .await;
+            let responses = provider.send_eth_bundle(bundle, &endpoints).await;
 
             let took = time.elapsed().unwrap_or_default().as_millis();
             bd.broadcasted_took_ms = took;
 
-            tracing::info!("{}: Bundle submission complete. Got {} responses in {}ms",
-                self.name(), responses.len(), took);
+            tracing::info!("{}: Bundle submission complete. Got {} responses in {}ms", self.name(), responses.len(), took);
 
             // Process responses from each builder
             let mut successful_builders = 0;
@@ -221,12 +207,7 @@ impl ExecStrategy for MainnetExec {
                 }
             }
 
-            tracing::info!(
-                "{}: Bundle results: {}/{} builders accepted",
-                self.name(),
-                successful_builders,
-                successful_builders + failed_builders
-            );
+            tracing::info!("{}: Bundle results: {}/{} builders accepted", self.name(), successful_builders, successful_builders + failed_builders);
 
             // Consider broadcast successful if at least one builder accepted
             if successful_builders == 0 {
