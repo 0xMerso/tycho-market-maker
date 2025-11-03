@@ -235,17 +235,8 @@ impl MarketMakerConfig {
     /// =============================================================================
     pub fn print(&self) {
         // Ultra warnings for negative spreads
-        if self.min_watch_spread_bps < 0.0 {
-            tracing::warn!(
-                "Target spread is NEGATIVE: {} bps! This will cause unprofitable execution (and drain the inventory) !",
-                self.min_watch_spread_bps
-            );
-        }
         if self.min_executable_spread_bps < 0.0 {
-            tracing::warn!(
-                "Min exec spread is NEGATIVE: {} bps! This will cause unprofitable execution (and drain the inventory) !",
-                self.min_executable_spread_bps
-            );
+            tracing::warn!("Min exec spread is NEGATIVE: {} bps! This will cause unprofitable execution !", self.min_executable_spread_bps);
         }
 
         tracing::debug!("Market Maker Config:");

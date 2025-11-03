@@ -10,6 +10,7 @@ config/secrets/*
 config/olds
 config/v2/secrets
 
+
 dump.rdb
 /src/generated
 node_modules

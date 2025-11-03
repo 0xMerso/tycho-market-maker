@@ -183,7 +183,7 @@ pub async fn scope(config: MarketMakerConfig, key: Option<&str>) -> Vec<Token> {
 /// @behavior: Queries Tycho API for specific tokens with quality filter of 100
 /// =============================================================================
 pub async fn specific(mmc: MarketMakerConfig, key: Option<&str>, addresses: Vec<String>) -> Option<Vec<Token>> {
-    tracing::info!("Getting tokens for network {}", mmc.network_name.as_str().to_string());
+    tracing::info!("Getting specific tokens for network {}", mmc.network_name.as_str().to_string());
 
     let Ok(client) = HttpRPCClient::new(format!("https://{}", mmc.tycho_api).as_str(), key) else {
         tracing::error!("Failed to create client");
