@@ -30,7 +30,7 @@ publish_events = true
 skip_simulation = true
 infinite_approval = true
 min_publish_timeframe_ms = 60000
-min_reference_price_move_bps = 1.0 
+min_reference_price_move_bps = 3.0 # The higher, the less sensitive is the bot
 max_gas_multiplier = 100.0 # To implement later
 
 [price_feed_config]

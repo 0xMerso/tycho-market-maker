@@ -794,7 +794,7 @@ impl IMarketMaker for MarketMaker {
                                 let function_selector = &encoded_solution.swaps[0..4];
                                 tracing::debug!("   Function selector (first 4 bytes): 0x{}", hex::encode(function_selector));
                             }
-                            tracing::debug!("   Full swaps bytes: 0x{}", hex::encode(&encoded_solution.swaps));
+                            // tracing::debug!("   Full swaps bytes: 0x{}", hex::encode(&encoded_solution.swaps));
 
                             // Build proper router function call with ABI encoding
                             // encoded_solution.swaps is just the swap routing data (105 bytes)
