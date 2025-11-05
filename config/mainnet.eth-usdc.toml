@@ -9,10 +9,7 @@ chain_id = 1
 wallet_public_key = "0x0aF694C17137ad1dE34e94335eA09608B715f20A"
 gas_token_symbol = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
 gas_token_chainlink_price_feed = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419"
-rpc_url = "https://withered-dimensional-shape.quiknode.pro/85864fca86c81194d6a3f8197b60e3672f776fcc"
-
-# rpc_url = "https://eth-mainnet.blastapi.io/1437c115-f259-4690-a2d7-8c32e658a164"
-# https://mainnet.infura.io/v3/52dc384d93684f998c265e823be8250b
+rpc_url = "https://0xrpc.io/eth"
 explorer_url = "https://etherscan.io/"
 tycho_api = "tycho-beta.propellerheads.xyz"
 
@@ -33,6 +30,8 @@ publish_events = true
 skip_simulation = true
 infinite_approval = true
 min_publish_timeframe_ms = 60000
+min_reference_price_move_bps = 1.0 
+max_gas_multiplier = 100.0 # To implement later
 
 [price_feed_config]
 # type = "chainlink"

@@ -14,7 +14,6 @@ use crate::{
     },
     utils::constants::{
         ADD_TVL_THRESHOLD, APPROVE_FN_SIGNATURE, BASIS_POINT_DENO, DEFAULT_APPROVE_GAS, DEFAULT_SWAP_GAS, MAX_POOL_PRICE_DEVIATION_PCT, MIN_AMOUNT_WORTH_USD, NULL_ADDRESS, PERCENT_MULTIPLIER,
-        PRICE_MOVE_THRESHOLD,
     },
 };
 use alloy::{
@@ -1047,17 +1046,17 @@ impl IMarketMaker for MarketMaker {
                                         } else {
                                             // First run - always push to DB since we have no previous price
                                             tracing::info!("First run - always push to DB since we have no previous price");
-                                            PRICE_MOVE_THRESHOLD + 1.0
+                                            self.config.min_reference_price_move_bps + 1.0
                                         };
 
                                         // ===== Publish Price event =====
-                                        let threshold = price_move_bps > PRICE_MOVE_THRESHOLD;
+                                        let threshold = price_move_bps > self.config.min_reference_price_move_bps;
 
                                         tracing::info!(
                                             "{} | Price movement {} threshold ({} bps), of {:.2} bps, from {} to {}",
                                             intro,
                                             if threshold { "above" } else { "below" },
-                                            PRICE_MOVE_THRESHOLD,
+                                            self.config.min_reference_price_move_bps,
                                             price_move_bps,
                                             previous_reference_price,
                                             reference_price

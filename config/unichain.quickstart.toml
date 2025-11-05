@@ -31,10 +31,12 @@ tycho_router_address = "0xFfA5ec2e444e4285108e4a17b82dA495c178427B"
 
 # === Misc ===
 poll_interval_ms = 1000
-publish_events = true 
-skip_simulation = false 
+publish_events = false
+skip_simulation = false
 infinite_approval = true
 min_publish_timeframe_ms = 60000
+min_reference_price_move_bps = 1.0
+max_gas_multiplier = 100.0
 
 [price_feed_config]
 type = "binance"

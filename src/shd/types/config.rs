@@ -208,6 +208,8 @@ pub struct MarketMakerConfig {
     pub infinite_approval: bool,
     pub price_feed_config: PriceFeedConfig,
     pub min_publish_timeframe_ms: u64,
+    pub min_reference_price_move_bps: f64,
+    pub max_gas_multiplier: f64,
 }
 
 impl MarketMakerConfig {
@@ -267,6 +269,8 @@ impl MarketMakerConfig {
         tracing::debug!("  Tycho Router:          {}", self.tycho_router_address);
         tracing::debug!("  Publish Events:        {}", self.publish_events);
         tracing::debug!("  Min Publish Timeframe (ms): {}", self.min_publish_timeframe_ms);
+        tracing::debug!("  Min Ref Price Move (bps): {}", self.min_reference_price_move_bps);
+        tracing::debug!("  Max Gas Multiplier:    {}", self.max_gas_multiplier);
         tracing::debug!("  Skip Simulation:       {}", self.skip_simulation);
         tracing::debug!("  Skip Approval:      {}", self.infinite_approval);
         tracing::debug!("  Price Feed Config:     {:?}", self.price_feed_config);
@@ -311,6 +315,22 @@ impl MarketMakerConfig {
         // Check min_publish_timeframe_ms
         if self.min_publish_timeframe_ms < 30000 {
             return Err(ConfigError::Config("min_publish_timeframe_ms must be ≥ 30000 ms (30 seconds)".into()));
+        }
+
+        // Check min_reference_price_move_bps
+        if self.min_reference_price_move_bps < 0.0 {
+            return Err(ConfigError::Config("min_reference_price_move_bps must be ≥ 0.0 bps".into()));
+        }
+        if self.min_reference_price_move_bps > 500.0 {
+            return Err(ConfigError::Config("min_reference_price_move_bps must be ≤ 500.0 bps (5%)".into()));
+        }
+
+        // Check max_gas_multiplier
+        if self.max_gas_multiplier < 1.0 {
+            return Err(ConfigError::Config("max_gas_multiplier must be ≥ 1.0".into()));
+        }
+        if self.max_gas_multiplier > 100.0 {
+            return Err(ConfigError::Config("max_gas_multiplier must be ≤ 100.0".into()));
         }
 
         // Validate Ethereum addresses
