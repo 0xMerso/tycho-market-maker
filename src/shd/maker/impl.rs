@@ -1033,6 +1033,7 @@ impl IMarketMaker for MarketMaker {
                                     let now = std::time::Instant::now();
                                     if (now.duration_since(last_poll).as_millis() as u64) < self.config.poll_interval_ms {
                                         tracing::debug!("{} | ⏩  Skipping block update: poll_interval_ms not elapsed", intro);
+                                        tokio::time::sleep(tokio::time::Duration::from_millis(self.config.poll_interval_ms)).await;
                                         continue;
                                     }
                                     last_poll = now;
@@ -1149,6 +1150,8 @@ impl IMarketMaker for MarketMaker {
                         },
                         None => {
                             tracing::warn!("Stream closed. Retrying...");
+                            // Sleep for 1 second
+                            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
                             break;
                         }
                     }

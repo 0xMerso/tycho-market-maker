@@ -323,6 +323,7 @@ pub trait ExecStrategy: Send + Sync {
                     }
                 }
                 // Continue with broadcast instead of skipping
+                continue;
             }
 
             // Handle optional approval transaction
