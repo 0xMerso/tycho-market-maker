@@ -188,6 +188,7 @@ impl ExecStrategy for MainnetExec {
             // Process responses from each builder
             let mut successful_builders = 0;
             let mut failed_builders = 0;
+            let mut rejection_errors = Vec::new();
 
             for response in responses.iter() {
                 match response {
@@ -197,12 +198,9 @@ impl ExecStrategy for MainnetExec {
                     }
                     Err(e) => {
                         failed_builders += 1;
-                        tracing::warn!("    ❌ Builder rejected bundle: {:?}", e);
-
-                        // Store first error (if not already set)
-                        if bd.broadcast_error.is_none() {
-                            bd.broadcast_error = Some(format!("Bundle submission failed: {:?}", e));
-                        }
+                        let error_msg = format!("{:?}", e);
+                        tracing::warn!("    ❌ Builder rejected bundle: {}", error_msg);
+                        rejection_errors.push(error_msg);
                     }
                 }
             }
@@ -212,7 +210,14 @@ impl ExecStrategy for MainnetExec {
             // Consider broadcast successful if at least one builder accepted
             if successful_builders == 0 {
                 tracing::error!("{}: All builders rejected the bundle!", self.name());
-                return Err(bd.broadcast_error.unwrap_or_else(|| "All builders rejected bundle".to_string()));
+                let all_errors = rejection_errors.join(" | ");
+                bd.broadcast_error = Some(format!("All builders rejected bundle: {}", all_errors));
+                return Err(bd.broadcast_error.clone().unwrap());
+            } else if !rejection_errors.is_empty() {
+                // At least one builder accepted, but some rejected
+                // Log rejections for debugging but don't mark as failed
+                tracing::info!("{}: Trade successful despite {} rejections: {}", self.name(), rejection_errors.len(), rejection_errors.join(" | "));
+                bd.broadcast_error = None;
             }
 
             results.push(bd);
@@ -221,71 +226,3 @@ impl ExecStrategy for MainnetExec {
         Ok(results)
     }
 }
-
-/* =============================================================================
- * OLD IMPLEMENTATION (alloy-mev 0.5) - KEPT FOR REFERENCE
- * =============================================================================
- *
- * Key API changes in alloy-mev 1.0:
- *
- * 1. NO BundleSigner wrapper:
- *    OLD: .flashbots(BundleSigner::flashbots(bundle_signer))
- *    NEW: .flashbots(bundle_signer.clone())
- *
- * 2. Bundle construction via builder pattern:
- *    OLD: Manual EthSendBundle { txs, block_number, ... }
- *    NEW: provider.bundle_builder().on_block(...).add_transaction_request(...).build()
- *
- * 3. Adding transactions:
- *    OLD: provider.encode_request(tx) → manual Vec<Bytes> txs
- *    NEW: bundle_builder.add_transaction_request(tx).await
- *
- * 4. Import changes:
- *    OLD: use alloy::rpc::types::mev::EthSendBundle;
- *    NEW: No manual import needed - use bundle_builder() API
- *
- * OLD CODE:
- *
- * use alloy_mev::{BundleSigner, EthMevProviderExt};
- * use alloy::rpc::types::mev::EthSendBundle;
- *
- * let bundle_signer = PrivateKeySigner::random();
- *
- * let endpoints = provider
- *     .endpoints_builder()
- *     .beaverbuild()
- *     .titan(BundleSigner::flashbots(bundle_signer.clone()))  // ← OLD: wrapper needed
- *     .flashbots(BundleSigner::flashbots(bundle_signer.clone()))
- *     .rsync()
- *     .build();
- *
- * let mut txs = vec![];
- * if let Some(approval) = &trade.approve {
- *     match provider.encode_request(approval.clone()).await {  // ← OLD: manual encoding
- *         Ok(encoded) => txs.push(encoded),
- *         Err(e) => tracing::error!("Failed to encode approval: {:?}", e),
- *     }
- * }
- * match provider.encode_request(trade.swap.clone()).await {
- *     Ok(encoded) => txs.push(encoded),
- *     Err(e) => return Err(format!("Failed to encode swap: {:?}", e)),
- * }
- *
- * let bundle = EthSendBundle {  // ← OLD: manual construction
- *     txs,
- *     block_number: target_block,
- *     min_timestamp: None,
- *     max_timestamp: None,
- *     reverting_tx_hashes: vec![],
- *     replacement_uuid: None,
- *     dropping_tx_hashes: vec![],
- *     refund_percent: None,
- *     refund_recipient: None,
- *     refund_tx_hashes: vec![],
- *     extra_fields: Default::default(),
- * };
- *
- * let responses = provider.send_eth_bundle(bundle, &endpoints).await;
- *
- * =============================================================================
- */
