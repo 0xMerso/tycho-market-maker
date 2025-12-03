@@ -9,7 +9,7 @@ chain_id = 1
 wallet_public_key = "0xA61E420c6FB54F04c5D7a4818bA2DBAAC0120669"
 gas_token_symbol = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
 gas_token_chainlink_price_feed = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419"
-rpc_url = "https://eth-mainnet.blastapi.io/1437c115-f259-4690-a2d7-8c32e658a164"
+rpc_url = "https://eth.llamarpc.com"
 explorer_url = "https://etherscan.io/"
 tycho_api = "tycho-beta.propellerheads.xyz"
 

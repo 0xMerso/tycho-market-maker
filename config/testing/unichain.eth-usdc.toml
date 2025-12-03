@@ -9,7 +9,6 @@ chain_id = 130
 wallet_public_key = "0xA61E420c6FB54F04c5D7a4818bA2DBAAC0120669"
 gas_token_symbol = "0x4200000000000000000000000000000000000006"
 gas_token_chainlink_price_feed = "0x5b0cf2b36a65a6BB085D501B971e4c102B9Cd473"
-# rpc_url = "https://unichain-mainnet.blastapi.io/713ef8fa-d6fb-4192-bf47-3c924ec3ff6b"
 # rpc_url = "https://0xrpc.io/uni"
 rpc_url = "https://unichain.drpc.org"
 
