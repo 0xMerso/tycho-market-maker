@@ -14,8 +14,8 @@ explorer_url = "https://uniscan.xyz/"
 tycho_api = "tycho-unichain-beta.propellerheads.xyz"
 
 # === Execution ===
-min_watch_spread_bps = 4.0
-min_executable_spread_bps = 3.0 # 5.0
+min_watch_spread_bps = 5.0
+min_executable_spread_bps = 4.0 # 5.0
 max_slippage_pct = 0.0025
 max_inventory_ratio = 0.99 # 0.99
 tx_gas_limit = 500000
