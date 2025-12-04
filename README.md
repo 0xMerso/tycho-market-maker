@@ -2,6 +2,8 @@
 
 A Rust market making bot that monitors price differences between reference prices (Binance, Chainlink) and on-chain liquidity pools, executing profitable trades via the [Tycho protocol](https://docs.propellerheads.xyz/).
 
+A UI showing 2 instances running can be found at [https://stabiliser.vercel.app/](https://stabiliser.vercel.app/)
+
 ## Documentation
 
 **[https://tycho-openmaker.gitbook.io/docs/](https://tycho-openmaker.gitbook.io/docs/)**
