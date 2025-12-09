@@ -1,17 +1,6 @@
-///   =============================================================================
-/// Mainnet Execution Strategy
-///   =============================================================================
-///
-/// @description: Mainnet execution strategy optimized for Ethereum mainnet with
-/// Flashbots support. This strategy provides MEV protection and bundle submission
-/// capabilities for secure and efficient transaction execution on Ethereum mainnet.
-///
-/// @changelog:
-/// - 2025-01: Upgraded from Alloy 0.5.4 → 1.0.30 + alloy-mev 0.5 → 1.0
-/// - Changed: No more BundleSigner wrapper - pass PrivateKeySigner directly
-/// - Changed: Use provider.bundle_builder() instead of manual EthSendBundle construction
-/// - Changed: .add_transaction_request() instead of .encode_request()
-///   =============================================================================
+//! Mainnet Execution Strategy
+//!
+//! Optimized for Ethereum mainnet with Flashbots MEV protection and bundle submission.
 use async_trait::async_trait;
 use std::str::FromStr;
 
@@ -33,11 +22,7 @@ use crate::{
 
 use super::super::ExecStrategy;
 
-///   =============================================================================
-/// @struct: MainnetExec
-/// @description: Mainnet execution strategy implementation
-/// @behavior: Optimized for Ethereum mainnet with Flashbots MEV protection
-///   =============================================================================
+/// Mainnet execution strategy with Flashbots MEV protection.
 pub struct MainnetExec;
 
 impl Default for MainnetExec {
@@ -52,42 +37,13 @@ impl MainnetExec {
     }
 }
 
-///   =============================================================================
-/// TRAIT IMPLEMENTATION: ExecStrategy
-///   =============================================================================
-/// OVERRIDDEN FUNCTIONS:
-/// - name(): Returns "Mainnet_Strategy"
-/// - broadcast(): Custom implementation using Flashbots bundles for MEV protection
-///
-/// INHERITED FUNCTIONS (using default implementation):
-/// - pre_hook(): Default logging
-/// - post_hook(): Default event publishing
-/// - execute(): Default orchestration flow
-/// - simulate(): Default EVM simulation
-///   =============================================================================
 #[async_trait]
 impl ExecStrategy for MainnetExec {
-    /// OVERRIDDEN: Custom strategy name
     fn name(&self) -> String {
         ExecStrategyName::MainnetStrategy.as_str().to_string()
     }
 
-    /// =============================================================================
-    /// OVERRIDDEN: Custom broadcast implementation - Flashbots Bundle Submission
-    /// @description: Replaces default mempool broadcast with Flashbots bundle submission
-    /// @param prepared: Vector of trades to broadcast (each can have approval + swap)
-    /// @param mmc: Market maker configuration
-    /// @param env: Environment configuration
-    /// @return `Result<Vec<BroadcastData>, String>`: Broadcast results or error
-    ///
-    /// @behavior:
-    /// - Submits transactions as bundles to multiple builders (Flashbots, Beaverbuild, Titan, Rsync)
-    /// - Handles approval transactions if infinite_approval is disabled
-    /// - Targets inclusion at current_block + inclusion_block_delay
-    /// - Provides MEV protection via private mempool
-    ///
-    /// @differs_from_default: Uses private mempool via Flashbots instead of public mempool
-    /// =============================================================================
+    /// Broadcasts via Flashbots bundle submission for MEV protection.
     async fn broadcast(&self, prepared: Vec<Trade>, mmc: MarketMakerConfig, env: EnvConfig) -> Result<Vec<BroadcastData>, String> {
         tracing::info!("{}: broadcasting {} transactions on Mainnet via Flashbots bundle", self.name(), prepared.len());
 

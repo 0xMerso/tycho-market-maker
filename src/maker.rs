@@ -1,11 +1,8 @@
-///   =============================================================================
-/// Market Maker Binary Entry Point
-///   =============================================================================
-///
-/// @description: Main binary executable for the Tycho Market Maker. This module contains
-/// the application entry point, initialization logic, and the main runtime loop that
-/// orchestrates the market making operations across different blockchain networks.
-///   =============================================================================
+//! Market Maker Binary Entry Point
+//!
+//! Main binary executable for the Tycho Market Maker. This module contains
+//! the application entry point, initialization logic, and the main runtime loop that
+//! orchestrates the market making operations across different blockchain networks.
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -22,13 +19,10 @@ use tracing::Level;
 use tracing_subscriber::EnvFilter;
 use tycho_common::models::token::Token; // Changed from tycho_simulation::models in 0.181.3
 
-///   =============================================================================
-/// @function: init_allowance
-/// @description: Handle allowance for base and quote tokens
-/// @param config: Market maker configuration containing token addresses and router
-/// @param env: Environment configuration with wallet credentials
-/// @behavior: If infinite_approval is true, approves u128::MAX for both base and quote tokens on permit2_address
-///   =============================================================================
+/// Handles allowance for base and quote tokens.
+///
+/// If `infinite_approval` is enabled, approves `u128::MAX` for both base and quote
+/// tokens on the Tycho router.
 async fn init_allowance(config: MarketMakerConfig, env: EnvConfig) {
     tracing::info!("config.infinite_approval: {:?}", config.infinite_approval);
 
@@ -79,24 +73,11 @@ async fn init_allowance(config: MarketMakerConfig, env: EnvConfig) {
     }
 }
 
-///   =============================================================================
-/// Main Market Maker Runtime Loop
-///   =============================================================================
+/// Main market maker runtime loop.
 ///
-/// @description: Infinite loop that runs the market maker with automatic restart on failure
-/// @param mk: Market maker instance implementing IMarketMaker trait
-/// @param identifier: Unique identifier for this market maker instance
-/// @param config: Market maker configuration
-/// @param env: Environment configuration
-/// @param tokens: List of available tokens from Tycho API
-/// @return Result<()>: Success or error
-///
-/// @behavior:
-/// - Publishes instance start event if configured
-/// - Fetches initial market price
-/// - Runs infinite loop with panic recovery
-/// - Automatically restarts on failure with configurable delay
-///   =============================================================================
+/// Runs the market maker in an infinite loop with automatic restart on failure.
+/// Publishes instance start events if configured, initializes shared state cache,
+/// and handles panic recovery with configurable restart delays.
 async fn run<M: IMarketMaker>(mut mk: M, identifier: String, config: MarketMakerConfig, env: EnvConfig, tokens: Vec<Token>) -> Result<()> {
     let commit = shd::utils::misc::commit().unwrap_or_default();
 
@@ -139,22 +120,11 @@ async fn run<M: IMarketMaker>(mut mk: M, identifier: String, config: MarketMaker
     }
 }
 
-///   =============================================================================
-/// Market Maker Initialization
-///   =============================================================================
+/// Initializes and configures the market maker application.
 ///
-/// @description: Initialize and configure the market maker application
-/// @return Result<()>: Success or error
-///
-/// @steps:
-/// 1. Initialize logging and tracing
-/// 2. Load environment configuration and secrets
-/// 3. Load market maker configuration from TOML file
-/// 4. Fetch tokens from Tycho API
-/// 5. Validate base and quote tokens exist
-/// 6. Create dynamic price feed and execution strategy
-/// 7. Build and start market maker instance
-///    =============================================================================
+/// Sets up logging, loads configuration from TOML and environment files,
+/// fetches tokens from Tycho API, validates base/quote tokens, creates
+/// price feed and execution strategy, then builds and starts the market maker.
 async fn initialize() -> Result<()> {
     // Initialize logging with environment-based configuration
     let filter = EnvFilter::from_default_env();
@@ -256,13 +226,7 @@ async fn initialize() -> Result<()> {
     Ok(())
 }
 
-///   =============================================================================
-/// Application Entry Point
-///   =============================================================================
-///
-/// @description: Main function that initializes and runs the market maker
-/// @return: None (exits with error code 1 on failure)
-///   =============================================================================
+/// Application entry point. Initializes and runs the market maker.
 #[tokio::main]
 async fn main() {
     if let Err(e) = initialize().await {

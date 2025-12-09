@@ -1,20 +1,13 @@
-///   =============================================================================
-/// Binary Search Optimization Module
-///   =============================================================================
-///
-/// @description: Implements binary search (bisection) algorithm to find optimal
-/// swap quantity that maximizes profit
-///   =============================================================================
+//! Binary Search Optimization Module
+//!
+//! Implements binary search to find optimal swap quantity that stabilizes pool price.
 use num_bigint::BigUint;
 use tycho_common::models::token::Token;
 use tycho_common::simulation::protocol_sim::ProtocolSim; // ProtocolSim trait for protocol simulation
 
 use crate::utils::constants::{BASIS_POINT_DENO, OPTI_MAX_ITERATIONS, OPTI_TOLERANCE};
 
-///   =============================================================================
-/// @struct: OptimizationResult
-/// @description: Contains optimal swap amount and metrics
-///   =============================================================================
+/// Contains optimal swap amount and metrics.
 #[derive(Default, Debug, Clone)]
 pub struct OptimizationResult {
     pub optimal_qty: f64,             // Optimal quantity to swap (normalized)
@@ -24,18 +17,7 @@ pub struct OptimizationResult {
     pub price_impact_bps: f64,        // Price impact vs reference in basis points
 }
 
-///   =============================================================================
-/// @function: find_optimal_swap_amount
-/// @description: Uses binary search to find swap amount that stabilizes pool price
-///               to match the reference price after the swap
-/// @param protosim: Protocol simulator for the pool
-/// @param selling_token: Token being sold
-/// @param buying_token: Token being bought  
-/// @param reference_price: Target price to stabilize the pool to (base/quote)
-/// @param base_is_token0: Whether base token is token0 in the pool
-/// @param max_amount: Maximum amount available to swap (normalized)
-/// @return Result<OptimizationResult, String>: Optimization result or error
-///   =============================================================================
+/// Uses binary search to find swap amount that stabilizes pool price to reference.
 pub fn find_optimal_swap_amount(
     protosim: &dyn ProtocolSim, selling_token: &Token, buying_token: &Token, reference_price: f64, base_is_token0: bool, max_amount: f64,
 ) -> Result<OptimizationResult, String> {
@@ -191,11 +173,7 @@ pub fn find_optimal_swap_amount(
     })
 }
 
-///   =============================================================================
-/// @function: calculate_post_swap_price
-/// @description: Calculates the pool's spot price after a swap is executed
-/// @return Result<f64, String>: Post-swap spot price (base/quote) or error
-///   =============================================================================
+/// Calculates the pool's spot price after a swap is executed.
 fn calculate_post_swap_price(
     protosim: &dyn ProtocolSim, selling_token: &Token, buying_token: &Token, amount_normalized: f64, selling_pow: f64, _buying_pow: f64, base_is_token0: bool,
 ) -> Result<f64, String> {
@@ -223,11 +201,7 @@ fn calculate_post_swap_price(
     Ok(post_swap_price)
 }
 
-///   =============================================================================
-/// @function: calculate_swap_output
-/// @description: Calculates the output amount and execution price for a given swap
-/// @return Result<(f64, f64), String>: (output_amount, execution_price) or error
-///   =============================================================================
+/// Calculates the output amount and execution price for a given swap.
 fn calculate_swap_output(
     protosim: &dyn ProtocolSim, selling_token: &Token, buying_token: &Token, amount_normalized: f64, selling_pow: f64, buying_pow: f64, base_is_token0: bool,
 ) -> Result<(f64, f64), String> {

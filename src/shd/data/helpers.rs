@@ -13,11 +13,7 @@ use redis::{
 
 use crate::types::misc::StreamState;
 
-///   =============================================================================
-/// @function: ping
-/// @description: Tests Redis connection by sending a PING command
-/// @behavior: Sends PING to Redis server and panics if connection fails
-///   =============================================================================
+/// Tests Redis connection by sending a PING command.
 pub async fn ping() {
     let co = connect().await;
     match co {
@@ -38,11 +34,7 @@ pub async fn ping() {
     }
 }
 
-///   =============================================================================
-/// @function: connect
-/// @description: Establishes an async multiplexed connection to Redis server
-/// @behavior: Reads REDIS_HOST and REDIS_PORT from environment or uses defaults
-///   =============================================================================
+/// Establishes an async multiplexed connection to Redis server.
 pub async fn connect() -> Result<MultiplexedConnection, RedisError> {
     let host = std::env::var("REDIS_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
     let port = std::env::var("REDIS_PORT").unwrap_or_else(|_| "42044".to_string());
@@ -64,11 +56,7 @@ pub async fn connect() -> Result<MultiplexedConnection, RedisError> {
     }
 }
 
-///   =============================================================================
-/// @function: pubsub
-/// @description: Creates a Redis client for pub/sub operations
-/// @behavior: Reads REDIS_HOST from environment or uses default localhost:42044
-///   =============================================================================
+/// Creates a Redis client for pub/sub operations.
 pub fn pubsub() -> Result<redis::Client, RedisError> {
     let endpoint = std::env::var("REDIS_HOST");
     let endpoint = match endpoint {
@@ -87,12 +75,7 @@ pub fn pubsub() -> Result<redis::Client, RedisError> {
     }
 }
 
-///   =============================================================================
-/// @function: status
-/// @description: Gets the database synchronization status for a given network
-/// @param key: Network identifier key to check status for
-/// @behavior: Maps numeric status values to StreamState enum variants
-///   =============================================================================
+/// Gets the database synchronization status for a given network.
 pub async fn status(key: String) -> StreamState {
     let status = get::<u128>(key.as_str()).await;
     match status {
@@ -107,13 +90,7 @@ pub async fn status(key: String) -> StreamState {
     }
 }
 
-///   =============================================================================
-/// @function: wstatus
-/// @description: Waits until database reaches 'Running' state for a network
-/// @param key: Network identifier key to monitor
-/// @param object: Description of what is being waited for (for logging)
-/// @behavior: Polls status every 5 seconds until StreamState::Running is reached
-///   =============================================================================
+/// Waits until database reaches 'Running' state for a network.
 pub async fn wstatus(key: String, object: String) {
     let time = std::time::SystemTime::now();
     tracing::debug!("Waiting Redis Synchro");
@@ -129,12 +106,7 @@ pub async fn wstatus(key: String, object: String) {
     }
 }
 
-///   =============================================================================
-/// @function: delete
-/// @description: Deletes a key-value pair from Redis
-/// @param key: Redis key to delete
-/// @behavior: Executes DEL command and logs errors if deletion fails
-///   =============================================================================
+/// Deletes a key-value pair from Redis.
 pub async fn delete(key: &str) {
     let co = connect().await;
     match co {
@@ -150,13 +122,7 @@ pub async fn delete(key: &str) {
     }
 }
 
-///   =============================================================================
-/// @function: set
-/// @description: Stores a JSON-serialized object in Redis
-/// @param key: Redis key to store value under
-/// @param data: Generic serializable data to store
-/// @behavior: Serializes data to JSON and stores using SET command
-///   =============================================================================
+/// Stores a JSON-serialized object in Redis.
 pub async fn set<T: Serialize>(key: &str, data: T) {
     let data = serde_json::to_string(&data);
     match data {
@@ -182,12 +148,7 @@ pub async fn set<T: Serialize>(key: &str, data: T) {
     }
 }
 
-///   =============================================================================
-/// @function: get
-/// @description: Retrieves and deserializes a JSON object from Redis
-/// @param key: Redis key to retrieve value from
-/// @behavior: Fetches string value and deserializes to type T, returns None on error
-///   =============================================================================
+/// Retrieves and deserializes a JSON object from Redis.
 pub async fn get<T: Serialize + DeserializeOwned>(key: &str) -> Option<T> {
     let time = std::time::SystemTime::now();
     let co = connect().await;

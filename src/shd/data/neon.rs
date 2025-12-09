@@ -14,14 +14,7 @@ use crate::{
 };
 use sea_orm::prelude::Uuid;
 
-///   =============================================================================
-/// @function: connect
-/// @description: Establishes a connection to PostgreSQL database using SeaORM
-/// @param env: Monitoring environment configuration containing database URL
-/// @return Result<DatabaseConnection, DbErr>: Database connection or error
-/// @behavior: Connects to database and logs success/failure
-/// @note: Database URL format: "protocol://username:password@host:port/database"
-///   =============================================================================
+/// Establishes a connection to PostgreSQL database using SeaORM.
 pub async fn connect(env: MoniEnvConfig) -> Result<DatabaseConnection, DbErr> {
     // tracing::info!("Connecting to database: {}", env.database_url);
     match Database::connect(env.database_url.clone()).await {

@@ -1,37 +1,16 @@
-///   =============================================================================
-/// Market Maker Monitoring Service
-///   =============================================================================
-///
-/// @description: Standalone monitoring service that listens to market maker events
-/// and stores them in the database for analysis and tracking. This service provides
-/// real-time monitoring capabilities for market maker performance and trade execution.
-///   =============================================================================
-///
-/// @features:
-/// - Connects to Neon PostgreSQL database
-/// - Listens to Redis pub/sub channel for market maker events
-/// - Stores configuration data and trade events
-/// - Provides real-time monitoring of market maker performance
-///
-/// @dependencies:
-/// - Neon PostgreSQL database connection
-/// - Redis pub/sub channel (CHANNEL_REDIS)
-/// - Environment configuration (.env.monitor.global)
-///   =============================================================================
+//! Market Maker Monitoring Service
+//!
+//! Standalone monitoring service that listens to market maker events and stores them
+//! in the database for analysis and tracking. Connects to Neon PostgreSQL, listens
+//! to Redis pub/sub for market maker events, and provides real-time performance monitoring.
 use shd::{types::config::MoniEnvConfig, utils::constants::CHANNEL_REDIS};
 use tracing::Level;
 use tracing_subscriber::EnvFilter;
 
-///   =============================================================================
-/// @function: main
-/// @description: Main entry point for the monitoring service
-/// @behavior:
-/// - Initializes logging and tracing
-/// - Loads monitor-specific environment configuration
-/// - Establishes database connection
-/// - Validates database connectivity
-/// - Starts Redis pub/sub listening loop
-///   =============================================================================
+/// Main entry point for the monitoring service.
+///
+/// Initializes logging, loads configuration, establishes database connection,
+/// and starts listening to Redis pub/sub for market maker events.
 #[tokio::main]
 async fn main() {
     // Initialize logging with environment-based configuration

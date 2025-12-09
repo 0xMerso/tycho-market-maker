@@ -3,12 +3,7 @@ use crate::types::moni::{MessageType, NewInstanceMessage, NewPricesMessage, NewT
 use crate::utils::constants::CHANNEL_REDIS;
 use serde_json;
 
-///   =============================================================================
-/// @function: parse
-/// @description: Parse a JSON string from Redis into a strongly-typed ParsedMessage
-/// @param value: JSON string received from Redis pub/sub channel
-/// @behavior: Deserializes the JSON and returns appropriate ParsedMessage variant based on MessageType
-///   =============================================================================
+/// Parses a JSON string from Redis into a strongly-typed ParsedMessage.
 pub fn parse(value: &str) -> Result<ParsedMessage, String> {
     let rdmsg: RedisMessage = serde_json::from_str(value).map_err(|e| format!("Failed to parse Redis message: {}", e))?;
 
@@ -29,12 +24,7 @@ pub fn parse(value: &str) -> Result<ParsedMessage, String> {
     }
 }
 
-///   =============================================================================
-/// @function: listen
-/// @description: Continuously listens to Redis pub/sub channel for market maker events
-/// @param env: Monitoring environment configuration containing connection details
-/// @behavior: Subscribes to CHANNEL_REDIS, processes incoming messages, and forwards them to Neon database handler
-///   =============================================================================
+/// Continuously listens to Redis pub/sub channel for market maker events.
 pub async fn listen(env: MoniEnvConfig) {
     let Ok(client) = crate::data::helpers::pubsub() else {
         tracing::error!("Error while getting connection 3");

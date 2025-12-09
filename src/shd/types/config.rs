@@ -58,12 +58,6 @@ pub enum NetworkName {
 impl FromStr for NetworkName {
     type Err = String;
 
-    /// =============================================================================
-    /// @function: from_str
-    /// @description: Parses a string into NetworkName enum variant
-    /// @param s: String to parse (e.g., "ethereum", "base", "unichain")
-    /// @behavior: Returns Ok(NetworkName) if valid, Err otherwise
-    /// =============================================================================
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match s {
             "ethereum" => Ok(NetworkName::Ethereum),
@@ -75,11 +69,7 @@ impl FromStr for NetworkName {
 }
 
 impl NetworkName {
-    /// =============================================================================
-    /// @function: as_str
-    /// @description: Converts NetworkName enum to its string representation
-    /// @behavior: Returns lowercase string representation of the network name
-    /// =============================================================================
+    /// Converts to string representation.
     pub fn as_str(&self) -> &str {
         match self {
             NetworkName::Ethereum => "ethereum",
@@ -96,11 +86,7 @@ impl Default for EnvConfig {
 }
 
 impl EnvConfig {
-    /// =============================================================================
-    /// @function: new
-    /// @description: Creates EnvConfig from environment variables
-    /// @behavior: Reads CONFIG_PATH, TESTING, HEARTBEAT, WALLET_PRIVATE_KEY, TYCHO_API_KEY from env
-    /// =============================================================================
+    /// Creates EnvConfig from environment variables.
     pub fn new() -> Self {
         EnvConfig {
             path: std::env::var("CONFIG_PATH").unwrap(),
@@ -111,11 +97,7 @@ impl EnvConfig {
         }
     }
 
-    /// =============================================================================
-    /// @function: validate
-    /// @description: Validates that required environment configuration is present
-    /// @behavior: Checks that API key and wallet private key are not empty
-    /// =============================================================================
+    /// Validates that required environment configuration is present.
     pub fn validate(&self) -> Result<()> {
         if self.tycho_api_key.is_empty() {
             return Err(ConfigError::Config("TYCHO_API_KEY cannot be empty".into()));
@@ -126,11 +108,7 @@ impl EnvConfig {
         Ok(())
     }
 
-    /// =============================================================================
-    /// @function: print
-    /// @description: Prints environment configuration for debugging
-    /// @behavior: Logs configuration values, masking sensitive keys
-    /// =============================================================================
+    /// Prints environment configuration for debugging.
     pub fn print(&self) {
         tracing::info!("Environment Configuration:");
         tracing::info!("  Config Path: {}", self.path);
@@ -148,11 +126,7 @@ impl Default for MoniEnvConfig {
 }
 
 impl MoniEnvConfig {
-    /// =============================================================================
-    /// @function: new
-    /// @description: Creates MoniEnvConfig from environment variables for monitoring service
-    /// @behavior: Reads TESTING, HEARTBEAT, DATABASE_URL, DATABASE_NAME from environment
-    /// =============================================================================
+    /// Creates MoniEnvConfig from environment variables.
     pub fn new() -> Self {
         MoniEnvConfig {
             // paths: utils::misc::get("CONFIGS_PATHS"),
@@ -163,11 +137,7 @@ impl MoniEnvConfig {
         }
     }
 
-    /// =============================================================================
-    /// @function: print
-    /// @description: Prints monitoring environment configuration for debugging
-    /// @behavior: Logs all monitoring-specific configuration values
-    /// =============================================================================
+    /// Prints monitoring environment configuration for debugging.
     pub fn print(&self) {
         tracing::debug!("MoniEnvConfig:");
         // tracing::debug!("  Paths:                 {}", self.paths);
@@ -213,33 +183,21 @@ pub struct MarketMakerConfig {
 }
 
 impl MarketMakerConfig {
-    /// =============================================================================
-    /// @function: id
-    /// @description: Generates unique identifier for the market maker configuration
-    /// @behavior: Creates ID from network, token pair, and wallet address prefix
-    /// =============================================================================
+    /// Generates unique identifier for the market maker configuration.
     pub fn id(&self) -> String {
         let f7 = self.wallet_public_key[..9].to_string(); // 0x + 7 chars
         let msg = format!("mmc-{}-{}-{}-{}", self.network_name, self.base_token, self.quote_token, f7);
         msg.to_lowercase()
     }
 
-    /// =============================================================================
-    /// @function: hash
-    /// @description: Generates a keccak256 hash of the configuration
-    /// @behavior: Serializes config to JSON and returns hash as hex string
-    /// =============================================================================
+    /// Generates a keccak256 hash of the configuration.
     pub fn hash(&self) -> String {
         let serialized = serde_json::to_string(self).unwrap();
         let hash = alloy_primitives::keccak256(serialized.as_bytes());
         hash.to_string()
     }
 
-    /// =============================================================================
-    /// @function: print
-    /// @description: Prints market maker configuration with warnings for dangerous settings
-    /// @behavior: Logs all config values and warns if spreads are negative
-    /// =============================================================================
+    /// Prints market maker configuration with warnings for dangerous settings.
     pub fn print(&self) {
         // Ultra warnings for negative spreads
         if self.min_executable_spread_bps < 0.0 {
@@ -276,20 +234,12 @@ impl MarketMakerConfig {
         tracing::debug!("  Price Feed Config:     {:?}", self.price_feed_config);
     }
 
-    /// =============================================================================
-    /// @function: shortname
-    /// @description: Generates a short descriptive name for the market maker instance
-    /// @behavior: Returns format: network-base-quote-pricefeed
-    /// =============================================================================
+    /// Generates a short descriptive name for the market maker instance.
     pub fn shortname(&self) -> String {
         format!("{}-{}-{}-{}", self.network_name, self.base_token, self.quote_token, self.price_feed_config.r#type)
     }
 
-    /// =============================================================================
-    /// @function: validate
-    /// @description: Validates market maker configuration parameters
-    /// @behavior: Checks spreads, slippage, inventory ratios, and network-specific settings
-    /// =============================================================================
+    /// Validates market maker configuration parameters.
     pub fn validate(&self) -> Result<()> {
         // Check spread bounds
         if self.min_watch_spread_bps > BASIS_POINT_DENO {
@@ -378,22 +328,13 @@ impl MarketMakerConfig {
         Ok(())
     }
 
-    /// =============================================================================
-    /// @function: poll_interval
-    /// @description: Converts poll interval from milliseconds to Duration
-    /// @behavior: Returns Duration from poll_interval_ms configuration value
-    /// =============================================================================
+    /// Converts poll interval from milliseconds to Duration.
     pub fn poll_interval(&self) -> Duration {
         Duration::from_millis(self.poll_interval_ms)
     }
 }
 
-///   =============================================================================
-/// @function: load_market_maker_config
-/// @description: Loads and validates market maker configuration from TOML file
-/// @param path: Path to the TOML configuration file
-/// @behavior: Reads file, parses TOML, validates config, and returns MarketMakerConfig
-///   =============================================================================
+/// Loads and validates market maker configuration from TOML file.
 pub fn load_market_maker_config(path: &str) -> Result<MarketMakerConfig> {
     let contents = match fs::read_to_string(path) {
         Ok(contents) => contents,

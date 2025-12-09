@@ -11,72 +11,47 @@ use url;
 
 use crate::types::sol::IERC20;
 
-///   =============================================================================
-/// EVM Blockchain Utilities
-///   =============================================================================
-///
-/// @description: Collection of utility functions for interacting with EVM-compatible
-/// blockchains including Ethereum, Base, and other L2 networks
-///   =============================================================================
-///   =============================================================================
-/// @function: create_provider
-/// @description: Create an HTTP provider instance from RPC URL
-/// @param rpc: RPC endpoint URL as string
-/// @return impl Provider: Configured provider instance
-///   =============================================================================
+/// Creates an HTTP provider instance from RPC URL.
 pub fn create_provider(rpc: &str) -> impl Provider {
     ProviderBuilder::new().connect_http(rpc.parse().expect("Failed to parse RPC URL"))
 }
 
-///   =============================================================================
-/// @function: latest
-/// @description: Retrieve the latest block number from the specified RPC endpoint
-/// @param provider: RPC endpoint URL as string
-/// @return u64: Latest block number (returns 0 if failed)
-///   =============================================================================
+/// Retrieves the latest block number from the specified RPC endpoint.
 pub async fn latest(provider: String) -> u64 {
     let provider = create_provider(&provider);
     provider.get_block_number().await.unwrap_or_default()
 }
 
-///   =============================================================================
-/// @function: gas_price
-/// @description: Retrieve the current gas price from the specified RPC endpoint
-/// @param provider: RPC endpoint URL as string
-/// @return u128: Current gas price in wei (returns 0 if failed)
-///   =============================================================================
+/// Retrieves the current gas price from the specified RPC endpoint.
 pub async fn gas_price(provider: String) -> u128 {
     let provider = create_provider(&provider);
     provider.get_gas_price().await.unwrap_or_default()
 }
 
-///   =============================================================================
-/// @function: eip1559_fees
-/// @description: Estimate EIP-1559 gas fees (max fee and priority fee) for the network
-/// @param provider: RPC endpoint URL as string
-/// @return Result<Eip1559Estimation, String>: EIP-1559 fee estimation or error
-///   =============================================================================
-pub async fn eip1559_fees(provider: String) -> Result<Eip1559Estimation, String> {
-    let provider = create_provider(&provider);
+/// Estimates EIP-1559 gas fees for the network.
+pub async fn eip1559_fees(provider_url: String) -> Result<Eip1559Estimation, String> {
+    let provider = create_provider(&provider_url);
 
-    // Alloy 1.0: estimate_eip1559_fees() no longer takes optional estimator parameter
     match provider.estimate_eip1559_fees().await {
         Ok(fees) => Ok(fees),
         Err(e) => {
-            tracing::error!("Failed to estimate EIP-1559 fees: {:?}", e);
-            Err(format!("Failed to call estimate_eip1559_fees: {:?}", e))
+            // Fallback: use legacy gas_price when eth_feeHistory isn't supported
+            tracing::warn!("EIP-1559 estimation failed, falling back to legacy gas price: {:?}", e);
+            match provider.get_gas_price().await {
+                Ok(gas_price) => Ok(Eip1559Estimation {
+                    max_fee_per_gas: gas_price,
+                    max_priority_fee_per_gas: gas_price / 10, // ~10% tip
+                }),
+                Err(e2) => {
+                    tracing::error!("Both EIP-1559 and legacy gas estimation failed: {:?}", e2);
+                    Err(format!("Both EIP-1559 and legacy gas estimation failed: {:?}", e2))
+                }
+            }
         }
     }
 }
 
-///   =============================================================================
-/// @function: balances
-/// @description: Get token balances for a specific owner address across multiple tokens
-/// @param provider: Alloy provider instance
-/// @param owner: Owner address as string
-/// @param tokens: Vector of token contract addresses
-/// @return `Result<Vec<u128>, String>`: Vector of token balances in wei or error
-///   =============================================================================
+/// Gets token balances for a specific owner address across multiple tokens.
 pub async fn balances(provider: &impl Provider, owner: String, tokens: Vec<String>) -> Result<Vec<u128>, String> {
     let mut balances = vec![];
     let client = Arc::new(provider);
@@ -100,15 +75,7 @@ pub async fn balances(provider: &impl Provider, owner: String, tokens: Vec<Strin
     Ok(balances)
 }
 
-///   =============================================================================
-/// @function: allowance
-/// @description: Get the allowance amount for a specific token between owner and spender
-/// @param provider: Alloy provider instance
-/// @param owner: Token owner address
-/// @param spender: Spender address
-/// @param token: Token contract address
-/// @return Result<u128, String>: Allowance amount in wei or error
-///   =============================================================================
+/// Gets the allowance amount for a specific token between owner and spender.
 pub async fn allowance(rpc: String, owner: String, spender: String, token: String) -> Result<u128, String> {
     let provider = create_provider(&rpc);
     let client = Arc::new(provider);
@@ -125,13 +92,7 @@ pub async fn allowance(rpc: String, owner: String, spender: String, token: Strin
     }
 }
 
-///   =============================================================================
-/// @function: approve
-/// @description: Approve a spender to spend a specific amount of tokens
-/// @param mmc: Market maker configuration
-/// @param env: Environment configuration
-/// @param spender: Spender address
-/// @param token: Token contract address
+/// Approves a spender to spend a specific amount of tokens.
 pub async fn approve(mmc: MarketMakerConfig, env: EnvConfig, spender: String, token: String, amount: u128) -> Result<TransactionReceipt, String> {
     let rpc = mmc.rpc_url.parse::<url::Url>().unwrap().clone();
     let pk = env.wallet_private_key.clone();
@@ -174,18 +135,7 @@ pub async fn approve(mmc: MarketMakerConfig, env: EnvConfig, spender: String, to
     }
 }
 
-///   =============================================================================
-/// @function: wallet
-/// @description: Initialize the wallet by checking token balances, nonce, and wallet state
-/// @param config: Market maker configuration containing RPC URL and token addresses
-/// @param _env: Environment configuration (unused but kept for future use)
-/// @return: None
-///
-/// @behavior:
-/// - Fetches balances for base and quote tokens
-/// - Gets current nonce for transaction ordering
-/// - Logs wallet state for debugging
-///   =============================================================================
+/// Fetches wallet state including token balances and nonce.
 pub async fn fetch_wallet_state(config: MarketMakerConfig) {
     let provider = create_provider(&config.rpc_url);
     let tokens = vec![config.base_token_address.clone(), config.quote_token_address.clone()];
@@ -198,13 +148,7 @@ pub async fn fetch_wallet_state(config: MarketMakerConfig) {
     tracing::debug!("Nonce of sender {}: {}", config.wallet_public_key.clone(), nonce);
 }
 
-///   =============================================================================
-/// @function: fetch_receipt
-/// @description: Fetch the receipt for a specific transaction hash
-/// @param rpc: RPC endpoint URL as string
-/// @param hash: Transaction hash as string
-/// @return Result<TransactionReceipt, String>: Receipt or error
-///   =============================================================================
+/// Fetches the receipt for a specific transaction hash.
 pub async fn fetch_receipt(rpc: String, hash: String) -> Result<TransactionReceipt, String> {
     // If it doesn't contain 0x, return error
     if !hash.starts_with("0x") {
@@ -222,45 +166,3 @@ pub async fn fetch_receipt(rpc: String, hash: String) -> Result<TransactionRecei
         }
     }
 }
-
-// let approve_receipt = if let Some(approve) = approval_result {
-//     match approve.get_receipt().await {
-//         Ok(receipt) => Some(receipt),
-//         Err(e) => {
-//             tracing::error!("Failed to get receipt for approval transaction: {:?}", e.to_string());
-//             None
-//         }
-//     }
-// } else {
-//     None
-// };
-
-// let swap_receipt = swap.get_receipt().await;
-// let total_time = time.elapsed().unwrap_or_default().as_millis();
-// tracing::debug!(" - Receipt processing took {} ms", total_time);
-
-// match (approve_receipt, swap_receipt) {
-//     (Ok(approval_receipt), Ok(swap_receipt)) => {
-//         if let Some(approval_receipt) = approve_receipt.unwrap() {
-//             tracing::debug!("   - Approval receipt: status: {:?}", approval_receipt.status());
-//         }
-//         let swap_receipt = swap_receipt.clone();
-//         let swap_receipt_data = ReceiptData {
-//             status: swap_receipt.status().clone(),
-//             gas_used: swap_receipt.gas_used,
-//             effective_gas_price: swap_receipt.effective_gas_price,
-//             error: None,
-//             transaction_hash: swap_receipt.transaction_hash.to_string(),
-//             transaction_index: swap_receipt.transaction_index.unwrap_or_default(),
-//             block_number: swap_receipt.block_number.clone().unwrap_or_default(),
-//         };
-//         bd.receipt = Some(swap_receipt_data);
-//     }
-//     (_, Err(e)) => {
-//         tracing::error!("Failed to get receipt for swap transaction: {:?}", e.to_string());
-//         bd.broadcast_error = Some(e.to_string());
-//     }
-//     _ => {
-//         tracing::error!("Failed to get receipts, unhandled error");
-//     }
-// }
