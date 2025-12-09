@@ -117,13 +117,8 @@ impl MarketContext {
     }
 }
 
-#[async_trait]
-impl IMarketMaker for MarketMaker {
-    /// Fetches current market price from the configured price feed.
-    async fn fetch_market_price(&self) -> Result<f64, String> {
-        self.feed.get(self.config.clone()).await
-    }
-
+/// Internal methods for MarketMaker - not part of the public trait interface.
+impl MarketMaker {
     /// Fetches ETH/USD price for gas cost calculations.
     ///
     /// Uses Chainlink oracle if configured, falls back to CoinGecko.
@@ -374,7 +369,8 @@ impl IMarketMaker for MarketMaker {
             };
             let pool_buying_balance_normalized = (*pool_buying_balance as f64) / buying_pow;
             if pool_buying_balance_normalized < f64::EPSILON {
-                tracing::info!("pool_buying_balance_normalized < 0 !");
+                tracing::warn!("Cannot readjust, skipping due to pool_buying_balance_normalized < 0 !");
+                continue;
             }
             let selling = &adjustment.selling;
             let selling_pow = 10f64.powi(selling.decimals as i32);
@@ -396,14 +392,6 @@ impl IMarketMaker for MarketMaker {
                 tracing::warn!("Cannot readjust, skipping due to eth_to_usd <= 0 !");
                 continue;
             }
-
-            // --- OLD ---
-            // let inventory_balance = if base_to_quote { inventory.base_balance } else { inventory.quote_balance };
-            // let inventory_balance_normalized = (inventory_balance as f64) / selling_pow;
-            // let optimal = pool_selling_balance_normalized * SHARE_POOL_BAL_SWAP_BPS / BASIS_POINT_DENO;
-            // let max_alloc = inventory_balance_normalized * self.config.max_inventory_ratio;
-            // let selling_amount = max_alloc;
-            // let buying_amount = if base_to_quote { selling_amount * adjustment.spot } else { selling_amount / adjustment.spot };
 
             // Use TradeDirection from adjustment to determine swap direction
             let base_to_quote = adjustment.direction == TradeDirection::Buy;
@@ -689,7 +677,7 @@ impl IMarketMaker for MarketMaker {
         unsafe {
             std::env::set_var("RPC_URL", self.config.rpc_url.clone());
         }
-        let (_, _, chain) = crate::maker::tycho::chain(self.config.network_name.as_str().to_string()).unwrap();
+        let (_, chain) = crate::maker::tycho::chain(self.config.network_name.as_str().to_string()).unwrap();
         let mut output: Vec<Trade> = vec![];
         let solutions = orders.iter().map(|order| self.build_tycho_solution(order.clone())).collect::<Vec<Solution>>();
 
@@ -788,6 +776,14 @@ impl IMarketMaker for MarketMaker {
             }
         };
         output
+    }
+}
+
+#[async_trait]
+impl IMarketMaker for MarketMaker {
+    /// Fetches current market price from the configured price feed.
+    async fn fetch_market_price(&self) -> Result<f64, String> {
+        self.feed.get(self.config.clone()).await
     }
 
     /// Main market maker runtime loop that monitors pools and executes trades.

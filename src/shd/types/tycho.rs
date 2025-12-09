@@ -13,17 +13,17 @@ pub struct PsbConfig {
     pub filter: ComponentFilter,
 }
 
-/// Due to library conflicts, we need to redefine the Chain type depending the use case, hence the following aliases.
+/// Chain type aliases to resolve library conflicts between different Tycho modules.
+/// Note: tycho_simulation::tycho_core is a re-export of tycho_common, so we only need ChainCommon.
 pub type ChainCommon = tycho_common::dto::Chain;
-pub type ChainSimCore = tycho_simulation::tycho_core::dto::Chain;
 pub type ChainSimu = tycho_simulation::evm::tycho_models::Chain;
 
-/// Return the chains types for a given network name
-pub fn chain(name: String) -> Option<(ChainCommon, ChainSimCore, ChainSimu)> {
+/// Returns the chain types for a given network name.
+pub fn chain(name: String) -> Option<(ChainCommon, ChainSimu)> {
     match name.as_str() {
-        "ethereum" => Some((ChainCommon::Ethereum, ChainSimCore::Ethereum, ChainSimu::Ethereum)),
-        "base" => Some((ChainCommon::Base, ChainSimCore::Base, ChainSimu::Base)),
-        "unichain" => Some((ChainCommon::Unichain, ChainSimCore::Unichain, ChainSimu::Unichain)),
+        "ethereum" => Some((ChainCommon::Ethereum, ChainSimu::Ethereum)),
+        "base" => Some((ChainCommon::Base, ChainSimu::Base)),
+        "unichain" => Some((ChainCommon::Unichain, ChainSimu::Unichain)),
         _ => {
             tracing::error!("Unknown chain: {}", name);
             None

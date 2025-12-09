@@ -2,15 +2,10 @@
 //!
 //! Core type definitions for market making operations including the main market
 //! maker trait, data structures for trades, orders, and market context.
-use std::collections::HashMap;
-
 use alloy::rpc::types::TransactionRequest;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use tycho_execution::encoding::models::{Solution, Transaction};
 use tycho_common::models::token::Token;
-use tycho_common::simulation::protocol_sim::ProtocolSim; // ProtocolSim trait for protocol simulation
-use tycho_simulation::protocol::models::ProtocolComponent;
 
 use crate::maker::{exec::ExecStrategy, feed::PriceFeed};
 
@@ -19,41 +14,11 @@ use super::{
     tycho::{ProtoSimComp, SharedTychoStreamState},
 };
 
-/// Core market maker interface defining all required operations.
+/// Core market maker interface - only exposes methods needed externally.
 #[async_trait]
 pub trait IMarketMaker: Send + Sync {
-    /// Retrieves prices for protocol simulation components.
-    fn prices(&self, psc: &[ProtoSimComp]) -> Vec<ComponentPriceData>;
-
-    /// Evaluates pools for profitable spread opportunities.
-    fn evaluate(&self, psc: &[ProtoSimComp], sps: Vec<f64>, reference: f64) -> Vec<CompReadjustment>;
-
-    /// Analyzes optimal market readjustment and computes profitability.
-    async fn readjust(&self, context: MarketContext, inventory: Inventory, crs: Vec<CompReadjustment>, env: EnvConfig) -> Vec<ExecutionOrder>;
-
-    /// Fetches current token inventory from blockchain.
-    async fn fetch_inventory(&self, env: EnvConfig) -> Result<Inventory, String>;
-
-    /// Fetches current market context and state.
-    async fn fetch_market_context(&self, components: Vec<ProtocolComponent>, protosims: &HashMap<std::string::String, Box<dyn ProtocolSim>>, tokens: Vec<Token>) -> Option<MarketContext>;
-
-    /// Fetches current ETH/USD price from price feed.
-    async fn fetch_eth_usd(&self) -> Result<f64, String>;
-
-    /// Fetches current market price for the trading pair.
+    /// Fetches current market price for the trading pair (used for initial validation).
     async fn fetch_market_price(&self) -> Result<f64, String>;
-
-    /// Creates trade data from execution order.
-    fn pre_trade_data(&self, order: &ExecutionOrder) -> PreTradeData;
-
-    /// Builds Tycho solution from execution order.
-    fn build_tycho_solution(&self, order: ExecutionOrder) -> Solution;
-
-    /// Creates transaction request from Tycho solution.
-    fn trade_tx_request(&self, solution: Solution, encoded: Transaction, context: MarketContext, inventory: Inventory) -> Result<TradeTxRequest, String>;
-
-    /// Prepares transactions for execution.
-    fn prepare(&self, orders: Vec<ExecutionOrder>, tdata: Vec<TradeData>, context: MarketContext, inventory: Inventory, env: EnvConfig) -> Vec<Trade>;
 
     /// Main market maker loop that monitors Tycho stream state.
     async fn run(&mut self, mtx: SharedTychoStreamState, env: EnvConfig);
