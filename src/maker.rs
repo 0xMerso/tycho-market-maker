@@ -10,7 +10,7 @@ use shd::error::{MarketMakerError, Result};
 use shd::types::config::MarketMakerConfig;
 use shd::{
     maker::{exec::ExecStrategyFactory, feed::PriceFeedFactory},
-    types::{builder::MarketMakerBuilder, config::EnvConfig, maker::IMarketMaker, moni::NewInstanceMessage, tycho::TychoStreamState},
+    types::{builder::MarketMakerBuilder, config::EnvConfig, maker::MarketMaker, moni::NewInstanceMessage, tycho::TychoStreamState},
 };
 use tokio::sync::RwLock;
 use tracing::Level;
@@ -76,7 +76,7 @@ async fn init_allowance(config: MarketMakerConfig, env: EnvConfig) {
 /// Publishes instance start events if configured, initializes shared state cache,
 /// and runs the market maker. If a panic occurs, let it propagate - the process
 /// manager (Docker Compose) will handle restarts with proper resource cleanup.
-async fn run<M: IMarketMaker>(mut mk: M, identifier: String, config: MarketMakerConfig, env: EnvConfig, tokens: Vec<Token>) -> Result<()> {
+async fn run(mut mk: MarketMaker, identifier: String, config: MarketMakerConfig, env: EnvConfig, tokens: Vec<Token>) -> Result<()> {
     let commit = shd::utils::misc::commit().unwrap_or_default();
 
     // Publish instance start event if configured
