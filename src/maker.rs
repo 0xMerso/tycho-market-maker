@@ -6,13 +6,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use futures::FutureExt;
 use shd::error::{MarketMakerError, Result};
 use shd::types::config::MarketMakerConfig;
 use shd::{
     maker::{exec::ExecStrategyFactory, feed::PriceFeedFactory},
     types::{builder::MarketMakerBuilder, config::EnvConfig, maker::IMarketMaker, moni::NewInstanceMessage, tycho::TychoStreamState},
-    utils::constants::RESTART,
 };
 use tokio::sync::RwLock;
 use tracing::Level;
@@ -73,11 +71,11 @@ async fn init_allowance(config: MarketMakerConfig, env: EnvConfig) {
     }
 }
 
-/// Main market maker runtime loop.
+/// Main market maker runtime.
 ///
-/// Runs the market maker in an infinite loop with automatic restart on failure.
 /// Publishes instance start events if configured, initializes shared state cache,
-/// and handles panic recovery with configurable restart delays.
+/// and runs the market maker. If a panic occurs, let it propagate - the process
+/// manager (Docker Compose) will handle restarts with proper resource cleanup.
 async fn run<M: IMarketMaker>(mut mk: M, identifier: String, config: MarketMakerConfig, env: EnvConfig, tokens: Vec<Token>) -> Result<()> {
     let commit = shd::utils::misc::commit().unwrap_or_default();
 
@@ -90,7 +88,8 @@ async fn run<M: IMarketMaker>(mut mk: M, identifier: String, config: MarketMaker
         });
     }
 
-    // ! ToDo: Add a check to see if the price is valid (not 0) and if both prices (reference and Tycho) are close to each other (within x% ?) at launch
+    tracing::info!("Starting market maker (id: {}) for network {}", identifier, config.network_name.as_str());
+    tracing::info!("♻️  MarketMaker program commit: {:?}", commit);
 
     // Initialize shared state cache
     let cache = Arc::new(RwLock::new(TychoStreamState {
@@ -102,22 +101,12 @@ async fn run<M: IMarketMaker>(mut mk: M, identifier: String, config: MarketMaker
     // Spawn heartbeat task
     shd::utils::uptime::heartbeats(env.testing, env.heartbeat.clone()).await;
 
-    // Main runtime loop with automatic restart
-    loop {
-        tracing::debug!("Starting market make inf. loop (id: {}) and launching stream for network {}", identifier, config.network_name.as_str());
-        tracing::info!("♻️  MarketMaker program commit: {:?}", commit.clone());
+    // Run the market maker - panics will propagate and terminate the process,
+    // allowing Docker Compose restart policy to handle recovery with proper cleanup
+    let state = Arc::clone(&cache);
+    mk.run(state, env).await;
 
-        let state = Arc::clone(&cache);
-        match std::panic::AssertUnwindSafe(mk.run(state.clone(), env.clone())).catch_unwind().await {
-            Ok(_) => tracing::debug!("Maker main task ended. Restarting..."),
-            Err(e) => tracing::error!("Market maker task panicked: {:?}. Restarting...", e),
-        }
-
-        // Calculate restart delay (shorter in testing mode)
-        let delay = if env.testing { RESTART / 10 } else { RESTART };
-        tracing::debug!("Waiting {} seconds before restarting stream for {}", delay, config.network_name.as_str());
-        tokio::time::sleep(tokio::time::Duration::from_millis(delay * 1000)).await;
-    }
+    Ok(())
 }
 
 /// Initializes and configures the market maker application.
