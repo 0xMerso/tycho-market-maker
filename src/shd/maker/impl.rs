@@ -6,7 +6,7 @@ use crate::{
     types::{
         config::EnvConfig,
         maker::{
-            CompReadjustment, ComponentPriceData, ExecutionOrder, IMarketMaker, Inventory, MarketContext, MarketMaker, PreTradeData, SwapCalculation, Trade, TradeData, TradeDirection, TradeStatus,
+            CompReadjustment, ComponentPriceData, ExecutionOrder, Inventory, MarketContext, MarketMaker, PreTradeData, SwapCalculation, Trade, TradeData, TradeDirection, TradeStatus,
             TradeTxRequest,
         },
         moni::NewPricesMessage,
@@ -23,7 +23,6 @@ use alloy::{
 };
 
 use alloy_primitives::{Address, U256};
-use async_trait::async_trait;
 use futures::StreamExt;
 use num_bigint::BigUint;
 use num_traits::cast::ToPrimitive;
@@ -777,19 +776,16 @@ impl MarketMaker {
         };
         output
     }
-}
 
-#[async_trait]
-impl IMarketMaker for MarketMaker {
     /// Fetches current market price from the configured price feed.
-    async fn fetch_market_price(&self) -> Result<f64, String> {
+    pub async fn fetch_market_price(&self) -> Result<f64, String> {
         self.feed.get(self.config.clone()).await
     }
 
     /// Main market maker runtime loop that monitors pools and executes trades.
     ///
     /// Streams protocol updates, evaluates opportunities, and executes profitable trades.
-    async fn run(&mut self, mtx: SharedTychoStreamState, env: EnvConfig) {
+    pub async fn run(&mut self, mtx: SharedTychoStreamState, env: EnvConfig) {
         let mut last_publish = std::time::Instant::now() - std::time::Duration::from_millis(self.config.min_publish_timeframe_ms);
         let mut last_poll = std::time::Instant::now() - std::time::Duration::from_millis(self.config.poll_interval_ms);
         loop {

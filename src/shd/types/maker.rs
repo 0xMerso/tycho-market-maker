@@ -1,28 +1,14 @@
 //! Market Maker Types and Data Structures
 //!
 //! Core type definitions for market making operations including the main market
-//! maker trait, data structures for trades, orders, and market context.
+//! maker struct, data structures for trades, orders, and market context.
 use alloy::rpc::types::TransactionRequest;
-use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use tycho_common::models::token::Token;
 
 use crate::maker::{exec::ExecStrategy, feed::PriceFeed};
 
-use super::{
-    config::{EnvConfig, MarketMakerConfig},
-    tycho::{ProtoSimComp, SharedTychoStreamState},
-};
-
-/// Core market maker interface - only exposes methods needed externally.
-#[async_trait]
-pub trait IMarketMaker: Send + Sync {
-    /// Fetches current market price for the trading pair (used for initial validation).
-    async fn fetch_market_price(&self) -> Result<f64, String>;
-
-    /// Main market maker loop that monitors Tycho stream state.
-    async fn run(&mut self, mtx: SharedTychoStreamState, env: EnvConfig);
-}
+use super::{config::MarketMakerConfig, tycho::ProtoSimComp};
 
 /// Main market maker implementation struct.
 pub struct MarketMaker {
