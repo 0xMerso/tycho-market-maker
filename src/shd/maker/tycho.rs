@@ -95,6 +95,10 @@ fn sanitize(input: Vec<ResponseToken>, chain: ChainCommon) -> Vec<Token> {
     let mut tokens = vec![];
     for t in input.iter() {
         let g = t.gas.first().unwrap_or(&Some(0u64)).unwrap_or_default();
+        if g == 0 {
+            tracing::debug!("Skipping token with 0 gas: {} ({})", t.symbol, t.address);
+            continue;
+        }
         if let Ok(addr) = tycho_simulation::tycho_core::Bytes::from_str(t.address.clone().to_string().as_str()) {
             tokens.push(Token {
                 address: addr,
