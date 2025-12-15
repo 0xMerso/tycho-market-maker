@@ -120,8 +120,13 @@ async fn initialize() -> Result<()> {
     tracing_subscriber::fmt().with_max_level(Level::TRACE).with_env_filter(filter).init();
 
     // Load secrets from environment-specific file
-    let path = std::env::var("SECRET_PATH").unwrap();
-    let secrets = path;
+    let secrets = match std::env::var("SECRET_PATH") {
+        Ok(path) => path,
+        Err(_) => {
+            tracing::error!("SECRET_PATH environment variable is required");
+            std::process::exit(1);
+        }
+    };
     tracing::info!("Loading secrets from: {}", secrets);
 
     // Load environment variables and validate configuration
