@@ -8,7 +8,7 @@ Edit the proposed fix or commit message as needed.
 ## CRITICAL (will panic if condition not met)
 
 ### 1. SECRET_PATH env var
-- [ ] Fix
+- [x] Fix
 - **File:** `src/maker.rs:123`
 - **Code:** `std::env::var("SECRET_PATH").unwrap()`
 - **Risk:** Panics if env var not set
@@ -16,7 +16,7 @@ Edit the proposed fix or commit message as needed.
 - **Commit:** `fix(maker): handle missing SECRET_PATH env var gracefully`
 
 ### 2. EnvConfig env var unwraps
-- [ ] Fix
+- [x] Fix
 - **File:** `src/shd/types/config.rs:92-96`
 - **Code:**
 ```rust
