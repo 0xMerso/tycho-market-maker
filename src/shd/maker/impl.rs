@@ -1042,7 +1042,10 @@ impl MarketMaker {
                                                             continue;
                                                         }
                                                         orders.sort_by(|a, b| b.calculation.profit_delta_bps.partial_cmp(&a.calculation.profit_delta_bps).unwrap_or(std::cmp::Ordering::Equal));
-                                                        let orders = vec![orders.first().unwrap().clone()];
+                                                        let orders = match orders.first() {
+                                                            Some(order) => vec![order.clone()],
+                                                            None => continue,
+                                                        };
                                                         let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis();
                                                         let tdata = orders
                                                             .iter()

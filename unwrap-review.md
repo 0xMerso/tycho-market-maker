@@ -52,7 +52,7 @@ serde_json::from_str(&buffer).unwrap()
 - **Commit:** `fix(impl): handle block fetch failure gracefully`
 
 ### 5. Chain lookup unwrap
-- [ ] Fix
+- [x] Fix
 - **File:** `src/shd/maker/impl.rs:679`
 - **Code:** `crate::maker::tycho::chain(...).unwrap()`
 - **Risk:** Panics for unknown network name
@@ -60,7 +60,7 @@ serde_json::from_str(&buffer).unwrap()
 - **Commit:** `fix(impl): handle unknown chain gracefully`
 
 ### 6. Token find unwraps in routing
-- [ ] Fix
+- [x] Fix
 - **File:** `src/shd/opti/routing.rs:89-90`
 - **Code:**
 ```rust
