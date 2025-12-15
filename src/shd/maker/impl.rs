@@ -692,7 +692,13 @@ impl MarketMaker {
         unsafe {
             std::env::set_var("RPC_URL", self.config.rpc_url.clone());
         }
-        let (_, chain) = crate::maker::tycho::chain(self.config.network_name.as_str().to_string()).unwrap();
+        let (_, chain) = match crate::maker::tycho::chain(self.config.network_name.as_str().to_string()) {
+            Some(c) => c,
+            None => {
+                tracing::error!("Unknown chain: {}, skipping trade preparation", self.config.network_name);
+                return vec![];
+            }
+        };
         let mut output: Vec<Trade> = vec![];
         let solutions = orders.iter().map(|order| self.build_tycho_solution(order.clone())).collect::<Vec<Solution>>();
 
