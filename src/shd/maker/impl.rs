@@ -202,9 +202,25 @@ impl MarketMaker {
             Ok(eip1559_fees) => {
                 let native_gas_price = crate::utils::evm::gas_price(self.config.rpc_url.clone()).await;
                 let eth_to_usd = self.fetch_eth_usd().await;
-                let provider = ProviderBuilder::new().connect_http(self.config.rpc_url.clone().parse().unwrap());
+                let provider = match self.config.rpc_url.clone().parse() {
+                    Ok(url) => ProviderBuilder::new().connect_http(url),
+                    Err(e) => {
+                        tracing::error!("Failed to parse RPC URL: {}", e);
+                        return None;
+                    }
+                };
                 // Alloy 1.0: get_block_by_number() no longer takes hydrated parameter
-                let block: alloy::rpc::types::Block = provider.get_block_by_number(alloy::eips::BlockNumberOrTag::Latest).await.unwrap().unwrap();
+                let block: alloy::rpc::types::Block = match provider.get_block_by_number(alloy::eips::BlockNumberOrTag::Latest).await {
+                    Ok(Some(b)) => b,
+                    Ok(None) => {
+                        tracing::error!("Failed to fetch latest block: block not found");
+                        return None;
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to fetch latest block: {}", e);
+                        return None;
+                    }
+                };
                 let base_to_eth_vp = routing::find_path(components.clone(), self.base.address.to_string().to_lowercase(), self.config.gas_token_symbol.to_lowercase());
                 let quote_to_eth_vp = routing::find_path(components.clone(), self.quote.address.to_string().to_lowercase(), self.config.gas_token_symbol.to_lowercase());
                 match (base_to_eth_vp, quote_to_eth_vp, eth_to_usd) {

@@ -31,7 +31,7 @@ tycho_api_key: std::env::var("TYCHO_API_KEY").unwrap(),
 - **Commit:** `fix(config): handle missing env vars with clear error messages`
 
 ### 3. File operations in misc.rs
-- [ ] Fix
+- [x] Fix
 - **File:** `src/shd/utils/misc.rs:34-37`
 - **Code:**
 ```rust
@@ -44,7 +44,7 @@ serde_json::from_str(&buffer).unwrap()
 - **Commit:** `fix(misc): return Result from file read operations`
 
 ### 4. Double unwrap on block fetch
-- [ ] Fix
+- [x] Fix
 - **File:** `src/shd/maker/impl.rs:207`
 - **Code:** `provider.get_block_by_number(...).await.unwrap().unwrap()`
 - **Risk:** Panics if RPC fails or block not found
