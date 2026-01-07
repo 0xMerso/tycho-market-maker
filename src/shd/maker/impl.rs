@@ -6,8 +6,7 @@ use crate::{
     types::{
         config::EnvConfig,
         maker::{
-            CompReadjustment, ComponentPriceData, ExecutionOrder, Inventory, MarketContext, MarketMaker, PreTradeData, SwapCalculation, Trade, TradeData, TradeDirection, TradeStatus,
-            TradeTxRequest,
+            CompReadjustment, ComponentPriceData, ExecutionOrder, Inventory, MarketContext, MarketMaker, PreTradeData, SwapCalculation, Trade, TradeData, TradeDirection, TradeStatus, TradeTxRequest,
         },
         moni::NewPricesMessage,
         tycho::{ProtoSimComp, PsbConfig, SharedTychoStreamState},
@@ -278,7 +277,7 @@ impl MarketMaker {
             }
             Err(e) => {
                 tracing::error!("Failed to fetch EIP-1559 fees: {:?}", e);
-                return None;
+                None
             }
         }
     }
@@ -822,7 +821,7 @@ impl MarketMaker {
             let mut previous_reference_price = 0.0;
             let mut protosims: HashMap<String, Box<dyn ProtocolSim>> = HashMap::new();
             let psb = crate::maker::tycho::psb(self.config.clone(), env.tycho_api_key.to_string(), psbc.clone(), atks.clone()).await;
-            let _stream = match psb.build().await {
+            match psb.build().await {
                 Ok(mut stream) => loop {
                     // Looping
                     match stream.next().await {

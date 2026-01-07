@@ -28,7 +28,7 @@ impl ExecStrategy for UnichainExec {
     fn name(&self) -> String {
         ExecStrategyName::UnichainStrategy.as_str().to_string()
     }
-    
+
     // TODO: Override broadcast() for Unichain advanced transaction features
     // async fn broadcast(&self, prepared: Vec<Trade>, mmc: MarketMakerConfig, env: EnvConfig) -> Result<Vec<BroadcastData>, String>
 }

@@ -4,14 +4,10 @@ use shd::types::config::load_market_maker_config;
 use shd::utils::evm::{create_provider, eip1559_fees, gas_price, latest};
 
 // Global list of all config files to test
-static CONFIG_FILES: &[&str] = &[
-    "config/mainnet.eth-usdc.toml",
-    "config/unichain.eth-usdc.toml",
-];
+static CONFIG_FILES: &[&str] = &["config/mainnet.eth-usdc.toml", "config/unichain.eth-usdc.toml"];
 
 #[test]
 fn test_parse_all_configs() {
-
     println!("\n🔍 Testing parsing of all config files...\n");
 
     for config_path in CONFIG_FILES {

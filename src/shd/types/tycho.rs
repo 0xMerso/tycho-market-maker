@@ -3,10 +3,7 @@ use tokio::sync::RwLock;
 use tycho_common::models::token::Token;
 use tycho_common::simulation::protocol_sim::ProtocolSim; // ProtocolSim trait for protocol simulation
 use tycho_simulation::tycho_core::Bytes;
-use tycho_simulation::{
-    protocol::models::ProtocolComponent,
-    tycho_client::feed::component_tracker::ComponentFilter,
-};
+use tycho_simulation::{protocol::models::ProtocolComponent, tycho_client::feed::component_tracker::ComponentFilter};
 
 #[derive(Clone)]
 pub struct PsbConfig {
@@ -148,8 +145,8 @@ impl From<SrzToken> for Token {
             gas: vec![serialized.gas.parse::<u64>().ok()],
             // CONSERVATIVE DEFAULTS - New required fields (not Option):
             chain: tycho_common::dto::Chain::Ethereum.into(), // TODO: Serialize/deserialize chain
-            quality: 100,    // High quality default
-            tax: 0,          // Assume no tax
+            quality: 100,                                     // High quality default
+            tax: 0,                                           // Assume no tax
         }
     }
 }
