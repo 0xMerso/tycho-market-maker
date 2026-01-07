@@ -123,14 +123,12 @@ fn sanitize(input: Vec<ResponseToken>, chain: ChainCommon) -> Vec<Token> {
             let valid_symbol = s.symbol.chars().all(|c| c.is_ascii_graphic()) && !s.symbol.chars().any(|c| c.is_control());
             // Check that the address is valid: starts with "0x" and is exactly 42 chars (0x + 40 hex)
             let valid_address = addr.starts_with("0x");
-
-            if !valid_symbol {
-                tracing::debug!("Excluding token with invalid symbol: {} ({})", s.symbol, addr);
-            }
+            // if !valid_symbol {
+            //     tracing::debug!("Excluding token with invalid symbol: {} ({})", s.symbol, addr);
+            // }
             if !valid_address {
                 tracing::debug!("Excluding token with invalid address: {} (len={})", addr, addr.len());
             }
-
             valid_symbol && valid_address
         })
         .collect()
