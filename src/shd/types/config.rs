@@ -85,15 +85,26 @@ impl Default for EnvConfig {
     }
 }
 
+/// Helper to get required env var or exit with error.
+fn require_env(name: &str) -> String {
+    match std::env::var(name) {
+        Ok(val) => val,
+        Err(_) => {
+            eprintln!("Error: {} environment variable is required", name);
+            std::process::exit(1);
+        }
+    }
+}
+
 impl EnvConfig {
     /// Creates EnvConfig from environment variables.
     pub fn new() -> Self {
         EnvConfig {
-            path: std::env::var("CONFIG_PATH").unwrap(),
-            testing: std::env::var("TESTING").unwrap() == "true",
-            heartbeat: std::env::var("HEARTBEAT").unwrap(),
-            wallet_private_key: std::env::var("WALLET_PRIVATE_KEY").unwrap(),
-            tycho_api_key: std::env::var("TYCHO_API_KEY").unwrap(),
+            path: require_env("CONFIG_PATH"),
+            testing: require_env("TESTING") == "true",
+            heartbeat: require_env("HEARTBEAT"),
+            wallet_private_key: require_env("WALLET_PRIVATE_KEY"),
+            tycho_api_key: require_env("TYCHO_API_KEY"),
         }
     }
 

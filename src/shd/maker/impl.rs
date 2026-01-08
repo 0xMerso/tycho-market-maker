@@ -6,8 +6,7 @@ use crate::{
     types::{
         config::EnvConfig,
         maker::{
-            CompReadjustment, ComponentPriceData, ExecutionOrder, IMarketMaker, Inventory, MarketContext, MarketMaker, PreTradeData, SwapCalculation, Trade, TradeData, TradeDirection, TradeStatus,
-            TradeTxRequest,
+            CompReadjustment, ComponentPriceData, ExecutionOrder, Inventory, MarketContext, MarketMaker, PreTradeData, SwapCalculation, Trade, TradeData, TradeDirection, TradeStatus, TradeTxRequest,
         },
         moni::NewPricesMessage,
         tycho::{ProtoSimComp, PsbConfig, SharedTychoStreamState},
@@ -23,7 +22,6 @@ use alloy::{
 };
 
 use alloy_primitives::{Address, U256};
-use async_trait::async_trait;
 use futures::StreamExt;
 use num_bigint::BigUint;
 use num_traits::cast::ToPrimitive;
@@ -203,9 +201,25 @@ impl MarketMaker {
             Ok(eip1559_fees) => {
                 let native_gas_price = crate::utils::evm::gas_price(self.config.rpc_url.clone()).await;
                 let eth_to_usd = self.fetch_eth_usd().await;
-                let provider = ProviderBuilder::new().connect_http(self.config.rpc_url.clone().parse().unwrap());
+                let provider = match self.config.rpc_url.clone().parse() {
+                    Ok(url) => ProviderBuilder::new().connect_http(url),
+                    Err(e) => {
+                        tracing::error!("Failed to parse RPC URL: {}", e);
+                        return None;
+                    }
+                };
                 // Alloy 1.0: get_block_by_number() no longer takes hydrated parameter
-                let block: alloy::rpc::types::Block = provider.get_block_by_number(alloy::eips::BlockNumberOrTag::Latest).await.unwrap().unwrap();
+                let block: alloy::rpc::types::Block = match provider.get_block_by_number(alloy::eips::BlockNumberOrTag::Latest).await {
+                    Ok(Some(b)) => b,
+                    Ok(None) => {
+                        tracing::error!("Failed to fetch latest block: block not found");
+                        return None;
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to fetch latest block: {}", e);
+                        return None;
+                    }
+                };
                 let base_to_eth_vp = routing::find_path(components.clone(), self.base.address.to_string().to_lowercase(), self.config.gas_token_symbol.to_lowercase());
                 let quote_to_eth_vp = routing::find_path(components.clone(), self.quote.address.to_string().to_lowercase(), self.config.gas_token_symbol.to_lowercase());
                 match (base_to_eth_vp, quote_to_eth_vp, eth_to_usd) {
@@ -263,7 +277,7 @@ impl MarketMaker {
             }
             Err(e) => {
                 tracing::error!("Failed to fetch EIP-1559 fees: {:?}", e);
-                return None;
+                None
             }
         }
     }
@@ -677,7 +691,13 @@ impl MarketMaker {
         unsafe {
             std::env::set_var("RPC_URL", self.config.rpc_url.clone());
         }
-        let (_, chain) = crate::maker::tycho::chain(self.config.network_name.as_str().to_string()).unwrap();
+        let (_, chain) = match crate::maker::tycho::chain(self.config.network_name.as_str().to_string()) {
+            Some(c) => c,
+            None => {
+                tracing::error!("Unknown chain: {}, skipping trade preparation", self.config.network_name);
+                return vec![];
+            }
+        };
         let mut output: Vec<Trade> = vec![];
         let solutions = orders.iter().map(|order| self.build_tycho_solution(order.clone())).collect::<Vec<Solution>>();
 
@@ -777,19 +797,16 @@ impl MarketMaker {
         };
         output
     }
-}
 
-#[async_trait]
-impl IMarketMaker for MarketMaker {
     /// Fetches current market price from the configured price feed.
-    async fn fetch_market_price(&self) -> Result<f64, String> {
+    pub async fn fetch_market_price(&self) -> Result<f64, String> {
         self.feed.get(self.config.clone()).await
     }
 
     /// Main market maker runtime loop that monitors pools and executes trades.
     ///
     /// Streams protocol updates, evaluates opportunities, and executes profitable trades.
-    async fn run(&mut self, mtx: SharedTychoStreamState, env: EnvConfig) {
+    pub async fn run(&mut self, mtx: SharedTychoStreamState, env: EnvConfig) {
         let mut last_publish = std::time::Instant::now() - std::time::Duration::from_millis(self.config.min_publish_timeframe_ms);
         let mut last_poll = std::time::Instant::now() - std::time::Duration::from_millis(self.config.poll_interval_ms);
         loop {
@@ -804,7 +821,7 @@ impl IMarketMaker for MarketMaker {
             let mut previous_reference_price = 0.0;
             let mut protosims: HashMap<String, Box<dyn ProtocolSim>> = HashMap::new();
             let psb = crate::maker::tycho::psb(self.config.clone(), env.tycho_api_key.to_string(), psbc.clone(), atks.clone()).await;
-            let _stream = match psb.build().await {
+            match psb.build().await {
                 Ok(mut stream) => loop {
                     // Looping
                     match stream.next().await {
@@ -1024,7 +1041,10 @@ impl IMarketMaker for MarketMaker {
                                                             continue;
                                                         }
                                                         orders.sort_by(|a, b| b.calculation.profit_delta_bps.partial_cmp(&a.calculation.profit_delta_bps).unwrap_or(std::cmp::Ordering::Equal));
-                                                        let orders = vec![orders.first().unwrap().clone()];
+                                                        let orders = match orders.first() {
+                                                            Some(order) => vec![order.clone()],
+                                                            None => continue,
+                                                        };
                                                         let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis();
                                                         let tdata = orders
                                                             .iter()

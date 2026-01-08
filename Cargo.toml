@@ -3,93 +3,59 @@ name = "mkmk"
 version = "0.1.0"
 edition = "2021"
 authors = ["Tycho Market Maker Team"]
-description = "High-frequency market making bot for decentralized exchanges using the Tycho protocol"
+description = "Market making bot for DEXs using Tycho protocol"
 license = "MIT"
 repository = "https://github.com/propeller-heads/tycho-market-maker"
-keywords = ["defi", "market-making", "tycho", "ethereum", "trading", "amm"]
+keywords = ["defi", "market-making", "tycho", "ethereum"]
 categories = ["blockchain", "financial"]
 
 [dependencies]
-
-
-# --- Progressive Upgrade ---
-# Alloy 1.0
-# Rm alloy-mev, use the MEV pkgs from alloy
-# New tycho-simulation-new repo, update with pub fields ?
-# Upgrade each tycho crate
-
-# --- Tycho Ecosystem ---
-# OLD: tycho-simulation = { git = "https://github.com/propeller-heads/tycho-simulation.git", rev = "2ef64b9bcc20de865303efceb3a5d245c34b32c0" }
-# OLD: tycho-common = "0.66.4"
-# OLD: tycho-client = "0.66.4"
-# OLD: tycho-execution = { version = "0.81.0", features = ["evm"] }
+# Tycho
 tycho-simulation = { git = "https://github.com/propeller-heads/tycho-simulation.git", tag = "0.181.3" }
 tycho-common = "0.96.1"
 tycho-client = "0.96.1"
 tycho-execution = { version = "0.130.1", features = ["evm"] }
 
-# --- Error Handling ---
-thiserror = "1.0"
-
-# --- Serialization & Configuration ---
+# Serialization
 serde = { version = "1.0.104", features = ["derive"] }
 serde_json = "1.0"
 toml = "0.8.12"
 
-# --- Async Runtime & Networking ---
+# Async
 tokio = { version = "1.28", features = ["full", "tracing"] }
 futures = "0.3.31"
 reqwest = "0.12.4"
 async-trait = "0.1"
 
-# --- Web3 & Blockchain ---
-# OLD: alloy = { version = "0.5.4", features = ["full", "node-bindings", "json-rpc", "rpc-client", "providers", "signer-local", "rpc-types-eth", "consensus", "rpc", "rpc-types-mev", "network", "providers", "transports", "transport-http", "signers"] }
-# OLD: alloy-primitives = "0.8.23"
-# OLD: alloy-chains = "0.1.63"
-# OLD: primitive-types = "0.10.1"
-# OLD: alloy-mev = "0.5" # REMOVED - now using alloy's built-in rpc-types-mev + provider-mev-api
-# RESTORED: alloy-mev needed for Flashbots bundle submission
+# Blockchain
 alloy = { version = "1.0.30", features = [
-    "full", "node-bindings", "json-rpc", "rpc-client", "providers", "signer-local", "rpc-types-eth", "consensus", "rpc",
-    "rpc-types-mev", "network", "transports", "transport-http", "signers", "provider-mev-api"
+    "full", "node-bindings", "json-rpc", "rpc-client", "providers", "signer-local",
+    "rpc-types-eth", "consensus", "rpc", "rpc-types-mev", "network", "transports",
+    "transport-http", "signers", "provider-mev-api"
 ] }
 alloy-primitives = "1.3.1"
 alloy-chains = "0.2.14"
-alloy-rlp = "0.3"
-alloy-mev = "1.0.0"  # Flashbots bundle submission via EthMevProviderExt
-
+alloy-mev = "1.0.0"
 primitive-types = "0.12.2"
 
-# --- Database ---
+# Database
 redis = { version = "0.26.1", features = ["tokio-comp", "aio", "connection-manager"] }
 sea-orm = { version = "^0.12.0", features = ["sqlx-postgres", "runtime-async-std-native-tls", "macros"] }
 
-# --- Logging & Observability ---
+# Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-env_logger = "0.11.3"
 
-# --- Math & Utilities ---
+# Utils
+thiserror = "1.0"
+eyre = "0.6.11"
+anyhow = "1.0"
 num-bigint = "0.4.6"
 num-traits = "0.2.19"
 chrono = "0.4.23"
-rand = "0.8.5"
-
-# --- Environment & Configuration ---
 dotenv = "0.15.0"
-dotenv_codegen = "0.15.0"
-
-# --- Error Handling & Utilities ---
-eyre = "0.6.11"
-anyhow = "1.0"
 url = "2.5.0"
 hex = "0.4.3"
-
-# --- UI & Formatting ---
-fern = { version = "0.6.2", features = ["colored"] }
-colored = "2.0.0"
-
-# --- Enums & Macros ---
 strum = "0.26"
 strum_macros = "0.26"
 
@@ -105,6 +71,5 @@ path = "src/maker.rs"
 name = "monitor"
 path = "src/monitor.rs"
 
-# Patch to fix svm-rs-builds duplicate SOLC_VERSION_0_8_31 definition bug
 [patch.crates-io]
 svm-rs-builds = { git = "https://github.com/alloy-rs/svm-rs", rev = "99fe67b6" }

@@ -30,11 +30,26 @@ pub fn get(key: &str) -> String {
 }
 
 /// Reads and deserializes a JSON file into a vector of type T.
-pub fn read<T: DeserializeOwned>(file: &str) -> Vec<T> {
-    let mut file = File::open(file).unwrap();
+pub fn read<T: DeserializeOwned>(path: &str) -> Vec<T> {
+    let mut file = match File::open(path) {
+        Ok(f) => f,
+        Err(e) => {
+            tracing::error!("Failed to open file '{}': {}", path, e);
+            std::process::exit(1);
+        }
+    };
     let mut buffer = String::new();
-    file.read_to_string(&mut buffer).unwrap();
-    serde_json::from_str(&buffer).unwrap()
+    if let Err(e) = file.read_to_string(&mut buffer) {
+        tracing::error!("Failed to read file '{}': {}", path, e);
+        std::process::exit(1);
+    }
+    match serde_json::from_str(&buffer) {
+        Ok(data) => data,
+        Err(e) => {
+            tracing::error!("Failed to parse JSON from '{}': {}", path, e);
+            std::process::exit(1);
+        }
+    }
 }
 
 /// Serializes and saves a vector to a JSON file.

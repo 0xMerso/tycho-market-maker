@@ -86,8 +86,20 @@ pub fn quote(pts: Vec<ProtoSimComp>, atks: Vec<Token>, path: Vec<String>) -> Opt
             let comp_tokens: Vec<String> = state.component.tokens.iter().map(|t| t.address.to_string().to_lowercase()).collect();
             if comp_tokens.contains(&token_in) && comp_tokens.contains(&token_out) {
                 // Resolve the tokens from the global list.
-                let base = atks.iter().find(|t| t.address.to_string().to_lowercase() == token_in).unwrap().clone();
-                let quote = atks.iter().find(|t| t.address.to_string().to_lowercase() == token_out).unwrap().clone();
+                let base = match atks.iter().find(|t| t.address.to_string().to_lowercase() == token_in) {
+                    Some(t) => t.clone(),
+                    None => {
+                        tracing::warn!("Token not found in list: {}", token_in);
+                        return None;
+                    }
+                };
+                let quote = match atks.iter().find(|t| t.address.to_string().to_lowercase() == token_out) {
+                    Some(t) => t.clone(),
+                    None => {
+                        tracing::warn!("Token not found in list: {}", token_out);
+                        return None;
+                    }
+                };
                 match state.protosim.spot_price(&base, &quote) {
                     Ok(rate) => {
                         cumulative_price *= rate;
