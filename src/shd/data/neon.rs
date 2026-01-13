@@ -10,7 +10,7 @@ use crate::{
         maker::ReceiptData,
         moni::ParsedMessage,
     },
-    utils::evm::fetch_receipt,
+    utils::evm::fetch_receipt_with_retry,
 };
 use sea_orm::prelude::Uuid;
 
@@ -160,8 +160,8 @@ pub async fn handle(msg: &ParsedMessage, env: MoniEnvConfig) {
                     Some(broadcast) => {
                         let hash = broadcast.hash.clone();
                         if !hash.is_empty() {
-                            tracing::info!("Fetching receipt on network {} for transaction {}", config.network_name, hash);
-                            let swap_receipt = fetch_receipt(config.rpc_url.clone(), hash.clone()).await;
+                            tracing::info!("Fetching receipt on network {} for transaction {} (with retry)", config.network_name, hash);
+                            let swap_receipt = fetch_receipt_with_retry(config.rpc_url.clone(), hash.clone(), 10, 3000).await;
                             if let Ok(swap_receipt) = swap_receipt {
                                 let swap_receipt_data = ReceiptData {
                                     status: swap_receipt.status(),

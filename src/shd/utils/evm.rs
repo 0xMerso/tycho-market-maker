@@ -166,3 +166,40 @@ pub async fn fetch_receipt(rpc: String, hash: String) -> Result<TransactionRecei
         }
     }
 }
+
+/// Fetches the receipt for a transaction hash with retry logic.
+///
+/// Useful for Flashbots bundles and other async transaction submissions
+/// where the transaction may not be immediately available on-chain.
+pub async fn fetch_receipt_with_retry(rpc: String, hash: String, max_attempts: u32, delay_ms: u64) -> Result<TransactionReceipt, String> {
+    if !hash.starts_with("0x") {
+        return Err(format!("Invalid transaction hash: {}", hash));
+    }
+
+    let provider = create_provider(&rpc);
+    let mut last_error = String::new();
+
+    for attempt in 1..=max_attempts {
+        match provider.get_transaction_receipt(hash.parse().unwrap()).await {
+            Ok(Some(receipt)) => {
+                tracing::info!("Receipt found for {} on attempt {}/{}", hash, attempt, max_attempts);
+                return Ok(receipt);
+            }
+            Ok(None) => {
+                last_error = format!("No receipt found for transaction {}", hash);
+                tracing::debug!("Attempt {}/{}: Receipt not yet available for {}", attempt, max_attempts, hash);
+            }
+            Err(e) => {
+                last_error = format!("RPC error: {:?}", e);
+                tracing::debug!("Attempt {}/{}: RPC error for {}: {:?}", attempt, max_attempts, hash, e);
+            }
+        }
+
+        if attempt < max_attempts {
+            tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
+        }
+    }
+
+    tracing::warn!("Failed to fetch receipt for {} after {} attempts: {}", hash, max_attempts, last_error);
+    Err(format!("Failed to fetch receipt after {} attempts: {}", max_attempts, last_error))
+}

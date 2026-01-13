@@ -71,5 +71,9 @@ path = "src/maker.rs"
 name = "monitor"
 path = "src/monitor.rs"
 
+# [[bin]]
+# name = "pnl"
+# path = "src/pnl.rs"
+
 [patch.crates-io]
 svm-rs-builds = { git = "https://github.com/alloy-rs/svm-rs", rev = "99fe67b6" }
