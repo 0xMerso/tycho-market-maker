@@ -72,6 +72,10 @@ name = "monitor"
 path = "src/monitor.rs"
 
 # [[bin]]
+# name = "backfill"
+# path = "src/backfill.rs"
+
+# [[bin]]
 # name = "pnl"
 # path = "src/pnl.rs"
 
