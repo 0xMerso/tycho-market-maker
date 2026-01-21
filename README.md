@@ -1,19 +1,16 @@
-# Tycho Market Maker
+# Tycho Stabiliser
 
-A Rust market making bot that monitors price differences between reference prices (Binance, Chainlink) and on-chain liquidity pools, executing profitable trades via the [Tycho protocol](https://docs.propellerheads.xyz/).
+A Rust-based market maker that monitors price discrepancies between any source of price (Binance, Chainlink) and on-chain liquidity pools, executing trades to align pool prices with reference prices via the [Tycho protocol](https://docs.propellerheads.xyz/).
 
-A UI showing 2 instances running can be found at [https://stabiliser.vercel.app/](https://stabiliser.vercel.app/)
+Unlike basic arbitrage bots that exploit spreads when profitable, this stabiliser actively works to enforce price alignment, particularly suited for stablecoin pairs and liquid trading pairs with strong price discovery on any source of price.
 
 ## Documentation
 
-**[https://tycho-openmaker.gitbook.io/docs/](https://tycho-openmaker.gitbook.io/docs/)**
+**[https://tycho-stabiliser.gitbook.io/docs/](https://tycho-stabiliser.gitbook.io/docs/)**  
 
-The documentation covers:
-- **Quickstart** - Get up and running
-- **Architecture** - System design and components
-- **Configuration** - TOML config and environment setup
-- **Algorithm** - Trading logic and price feed integration
-- **UI** - Monitoring interface setup
+## Live Demo
+
+A live UI showing running instances: **[https://stabiliser.vercel.app/](https://stabiliser.vercel.app/)**
 
 ## Quick Start
 
@@ -47,11 +44,11 @@ Available configs: `mainnet.eth-usdc`, `unichain.eth-usdc`, `unichain.quickstart
 
 ## Features
 
-- **Multi-chain**: Ethereum mainnet, Unichain
-- **MEV protection**: Flashbots integration for mainnet
-- **Price feeds**: Binance WebSocket, Chainlink oracles
-- **Monitoring**: Redis pub/sub + PostgreSQL persistence
-- **Auto-recovery**: Panic recovery with restart loop
+- **Multi-chain**: Ethereum mainnet, Unichain, Base
+- **MEV protection**: Flashbots integration (with Flashblocks support on Unichain and Base)
+- **Price feeds**: Real-time Binance WebSocket, Chainlink oracles
+- **Monitoring**: Redis pub/sub + PostgreSQL persistence for trade history
+- **Auto-recovery**: Automatic error handling with restart capabilities
 
 ## Development
 
@@ -69,4 +66,4 @@ MIT
 
 ## Disclaimer
 
-Trading cryptocurrencies involves risk of financial loss. Use at your own risk.
+Trading crypto involves risk of financial loss. Use at your own risk.
