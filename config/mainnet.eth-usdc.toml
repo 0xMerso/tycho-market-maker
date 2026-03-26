@@ -10,7 +10,7 @@ wallet_public_key = "0x0aF694C17137ad1dE34e94335eA09608B715f20A"
 gas_token_symbol = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
 gas_token_chainlink_price_feed = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419"
 # rpc_url = "https://0xrpc.io/eth"
-rpc_url = "https://eth.drpc.org"
+rpc_url = "https://eth.api.pocket.network"
 explorer_url = "https://etherscan.io/"
 tycho_api = "tycho-beta.propellerheads.xyz"
 
@@ -22,6 +22,7 @@ max_inventory_ratio = 0.99
 tx_gas_limit = 300000
 block_offset = 1
 inclusion_block_delay = 1
+min_priority_fee_per_gas = 10000000
 permit2_address = "0x000000000022D473030F116dDEE9F6B43aC78BA3"
 tycho_router_address = "0xfD0b31d2E955fA55e3fa641Fe90e08b677188d35"
 

@@ -30,6 +30,7 @@ max_inventory_ratio = 0.99 # 0.99
 tx_gas_limit = 500000
 block_offset = 1
 inclusion_block_delay = 0
+min_priority_fee_per_gas = 10000000
 permit2_address = "0x000000000022D473030F116dDEE9F6B43aC78BA3"
 tycho_router_address = "0xFfA5ec2e444e4285108e4a17b82dA495c178427B"
 

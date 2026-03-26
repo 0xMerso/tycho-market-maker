@@ -624,8 +624,8 @@ impl MarketMaker {
 
     /// Builds transaction request for trade execution with gas settings and optional approval.
     fn trade_tx_request(&self, solution: Solution, tx: Transaction, context: MarketContext, inventory: Inventory) -> Result<TradeTxRequest, String> {
-        let max_priority_fee_per_gas = context.max_priority_fee_per_gas; // 1 Gwei, not suited for L2s.
-        let max_fee_per_gas = context.max_fee_per_gas;
+        let max_priority_fee_per_gas = context.max_priority_fee_per_gas.max(self.config.min_priority_fee_per_gas);
+        let max_fee_per_gas = context.max_fee_per_gas.max(max_priority_fee_per_gas);
 
         // 1. Approvals - only if infinite_approval is false
         // FIXED: Direct router approval (not Permit2)
