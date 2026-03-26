@@ -175,11 +175,15 @@ pub async fn handle(msg: &ParsedMessage, env: MoniEnvConfig) {
                                 let mut broadcast = broadcast.clone();
                                 broadcast.receipt = Some(swap_receipt_data);
                                 updated.data.broadcast = Some(broadcast.clone());
+                            } else {
+                                tracing::warn!("Trade did not land on-chain (no receipt for {}), skipping DB storage", hash);
+                                return;
                             }
                         }
                     }
                     None => {
                         tracing::warn!("No broadcast struct found for trade on instance: {}", instance.id);
+                        return;
                     }
                 }
 
