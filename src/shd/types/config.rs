@@ -183,7 +183,7 @@ pub struct MarketMakerConfig {
     pub tx_gas_limit: u64,
     pub block_offset: u64,
     pub inclusion_block_delay: u64,
-    pub min_priority_fee_per_gas: u128,
+    pub min_priority_fee_per_gas: u64,
     pub tycho_api: String,
     pub poll_interval_ms: u64,
     pub permit2_address: String,
