@@ -57,12 +57,17 @@ impl ExecStrategy for MainnetExec {
         let provider = ProviderBuilder::new().with_chain_id(mmc.chain_id).wallet(signer.clone()).connect_http(rpc);
 
         // Flashbots bundle signer for MEV protection and block builder authentication
-        // Note: Using a random key (no persistent reputation) for simplicity
-        // This is NOT a security risk - the bundle signer authenticates bundle submissions,
-        // it does NOT control any funds (the wallet private key above handles actual transactions)
-        // Production users may configure a persistent key to maintain builder reputation across restarts
-        // TODO: Add optional persistent bundle signer config
-        let bundle_signer = PrivateKeySigner::random();
+        // Using a persistent key maintains builder reputation across restarts
+        let bundle_signer = match &env.bundle_signer_key {
+            Some(key) => {
+                tracing::info!("{}: Using persistent bundle signer for builder reputation", self.name());
+                PrivateKeySigner::from_bytes(&B256::from_str(key).expect("Failed to parse BUNDLE_SIGNER_KEY")).expect("Failed to create bundle signer")
+            }
+            None => {
+                tracing::warn!("{}: No BUNDLE_SIGNER_KEY configured, using random signer (no builder reputation)", self.name());
+                PrivateKeySigner::random()
+            }
+        };
 
         // Build endpoints for multiple builders (Flashbots + alternatives)
         // NEW API: No more BundleSigner::flashbots() wrapper - pass PrivateKeySigner directly

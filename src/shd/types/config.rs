@@ -36,6 +36,8 @@ pub struct EnvConfig {
     pub tycho_api_key: String,
     // Wallet
     pub wallet_private_key: String,
+    // Flashbots bundle signer (persistent for builder reputation)
+    pub bundle_signer_key: Option<String>,
 }
 
 /// Environment configuration expected
@@ -105,6 +107,7 @@ impl EnvConfig {
             heartbeat: require_env("HEARTBEAT"),
             wallet_private_key: require_env("WALLET_PRIVATE_KEY"),
             tycho_api_key: require_env("TYCHO_API_KEY"),
+            bundle_signer_key: std::env::var("BUNDLE_SIGNER_KEY").ok().filter(|s| !s.is_empty()),
         }
     }
 
@@ -180,6 +183,7 @@ pub struct MarketMakerConfig {
     pub tx_gas_limit: u64,
     pub block_offset: u64,
     pub inclusion_block_delay: u64,
+    pub min_priority_fee_per_gas: u128,
     pub tycho_api: String,
     pub poll_interval_ms: u64,
     pub permit2_address: String,
