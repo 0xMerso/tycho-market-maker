@@ -76,7 +76,9 @@ impl ExecStrategy for MainnetExec {
             .beaverbuild()
             .titan(bundle_signer.clone()) // Pass signer directly
             .flashbots(bundle_signer.clone()) // Pass signer directly
-            .rsync()
+            .authenticated_endpoint("https://rpc.f1b.io".parse().unwrap(), bundle_signer.clone()) // Eureka
+            .authenticated_endpoint("https://rpc.buildernet.org".parse().unwrap(), bundle_signer.clone()) // BuilderNet
+            .authenticated_endpoint("https://builder.quasarbuilder.com".parse().unwrap(), bundle_signer.clone()) // Quasar
             .build();
 
         let mut results = Vec::new();
