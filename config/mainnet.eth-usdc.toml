@@ -15,8 +15,8 @@ explorer_url = "https://etherscan.io/"
 tycho_api = "tycho-beta.propellerheads.xyz"
 
 # === Execution ===
-min_watch_spread_bps = 5.0
-min_executable_spread_bps = 3.0 # -10
+min_watch_spread_bps = 3.0
+min_executable_spread_bps = 2.0
 max_slippage_pct = 0.0005
 max_inventory_ratio = 0.99
 tx_gas_limit = 300000
@@ -32,7 +32,7 @@ publish_events = true
 skip_simulation = true
 infinite_approval = true
 min_publish_timeframe_ms = 60000
-min_reference_price_move_bps = 3.0 # The higher, the less sensitive is the bot
+min_reference_price_move_bps = 1.0 # The higher, the less sensitive is the bot
 max_gas_multiplier = 100.0 # To implement later
 
 [price_feed_config]
